@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrbINT</title>
+    <script>window.APP_CONFIG = window.APP_CONFIG || {};</script>
+    <script src="config.js"></script>
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: #111113;
+            --surface-2: #18181b;
+            --line: rgba(255, 255, 255, 0.08);
+            --line-strong: rgba(255, 255, 255, 0.16);
+            --text: #f4f4f5;
+            --muted: #a1a1aa;
+            --dim: #71717a;
+            --accent: #67e8f9;
+            --accent-soft: rgba(103, 232, 249, 0.12);
+            --warn: #fbbf24;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+        }
+
+        .profile-panel {
+            height: 100vh;
+            border-right: 1px solid var(--line);
+            background: linear-gradient(180deg, #0c0c0e 0%, var(--bg) 100%);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .profile-header {
+            padding: 22px 22px 16px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .kicker {
+            font-size: 11px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 8px;
+        }
+
+        .subject-name {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            line-height: 1.2;
+        }
+
+        .subject-meta {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .completeness {
+            margin-top: 16px;
+        }
+
+        .completeness-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .completeness-bar span {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: var(--accent);
+            border-radius: inherit;
+            transition: width 0.35s ease;
+        }
+
+        .completeness-label {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--dim);
+        }
+
+        .profile-actions {
+            display: flex;
+            gap: 8px;
+            padding: 14px 22px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .btn {
+            appearance: none;
+            border: 1px solid var(--line);
+            background: var(--surface-2);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .btn:hover { border-color: var(--line-strong); background: #1f1f23; }
+        .btn.primary { border-color: rgba(103, 232, 249, 0.3); background: var(--accent-soft); color: #ecfeff; }
+
+        .profile-body {
+            overflow: auto;
+            padding: 16px 22px 28px;
+            flex: 1;
+        }
+
+        .section {
+            margin-bottom: 18px;
+        }
+
+        .section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--dim);
+            margin-bottom: 8px;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 100%;
+            padding: 6px 8px 6px 10px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .chip button {
+            appearance: none;
+            border: 0;
+            background: transparent;
+            color: var(--dim);
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .empty-note {
+            font-size: 13px;
+            color: var(--dim);
+            line-height: 1.5;
+        }
+
+        .leads {
+            display: grid;
+            gap: 8px;
+        }
+
+        .lead {
+            display: block;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .lead:hover { border-color: var(--line-strong); }
+        .lead small { display: block; color: var(--muted); margin-top: 3px; font-size: 11px; }
+
+        .caution {
+            font-size: 12px;
+            color: var(--warn);
+            line-height: 1.5;
+            padding: 10px 12px;
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            background: rgba(251, 191, 36, 0.06);
+            border-radius: 12px;
+        }
+
+        .analysis {
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.55;
+            color: #d4d4d8;
+        }
+
+        .map {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .map-canvas {
+            position: absolute;
+            inset: 0;
+        }
+
+        .hub {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 168px;
+            height: 168px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px solid var(--line-strong);
+            background: radial-gradient(circle at 50% 40%, #1c1c20 0%, #121214 70%);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 3;
+            cursor: default;
+        }
+
+        .hub-label {
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            color: var(--dim);
+            text-transform: uppercase;
+        }
+
+        .hub-title {
+            margin-top: 6px;
+            font-size: 22px;
+            font-weight: 650;
+            letter-spacing: -0.04em;
+        }
+
+        .node {
+            position: absolute;
+            z-index: 4;
+            min-width: 148px;
+            max-width: 210px;
+            padding: 8px 10px 8px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: #141416;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+        }
+
+        .node:focus-within,
+        .node:hover {
+            border-color: var(--line-strong);
+            background: #1a1a1e;
+            z-index: 6;
+        }
+
+        .node.filled {
+            border-color: rgba(103, 232, 249, 0.35);
+            background: #14181a;
+        }
+
+        .node-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3f3f46;
+            flex-shrink: 0;
+        }
+
+        .node.filled .node-dot { background: var(--accent); }
+
+        .node-copy {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .node-copy label {
+            display: block;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+
+        .node input,
+        .node textarea {
+            width: 100%;
+            border: 0;
+            outline: 0;
+            background: transparent;
+            color: var(--text);
+            font: inherit;
+            font-size: 13px;
+            resize: none;
+        }
+
+        .node input::placeholder { color: #52525b; }
+
+        .file-btn {
+            appearance: none;
+            border: 0;
+            background: transparent;
+            color: var(--muted);
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        svg.links {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @media (max-width: 980px) {
+            body { grid-template-columns: 1fr; }
+            .profile-panel {
+                position: absolute;
+                inset: 0 auto 0 0;
+                width: min(360px, 92vw);
+                z-index: 10;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+            }
+            .profile-panel.open { transform: none; }
+        }
+    </style>
+</head>
+<body>
+    <aside class="profile-panel" id="profilePanel">
+        <div class="profile-header">
+            <div class="kicker">Subject profile</div>
+            <div class="subject-name" id="subjectName">Unknown person</div>
+            <div class="subject-meta" id="subjectMeta">Add a name, phone, email, or username to start the case file.</div>
+            <div class="completeness">
+                <div class="completeness-bar"><span id="completenessFill"></span></div>
+                <div class="completeness-label" id="completenessLabel">0 of 17 fields populated</div>
+            </div>
+        </div>
+        <div class="profile-actions">
+            <button class="btn primary" id="analyzeBtn" type="button">Analyze profile</button>
+            <button class="btn" id="exportBtn" type="button">Export</button>
+            <button class="btn" id="resetBtn" type="button">New case</button>
+        </div>
+        <div class="profile-body">
+            <div class="section">
+                <h3>Known facts</h3>
+                <div id="factsList" class="empty-note">Nothing filed yet. Enter a value on the map and press Enter.</div>
+            </div>
+            <div class="section">
+                <h3>Suggested public searches</h3>
+                <div id="leadsList" class="empty-note">Select a field to see the next public lookups.</div>
+            </div>
+            <div class="section" id="cautionSection" hidden>
+                <h3>Limits</h3>
+                <div class="caution" id="cautionText"></div>
+            </div>
+            <div class="section">
+                <h3>Analyst notes</h3>
+                <div class="analysis" id="analysisBox">Run Analyze profile to summarize what this file supports and what is still missing.</div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="map">
+        <svg class="links" id="linkLayer"></svg>
+        <div class="map-canvas" id="mapCanvas">
+            <div class="hub" id="hub">
+                <div class="hub-label">OrbINT</div>
+                <div class="hub-title" id="hubTitle">OSINT</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const FIELDS = [
+            {
+                id: 'phone',
+                label: 'Phone Number',
+                placeholder: 'Add a number',
+                leads: (v) => [
+                    ['Reverse lookup', 'Whitepages / Truecaller / Spokeo', 'https://www.whitepages.com/phone/' + encodeURIComponent(v.replace(/\D/g, ''))],
+                    ['Truecaller', 'Name and spam reports', 'https://www.truecaller.com/search/' + encodeURIComponent(v.replace(/\D/g, ''))],
+                    ['Social search', 'If the number is linked to WhatsApp, Telegram, or Facebook', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '"')],
+                    ['Carrier / region', 'Prefix and area-code location', 'https://www.allareacodes.com/' + encodeURIComponent(v.replace(/\D/g, '').slice(0, 3))]
+                ]
+            },
+            {
+                id: 'name',
+                label: 'Name',
+                placeholder: 'Full name',
+                leads: (v) => [
+                    ['People search', 'Public directories and records', 'https://www.google.com/search?q=' + encodeURIComponent(v + ' phone address')],
+                    ['LinkedIn', 'Employment and education', 'https://www.linkedin.com/search/results/all/?keywords=' + encodeURIComponent(v)],
+                    ['Facebook', 'Social profiles', 'https://www.facebook.com/search/people/?q=' + encodeURIComponent(v)],
+                    ['Username check', 'Namechk / Instant Username', 'https://namechk.com/' + encodeURIComponent(v.replace(/\s+/g, ''))]
+                ]
+            },
+            {
+                id: 'email',
+                label: 'Email',
+                placeholder: 'name@domain.com',
+                leads: (v) => [
+                    ['Have I Been Pwned', 'Breach exposure', 'https://haveibeenpwned.com/account/' + encodeURIComponent(v)],
+                    ['Gravatar', 'Linked avatar and profile', 'https://en.gravatar.com/' + encodeURIComponent(v)],
+                    ['GitHub', 'Accounts using this email', 'https://github.com/search?q=' + encodeURIComponent(v) + '&type=users'],
+                    ['Domain MX', 'Where the mailbox is hosted', 'https://dns.google/query?name=' + encodeURIComponent(v.split('@')[1] || '') + '&type=MX']
+                ]
+            },
+            {
+                id: 'image',
+                label: 'Image',
+                placeholder: 'Image URL',
+                file: 'image/*',
+                leads: (v) => [
+                    ['Google Images', 'Reverse image search', 'https://www.google.com/searchbyimage?image_url=' + encodeURIComponent(v)],
+                    ['Yandex', 'Often stronger for faces and places', 'https://yandex.com/images/search?rpt=imageview&url=' + encodeURIComponent(v)],
+                    ['TinEye', 'Other copies of the same photo', 'https://tineye.com/search?url=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'username',
+                label: 'Username',
+                placeholder: 'Handle',
+                leads: (v) => [
+                    ['Namechk', 'Other accounts with this handle', 'https://namechk.com/' + encodeURIComponent(v)],
+                    ['GitHub', 'Commits, email, and bio clues', 'https://github.com/' + encodeURIComponent(v)],
+                    ['Reddit', 'Communities and writing style', 'https://www.reddit.com/search/?q=' + encodeURIComponent(v)],
+                    ['Sherlock-style search', 'Public web mentions of the handle', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '"')]
+                ]
+            },
+            {
+                id: 'address',
+                label: 'Address',
+                placeholder: 'Street, city',
+                leads: (v) => [
+                    ['Maps', 'Street and satellite view', 'https://www.google.com/maps/search/' + encodeURIComponent(v)],
+                    ['Zillow', 'Property and resident clues', 'https://www.zillow.com/homes/' + encodeURIComponent(v) + '_rb/'],
+                    ['Local news', 'Public mentions of the address', 'https://news.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'social',
+                label: 'Social Media',
+                placeholder: 'Profile URL or handle',
+                leads: (v) => [
+                    ['Open profile', 'Bio, location, friends, posts', /^https?:/i.test(v) ? v : 'https://www.google.com/search?q=' + encodeURIComponent(v)],
+                    ['Username reuse', 'Same handle on other sites', 'https://namechk.com/' + encodeURIComponent(v.replace(/^@/, '').split('/').pop())]
+                ]
+            },
+            {
+                id: 'audio',
+                label: 'Audio',
+                placeholder: 'Clip note or URL',
+                file: 'audio/*',
+                leads: (v) => [
+                    ['Transcribe and search', 'Keywords, place names, announcements', 'https://www.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'wifi',
+                label: 'Wi-Fi Network',
+                placeholder: 'SSID',
+                leads: (v) => [
+                    ['Wigle', 'If the SSID was logged by wardrivers', 'https://wigle.net/search?ssid=' + encodeURIComponent(v)],
+                    ['Owner hint', 'Family names or ISP defaults in the SSID', 'https://www.google.com/search?q=' + encodeURIComponent(v + ' wifi ssid')]
+                ]
+            },
+            {
+                id: 'ip',
+                label: 'IP Address',
+                placeholder: '1.2.3.4',
+                leads: (v) => [
+                    ['IPInfo', 'Approx. location and org', 'https://ipinfo.io/' + encodeURIComponent(v)],
+                    ['ARIN / WHOIS', 'Allocation and organization', 'https://whois.arin.net/rest/ip/' + encodeURIComponent(v)],
+                    ['Shodan', 'Public services on this host', 'https://www.shodan.io/host/' + encodeURIComponent(v)],
+                    ['VirusTotal', 'Reputation', 'https://www.virustotal.com/gui/ip-address/' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'plate',
+                label: 'License Plate',
+                placeholder: 'Plate text',
+                caution: 'Plate-to-owner lookups are restricted in many places. Use only public photos, maps, and lawful records.',
+                leads: (v) => [
+                    ['Public web mentions', 'Photos, posts, or dashcam stills', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '" license plate')],
+                    ['Image search', 'The plate appearing in public pictures', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v + ' license plate')]
+                ]
+            },
+            {
+                id: 'record',
+                label: 'Public Record',
+                placeholder: 'Case or document',
+                leads: (v) => [
+                    ['Court / docket search', 'Public case details and parties', 'https://www.google.com/search?q=' + encodeURIComponent(v + ' court records')],
+                    ['News', 'Reporting around the filing', 'https://news.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'domain',
+                label: 'Website Domain',
+                placeholder: 'example.com',
+                leads: (v) => [
+                    ['WHOIS', 'Registrant and history clues', 'https://whois.net/' + encodeURIComponent(v.replace(/^https?:\/\//, '').split('/')[0])],
+                    ['crt.sh', 'Certificates and linked emails', 'https://crt.sh/?q=' + encodeURIComponent(v)],
+                    ['Wayback', 'Historical site content', 'https://web.archive.org/web/*/' + encodeURIComponent(v)],
+                    ['DNS', 'Hosting and mail records', 'https://dns.google/query?name=' + encodeURIComponent(v.replace(/^https?:\/\//, '').split('/')[0])]
+                ]
+            },
+            {
+                id: 'behavior',
+                label: 'Behavioral Clues',
+                placeholder: 'Timezone, slang, style',
+                leads: (v) => [
+                    ['Writing-style search', 'Forums, reviews, and blogs', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '"')]
+                ]
+            },
+            {
+                id: 'crypto',
+                label: 'Crypto Wallet',
+                placeholder: 'Address',
+                leads: (v) => [
+                    ['Etherscan', 'Ethereum activity', 'https://etherscan.io/address/' + encodeURIComponent(v)],
+                    ['Blockchain.com', 'Bitcoin explorer', 'https://www.blockchain.com/explorer/search?search=' + encodeURIComponent(v)],
+                    ['Public mentions', 'Bios, signatures, and posts', 'https://www.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'mac',
+                label: 'MAC Address',
+                placeholder: 'AA:BB:CC:DD:EE:FF',
+                caution: 'MAC addresses usually stay on the local network. Useful mainly when they already appear in a public leak or log.',
+                leads: (v) => [
+                    ['OUI / vendor', 'Manufacturer from the first 6 hex digits', 'https://www.google.com/search?q=' + encodeURIComponent(v.replace(/[:\-]/g, '').slice(0, 6) + ' OUI lookup')]
+                ]
+            },
+            {
+                id: 'barcode',
+                label: 'Barcode',
+                placeholder: 'UPC, QR, or URL',
+                leads: (v) => [
+                    ['Product lookup', 'UPC and catalog data', 'https://www.upcitemdb.com/upc/' + encodeURIComponent(v)],
+                    ['Safe URL open', 'Only if this is a known-good link', /^https?:/i.test(v) ? v : 'https://www.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            }
+        ];
+
+        const STORAGE_KEY = 'osint-case-file-v1';
+        const APP_CONFIG = window.APP_CONFIG || {};
+        const profile = loadProfile();
+        let activeField = null;
+
+        const mapCanvas = document.getElementById('mapCanvas');
+        const linkLayer = document.getElementById('linkLayer');
+        const hub = document.getElementById('hub');
+
+        function emptyFacts() {
+            return Object.fromEntries(FIELDS.map((field) => [field.id, []]));
+        }
+
+        function loadProfile() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '');
+                if (saved && saved.facts) return saved;
+            } catch (error) {}
+            return { facts: emptyFacts(), analysis: '' };
+        }
+
+        function saveProfile() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+        }
+
+        function firstValue(id) {
+            return (profile.facts[id] && profile.facts[id][0] && profile.facts[id][0].value) || '';
+        }
+
+        function addFact(id, value) {
+            const clean = String(value || '').trim();
+            if (!clean) return;
+            profile.facts[id] = profile.facts[id] || [];
+            if (profile.facts[id].some((item) => item.value.toLowerCase() === clean.toLowerCase())) return;
+            profile.facts[id].push({ value: clean, addedAt: new Date().toISOString() });
+            saveProfile();
+            renderProfile();
+            renderNodes();
+        }
+
+        function removeFact(id, value) {
+            profile.facts[id] = (profile.facts[id] || []).filter((item) => item.value !== value);
+            saveProfile();
+            renderProfile();
+            renderNodes();
+        }
+
+        function populatedCount() {
+            return FIELDS.filter((field) => (profile.facts[field.id] || []).length).length;
+        }
+
+        function renderProfile() {
+            const name = firstValue('name') || 'Unknown person';
+            document.getElementById('subjectName').textContent = name;
+            document.getElementById('hubTitle').textContent = firstValue('name') ? name.split(' ')[0] : 'OSINT';
+
+            const filled = populatedCount();
+            document.getElementById('completenessFill').style.width = ((filled / FIELDS.length) * 100) + '%';
+            document.getElementById('completenessLabel').textContent = filled + ' of ' + FIELDS.length + ' fields populated';
+
+            const bits = [];
+            if (firstValue('phone')) bits.push(firstValue('phone'));
+            if (firstValue('email')) bits.push(firstValue('email'));
+            if (firstValue('username')) bits.push('@' + firstValue('username').replace(/^@/, ''));
+            document.getElementById('subjectMeta').textContent = bits.length
+                ? bits.join(' · ')
+                : 'Add a name, phone, email, or username to start the case file.';
+
+            const facts = FIELDS.filter((field) => (profile.facts[field.id] || []).length);
+            const factsList = document.getElementById('factsList');
+            if (!facts.length) {
+                factsList.className = 'empty-note';
+                factsList.textContent = 'Nothing filed yet. Enter a value on the map and press Enter.';
+            } else {
+                factsList.className = '';
+                factsList.innerHTML = facts.map((field) => {
+                    const chips = profile.facts[field.id].map((item) => (
+                        '<span class="chip">' + escapeHtml(item.value) +
+                        '<button type="button" data-remove="' + field.id + '" data-value="' + encodeURIComponent(item.value) + '" aria-label="Remove">×</button></span>'
+                    )).join('');
+                    return '<div class="section"><h3>' + field.label + '</h3><div class="chips">' + chips + '</div></div>';
+                }).join('');
+            }
+
+            document.getElementById('analysisBox').textContent = profile.analysis ||
+                'Run Analyze profile to summarize what this file supports and what is still missing.';
+            renderLeads(activeField);
+        }
+
+        function renderLeads(fieldId) {
+            const field = FIELDS.find((item) => item.id === fieldId);
+            const leadsList = document.getElementById('leadsList');
+            const cautionSection = document.getElementById('cautionSection');
+            const value = field ? firstValue(field.id) : '';
+
+            if (!field || !value) {
+                leadsList.className = 'empty-note';
+                leadsList.textContent = 'Select a populated field to see the next public lookups.';
+                cautionSection.hidden = true;
+                return;
+            }
+
+            const leads = field.leads(value);
+            leadsList.className = 'leads';
+            leadsList.innerHTML = leads.map(([title, detail, href]) => (
+                '<a class="lead" href="' + href + '" target="_blank" rel="noopener noreferrer">' +
+                escapeHtml(title) + '<small>' + escapeHtml(detail) + '</small></a>'
+            )).join('');
+
+            if (field.caution) {
+                cautionSection.hidden = false;
+                document.getElementById('cautionText').textContent = field.caution;
+            } else {
+                cautionSection.hidden = true;
+            }
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function createNodes() {
+            FIELDS.forEach((field) => {
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.dataset.field = field.id;
+                node.innerHTML =
+                    '<span class="node-dot"></span>' +
+                    '<div class="node-copy">' +
+                        '<label for="field-' + field.id + '">' + field.label + '</label>' +
+                        '<input id="field-' + field.id + '" type="text" placeholder="' + field.placeholder + '" spellcheck="false" autocomplete="off">' +
+                        (field.file ? '<button class="file-btn" type="button" data-file="' + field.id + '">Attach</button>' : '') +
+                    '</div>' +
+                    (field.file ? '<input type="file" accept="' + field.file + '" hidden data-upload="' + field.id + '">' : '');
+                mapCanvas.appendChild(node);
+            });
+        }
+
+        function renderNodes() {
+            FIELDS.forEach((field) => {
+                const node = document.querySelector('.node[data-field="' + field.id + '"]');
+                const input = document.getElementById('field-' + field.id);
+                const values = profile.facts[field.id] || [];
+                node.classList.toggle('filled', values.length > 0);
+                if (document.activeElement !== input) {
+                    input.value = values.length ? values[values.length - 1].value : '';
+                }
+            });
+            positionNodes();
+        }
+
+        function positionNodes() {
+            const nodes = Array.from(document.querySelectorAll('.node'));
+            const width = mapCanvas.clientWidth;
+            const height = mapCanvas.clientHeight;
+            const cx = width / 2;
+            const cy = height / 2;
+            const radius = Math.min(width, height) * 0.34;
+            const step = (Math.PI * 2) / nodes.length;
+
+            linkLayer.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+            linkLayer.innerHTML = '';
+
+            nodes.forEach((node, index) => {
+                const angle = step * index - Math.PI / 2;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+                const nodeWidth = node.offsetWidth || 168;
+                const nodeHeight = node.offsetHeight || 46;
+                node.style.left = (x - nodeWidth / 2) + 'px';
+                node.style.top = (y - nodeHeight / 2) + 'px';
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', cx);
+                line.setAttribute('y1', cy);
+                line.setAttribute('x2', x);
+                line.setAttribute('y2', y);
+                line.setAttribute('stroke', node.classList.contains('filled') ? 'rgba(103,232,249,0.28)' : 'rgba(255,255,255,0.08)');
+                line.setAttribute('stroke-width', node.classList.contains('filled') ? '1.4' : '1');
+                linkLayer.appendChild(line);
+            });
+        }
+
+        function serializeProfile() {
+            return FIELDS.map((field) => {
+                const values = (profile.facts[field.id] || []).map((item) => item.value).join(', ');
+                return values ? field.label + ': ' + values : '';
+            }).filter(Boolean).join('\n') || 'No facts yet.';
+        }
+
+        async function analyzeProfile() {
+            const box = document.getElementById('analysisBox');
+            const facts = serializeProfile();
+            if (facts === 'No facts yet.') {
+                box.textContent = 'Add at least one fact before analyzing.';
+                return;
+            }
+
+            const messages = [
+                {
+                    role: 'system',
+                    content: 'You are an OSINT case analyst. Use only public, lawful sources. Summarize the subject profile, list likely identities or connections, and recommend the next public searches. Do not give advice for unauthorized access, credential attacks, or illegal plate/owner lookups. Keep it concise and structured.'
+                },
+                {
+                    role: 'user',
+                    content: 'Analyze this subject profile and suggest the next public OSINT steps:\n\n' + facts
+                }
+            ];
+
+            box.textContent = 'Analyzing the case file…';
+
+            try {
+                if (APP_CONFIG.OPENROUTER_API_KEY) {
+                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            Authorization: 'Bearer ' + APP_CONFIG.OPENROUTER_API_KEY,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': location.origin,
+                            'X-OpenRouter-Title': 'OSINT Case File'
+                        },
+                        body: JSON.stringify({
+                            model: APP_CONFIG.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
+                            messages,
+                            temperature: 0.4
+                        })
+                    });
+                    const data = await response.json();
+                    const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (!text) throw new Error(data.error?.message || 'No analysis returned');
+                    profile.analysis = text;
+                } else {
+                    const response = await fetch((location.protocol === 'file:' ? 'http://localhost:8080' : '') + '/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: messages[1].content })
+                    });
+                    const data = await response.json();
+                    profile.analysis = data.response || data.reply || 'Could not analyze this profile.';
+                }
+            } catch (error) {
+                profile.analysis = 'Analysis failed: ' + (error.message || 'unknown error');
+            }
+
+            saveProfile();
+            renderProfile();
+        }
+
+        function exportProfile() {
+            const text = '# OSINT Subject Profile\n\n' +
+                'Subject: ' + (firstValue('name') || 'Unknown person') + '\n' +
+                'Updated: ' + new Date().toLocaleString() + '\n\n' +
+                serializeProfile() +
+                (profile.analysis ? '\n\n## Analyst notes\n\n' + profile.analysis : '');
+            const blob = new Blob([text], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'osint-profile.md';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        createNodes();
+        renderProfile();
+        renderNodes();
+
+        mapCanvas.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter') return;
+            const input = event.target.closest('input');
+            if (!input || !input.id.startsWith('field-')) return;
+            event.preventDefault();
+            const fieldId = input.id.replace('field-', '');
+            addFact(fieldId, input.value);
+            activeField = fieldId;
+            renderLeads(fieldId);
+        });
+
+        mapCanvas.addEventListener('focusin', (event) => {
+            const node = event.target.closest('.node');
+            if (!node) return;
+            activeField = node.dataset.field;
+            renderLeads(activeField);
+        });
+
+        document.getElementById('factsList').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-remove]');
+            if (!button) return;
+            removeFact(button.dataset.remove, decodeURIComponent(button.dataset.value));
+        });
+
+        mapCanvas.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-file]');
+            if (!button) return;
+            const upload = document.querySelector('[data-upload="' + button.dataset.file + '"]');
+            if (upload) upload.click();
+        });
+
+        mapCanvas.addEventListener('change', (event) => {
+            const upload = event.target.closest('[data-upload]');
+            if (!upload || !upload.files || !upload.files[0]) return;
+            const fieldId = upload.dataset.upload;
+            const file = upload.files[0];
+            addFact(fieldId, file.name + ' (' + Math.round(file.size / 1024) + ' KB)');
+            activeField = fieldId;
+            renderLeads(fieldId);
+        });
+
+        document.getElementById('analyzeBtn').addEventListener('click', analyzeProfile);
+        document.getElementById('exportBtn').addEventListener('click', exportProfile);
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (!confirm('Clear this case file?')) return;
+            profile.facts = emptyFacts();
+            profile.analysis = '';
+            saveProfile();
+            activeField = null;
+            renderProfile();
+            renderNodes();
+        });
+
+        window.addEventListener('resize', positionNodes);
+        setTimeout(positionNodes, 50);
+    </script>
+</body>
+</html>
