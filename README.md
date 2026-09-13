@@ -4,7 +4,8 @@ A circular OSINT case-file tool. Each fact you enter — phone, name, email, use
 
 ## Open it
 
-Open `index.html` in a browser, or run any static file server in this folder.
+- Live: https://delexoo.github.io/OrbINT/
+- Or open `index.html` in a browser
 
 ## Analyze profile
 
