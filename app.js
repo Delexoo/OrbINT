@@ -1,12 +1,16 @@
         const GROUPS = [
             { id: 'identity', label: 'Identity', fields: ['name', 'username', 'image'] },
-            { id: 'contact', label: 'Contact', fields: ['phone', 'email'] },
+            { id: 'contact', label: 'Contact', fields: ['phone', 'email', 'password'] },
             { id: 'location', label: 'Location', fields: ['address', 'geo', 'ip', 'wifi'] },
             { id: 'entity', label: 'Entity', fields: ['company', 'domain', 'crypto'] },
             { id: 'evidence', label: 'Evidence', fields: ['audio', 'vin', 'plate', 'mac', 'record', 'barcode'] },
             { id: 'notes', label: 'Notes', fields: ['timezone', 'notes'] },
             { id: 'custom', label: 'Custom', fields: [] }
         ];
+
+        function isPhone() {
+            return window.matchMedia('(max-width: 820px)').matches;
+        }
 
         function platformSearch(label) {
             return (h) => 'https://www.google.com/search?q=' + encodeURIComponent(h + ' ' + label);
@@ -444,12 +448,19 @@
 
         const FIND_LINKS = {
             phone: () => [
+                ['Google operators', 'Name + city + phone wording', gq('"phone number" OR "cell" OR "mobile"')],
                 ['TruePeopleSearch', 'People directories often list numbers', 'https://www.truepeoplesearch.com/'],
                 ['FastPeopleSearch', 'Public people directories', 'https://www.fastpeoplesearch.com/'],
                 ['Whitepages', 'Directory listings', 'https://www.whitepages.com/'],
                 ['Thatsthem', 'Phone and people search', 'https://thatsthem.com/'],
+                ['Nuwber', 'People search', 'https://nuwber.com/'],
                 ['Truecaller', 'Caller ID search', 'https://www.truecaller.com/'],
-                ['LinkedIn', 'About / contact clues', 'https://www.linkedin.com/search/results/people/']
+                ['GetProspect', 'Public contact finder', 'https://getprospect.com/'],
+                ['SignalHire', 'Email / phone finder', 'https://www.signalhire.com/'],
+                ['ContactOut', 'Public contact search', 'https://contactout.com/'],
+                ['LinkedIn', 'About / contact clues', 'https://www.linkedin.com/search/results/people/'],
+                ['Have I Been Pwned', 'If you already have an email', 'https://haveibeenpwned.com/'],
+                ['DeHashed', 'Public breach search', 'https://dehashed.com/']
             ],
             name: () => [
                 ['TruePeopleSearch', 'Public person records', 'https://www.truepeoplesearch.com/'],
@@ -605,18 +616,45 @@
         const DEEP_LINKS = {
             phone: (v) => {
                 const n = String(v).replace(/\D/g, '');
+                const last10 = n.slice(-10);
+                const dashed = last10.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+                const dotted = last10.replace(/(\d{3})(\d{3})(\d{4})/, '$1.$2.$3');
+                const spaced = last10.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
+                const formats = [v, n, last10, dashed, dotted, spaced];
+                if (n.length > 10) formats.push('+' + n, '00' + n);
+                const formatQ = formats.filter(Boolean).filter((item, i, all) => all.indexOf(item) === i).map((item) => '"' + item + '"').join(' OR ');
                 const q = quoted(v);
                 return [
                     ['Whitepages', 'Reverse lookup', 'https://www.whitepages.com/phone/' + encodeURIComponent(n)],
                     ['Truecaller', 'Caller ID and spam reports', 'https://www.truecaller.com/search/' + encodeURIComponent(n)],
+                    ['Sync.me', 'Caller ID search', 'https://sync.me/search/?number=' + encodeURIComponent(n)],
                     ['NumLookup', 'Free reverse lookup', 'https://www.numlookup.com/' + encodeURIComponent(n)],
                     ['SpyDialer', 'Caller ID search', 'https://www.spydialer.com/default.aspx?n=' + encodeURIComponent(n)],
+                    ['CallerID Test', 'CNAM / caller ID', 'https://calleridtest.com/'],
+                    ['Old Phone Book', 'Historic listings', 'https://oldphonebook.com/'],
+                    ['USA Phonebook', 'US directory', 'https://www.unitedstatesphonebook.com/'],
                     ['TruePeopleSearch', 'People records tied to the number', 'https://www.truepeoplesearch.com/resultphone?phoneno=' + encodeURIComponent(n)],
                     ['FastPeopleSearch', 'Directory match', 'https://www.fastpeoplesearch.com/phone/' + encodeURIComponent(n)],
+                    ['FastBackgroundCheck', 'Public people records', 'https://www.fastbackgroundcheck.com/'],
+                    ['Thatsthem', 'Phone in people records', 'https://thatsthem.com/phone/' + encodeURIComponent(n)],
+                    ['Nuwber', 'People search', 'https://nuwber.com/search/phone?phone=' + encodeURIComponent(n)],
+                    ['IntelTechniques', 'Telephone toolset', 'https://inteltechniques.com/tools/Telephone.html'],
                     ['Epieos', 'Accounts linked to the number', 'https://epieos.com/?q=' + encodeURIComponent(n)],
-                    ['IPQS', 'Validity / line type', 'https://www.ipqualityscore.com/free-ip-lookup-proxy-vpn-test/lookup/' + encodeURIComponent(n)],
+                    ['Castrick', 'Accounts and leak clues', 'https://castrickclues.com/'],
+                    ['OSINT Industries', 'Account correlation', 'https://www.osint.industries/'],
+                    ['IPQS', 'Validity / line type', 'https://www.ipqualityscore.com/free-phone-number-lookup'],
+                    ['Comfi', 'Reverse phone book', 'https://www.comfi.com/abook/reverse'],
+                    ['Numbering plans', 'Prefix and country analysis', 'https://www.numberingplans.com/?page=analysis&sub=phonenr'],
+                    ['Phone Validator', 'Line validation', 'https://www.phonevalidator.com/'],
+                    ['Yellow Search', 'Directory listings', 'https://www.searchyellowdirectory.com/'],
+                    ['NPA NXX', 'North American prefix data', 'https://www.npanxxsource.com/nalennd.php'],
                     ['Area code', 'Carrier region', 'https://www.allareacodes.com/' + encodeURIComponent(n.slice(0, 3))],
-                    ['Have I Been Pwned', 'If the number appears in a notified breach', 'https://haveibeenpwned.com/'],
+                    ['Format search', 'International and US number forms', gq(formatQ)],
+                    ['Have I Been Zuckered', 'Facebook leak check', 'https://haveibeenzuckered.com/'],
+                    ['Have I Been Pwned', 'Notified breach exposure', 'https://haveibeenpwned.com/'],
+                    ['DeHashed', 'Public breach search', 'https://dehashed.com/'],
+                    ['SignalHire', 'LinkedIn / phone extension', 'https://chromewebstore.google.com/detail/signalhire-find-email-or/aeidadjdhppdffggfgjpanbafaedankd'],
+                    ['PhoneInfoga', 'Local scanner docs', 'https://sundowndev.github.io/phoneinfoga/'],
                     ...engineSet(q)
                 ];
             },
@@ -1223,7 +1261,7 @@
             document.querySelectorAll('.node').forEach((node) => {
                 node.classList.toggle('off', hiddenFields.has(node.dataset.field));
             });
-            if (typeof positionNodes === 'function') positionNodes();
+            if (!isPhone() && typeof positionNodes === 'function') positionNodes();
             updateHubProgress();
         }
 
@@ -1283,6 +1321,11 @@
         }
 
         function focusOrbitField(id) {
+            if (isPhone()) {
+                closeAddField();
+                openPhoneField(id);
+                return;
+            }
             const input = document.getElementById('field-' + id);
             const node = document.querySelector('.node[data-field="' + id + '"]');
             activeField = id;
@@ -1440,9 +1483,41 @@
             }).join('');
         }
 
+        function showSheet(sheet) {
+            if (!sheet) return;
+            const instant = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            sheet.hidden = false;
+            if (instant || sheet.classList.contains('is-in')) {
+                sheet.classList.add('is-in');
+                return;
+            }
+            sheet.classList.remove('is-in');
+            void sheet.offsetWidth;
+            requestAnimationFrame(function () { sheet.classList.add('is-in'); });
+        }
+
+        function hideSheet(sheet) {
+            if (!sheet || sheet.hidden) return;
+            if (!sheet.classList.contains('is-in') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                sheet.classList.remove('is-in');
+                sheet.hidden = true;
+                return;
+            }
+            sheet.classList.remove('is-in');
+            let closed = false;
+            const done = function (event) {
+                if (event && event.target !== sheet) return;
+                if (closed) return;
+                closed = true;
+                sheet.hidden = true;
+                sheet.removeEventListener('transitionend', done);
+            };
+            sheet.addEventListener('transitionend', done);
+            setTimeout(done, 340);
+        }
+
         function closeAddField() {
-            const sheet = document.getElementById('addSheet');
-            if (sheet) sheet.hidden = true;
+            hideSheet(document.getElementById('addSheet'));
         }
 
         function openAddField() {
@@ -1460,7 +1535,7 @@
             if (hint) hint.value = '';
             if (filter) filter.value = '';
             renderAddPanel();
-            if (sheet) sheet.hidden = false;
+            showSheet(sheet);
             if (filter) filter.focus();
         }
 
@@ -1708,8 +1783,14 @@
 
         function placeSearchMenu(node) {
             const menu = document.getElementById('searchMenu');
+            if (!menu || menu.hidden) return;
+            if (isPhone()) {
+                menu.style.left = '';
+                menu.style.top = '';
+                return;
+            }
             const stage = document.getElementById('mapStage');
-            if (!menu || menu.hidden || !node || !stage) return;
+            if (!node || !stage) return;
             const nodeRect = node.getBoundingClientRect();
             const mapRect = stage.getBoundingClientRect();
             const left = Math.min(nodeRect.right - mapRect.left - 240, mapRect.width - 252);
@@ -1782,6 +1863,7 @@
         const STORAGE_KEY = 'osint-case-file-v1';
         let profile = { facts: {}, analysis: '' };
         let activeField = null;
+        const revealedPasswords = new Set();
 
         const mapCanvas = document.getElementById('mapCanvas');
         const linkLayer = document.getElementById('linkLayer');
@@ -1796,10 +1878,7 @@
             const raw = Math.round(Number(px));
             const width = Math.max(200, Math.min(max, Number.isFinite(raw) ? raw : 268));
             document.documentElement.style.setProperty('--sidebar', width + 'px');
-            if (profilePanel) {
-                if (drawerQuery.matches) profilePanel.style.width = width + 'px';
-                else profilePanel.style.width = '';
-            }
+            if (profilePanel) profilePanel.style.width = '';
             return width;
         }
 
@@ -1972,9 +2051,10 @@
         }
 
         function setPanelOpen(open) {
+            if (isPhone()) open = true;
             profilePanel.classList.toggle('open', open);
-            backdrop.hidden = !open || !drawerQuery.matches;
-            backdrop.classList.toggle('visible', open && drawerQuery.matches);
+            backdrop.hidden = !open || !drawerQuery.matches || isPhone();
+            backdrop.classList.toggle('visible', open && drawerQuery.matches && !isPhone());
         }
 
         function latestFact(id) {
@@ -2457,7 +2537,12 @@
 
             const filled = populatedCount();
             const completeness = document.getElementById('completenessFill');
-            if (completeness) completeness.style.width = ((filled / FIELDS.length) * 100) + '%';
+            const coverageLabel = document.getElementById('coverageLabel');
+            const caseTotal = groupsForProfile().reduce((count, group) => (
+                count + group.fields.filter((id) => fieldById(id) && !hiddenFields.has(id)).length
+            ), 0) || FIELDS.length;
+            if (completeness) completeness.style.width = ((filled / caseTotal) * 100) + '%';
+            if (coverageLabel) coverageLabel.textContent = filled + ' of ' + caseTotal + ' filed';
 
             const face = document.getElementById('targetFace');
             face.classList.add('visible');
@@ -2487,7 +2572,9 @@
                 idStack.hidden = true;
             } else {
                 idStack.hidden = false;
-                idStack.textContent = 'Unidentified · File public facts to build this profile';
+                idStack.textContent = isPhone()
+                    ? 'No public facts yet'
+                    : 'Unidentified · File public facts to build this profile';
             }
 
             const factsSection = document.getElementById('factsSection');
@@ -2502,7 +2589,22 @@
             }).filter((entry) => entry.rows.length);
 
             factsSection.hidden = false;
-            if (filledGroups.length) {
+            if (isPhone()) {
+                factsList.className = 'phone-facts';
+                const phoneGroups = groupsForProfile().map((group) => {
+                    const rows = group.fields.map((id) => {
+                        const field = fieldById(id);
+                        if (!field || hiddenFields.has(id)) return '';
+                        const items = ((profile.facts && profile.facts[id]) || []).filter((item) => item && String(item.value || '').trim());
+                        if (items.length) return items.map((item) => phoneFactRowHtml(field, item)).join('');
+                        return phoneFactRowHtml(field, null);
+                    }).join('');
+                    return rows
+                        ? '<section class="phone-group"><h3 class="phone-group-title">' + escapeHtml(group.label) + '</h3><div class="phone-group-card">' + rows + '</div></section>'
+                        : '';
+                }).join('');
+                factsList.innerHTML = phoneGroups || '<p class="empty-note empty-brief"><strong>Start a case</strong>Tap + to add a field, or tap Name, email, or phone below to file what you already have.</p>';
+            } else if (filledGroups.length) {
                 factsList.className = '';
                 factsList.innerHTML = filledGroups.map(({ group, rows }) => (
                     '<div class="group"><div class="group-label">' + group.label + '</div>' +
@@ -2511,7 +2613,7 @@
             } else if (name !== 'Anonymous' || socials.length || firstValue('image')) {
                 factsList.innerHTML = '';
             } else {
-                factsList.innerHTML = '<p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder case. No facts filed. Work the orbit — name, username, email, phone — and replace this with public, real details.</p>';
+                factsList.innerHTML = '<p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder information. Replace it with real public information using the diagram.</p>';
             }
 
             const analysisSection = document.getElementById('analysisSection');
@@ -2637,6 +2739,7 @@
         }
 
         function skipProfileRow(field, item) {
+            if (isPhone()) return false;
             const base = fieldBase(field.id);
             if (base === 'name' || base === 'image') return true;
             if (isSocialLikeField(field)) return true;
@@ -2716,8 +2819,18 @@
                 return { text: field.label, href: siteHref(value), title: value, wrap: false };
             }
             if (base === 'password') {
+                const key = field.id + '|' + ((item && item.platform) || '') + '|' + value;
+                const open = revealedPasswords.has(key);
                 const dots = Array(Math.min(14, Math.max(6, value.length)) + 1).join('•');
-                return { text: dots, href: '', title: value, wrap: false };
+                return {
+                    text: open ? value : dots,
+                    href: '',
+                    title: open ? value : 'Hidden password',
+                    wrap: false,
+                    secret: true,
+                    revealed: open,
+                    key: key
+                };
             }
             if (base === 'notes' || base === 'bio' || base === 'quote' || base === 'appearance') {
                 return { text: value, href: siteHref(value), title: value, wrap: true };
@@ -2726,18 +2839,175 @@
             return { text: href ? value.replace(/^https?:\/\//i, '').replace(/\/$/, '') : value, href: href, title: value, wrap: value.length > 42 };
         }
 
+        const EYE_OPEN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+        const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A11 11 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.3 4.4"/><path d="M6.1 6.1C3.8 7.8 2 12 2 12s3.5 7 10 7a10.8 10.8 0 0 0 4.4-.9"/></svg>';
+
         function profileFactRowHtml(field, item) {
             const shown = profileRowDisplay(field, item);
-            const platform = item.platform && platformById(item.platform);
-            const label = platform && fieldBase(field.id) === 'password' ? platform.label : field.label;
+            const label = field.label;
             const inner = shown.href
                 ? '<a href="' + escapeHtml(shown.href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(shown.text) + '</a>'
                 : escapeHtml(shown.text);
             const tzAttr = shown.zone ? ' data-profile-tz="' + escapeHtml(shown.zone) + '"' : '';
-            return '<div class="fact-row' + (activeField === field.id ? ' active' : '') + (shown.wrap ? ' wrap' : '') + '" data-focus="' + field.id + '">' +
+            const reveal = shown.secret
+                ? '<button type="button" class="fact-reveal" data-reveal="' + encodeURIComponent(shown.key) + '" aria-label="' + (shown.revealed ? 'Hide password' : 'Show password') + '" title="' + (shown.revealed ? 'Hide' : 'Show') + '">' + (shown.revealed ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                : '';
+            const find = isPhone()
+                ? '<button type="button" class="fact-find ready" data-search-field="' + field.id + '" aria-label="Search deeper" title="Search deeper">' + DEEP_ICON + '</button>'
+                : '';
+            return '<div class="fact-row' + (activeField === field.id ? ' active' : '') + (shown.wrap ? ' wrap' : '') + (shown.secret ? ' secret' : '') + '" data-focus="' + field.id + '">' +
                 '<span>' + escapeHtml(label) + '</span>' +
                 '<em title="' + escapeHtml(shown.title) + '"' + tzAttr + '>' + inner + '</em>' +
+                find +
+                reveal +
                 '<button type="button" data-remove="' + field.id + '" data-value="' + encodeURIComponent(item.value) + '" aria-label="Remove">×</button></div>';
+        }
+
+        function phoneFactRowHtml(field, item) {
+            if (!item) {
+                return '<div class="phone-row empty" data-focus="' + field.id + '">' +
+                    '<div class="phone-row-text">' +
+                        '<span class="phone-row-label">' + escapeHtml(field.label) + '</span>' +
+                        '<em class="phone-row-value">Not filed</em>' +
+                    '</div>' +
+                    '<div class="phone-row-tools">' +
+                        '<button type="button" class="phone-row-find" data-search-field="' + field.id + '" aria-label="How to find this" title="How to find this">' + FIND_ICON + '</button>' +
+                    '</div>' +
+                '</div>';
+            }
+            const shown = profileRowDisplay(field, item);
+            const inner = shown.href
+                ? '<a href="' + escapeHtml(shown.href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(shown.text) + '</a>'
+                : escapeHtml(shown.text);
+            const tzAttr = shown.zone ? ' data-profile-tz="' + escapeHtml(shown.zone) + '"' : '';
+            const reveal = shown.secret
+                ? '<button type="button" class="fact-reveal" data-reveal="' + encodeURIComponent(shown.key) + '" aria-label="' + (shown.revealed ? 'Hide password' : 'Show password') + '" title="' + (shown.revealed ? 'Hide' : 'Show') + '">' + (shown.revealed ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                : '';
+            return '<div class="phone-row' + (activeField === field.id ? ' active' : '') + (shown.secret ? ' secret' : '') + '" data-focus="' + field.id + '">' +
+                '<div class="phone-row-text">' +
+                    '<span class="phone-row-label">' + escapeHtml(field.label) + '</span>' +
+                    '<em class="phone-row-value" title="' + escapeHtml(shown.title) + '"' + tzAttr + '>' + inner + '</em>' +
+                '</div>' +
+                '<div class="phone-row-tools">' +
+                    reveal +
+                    '<button type="button" class="phone-row-find ready" data-search-field="' + field.id + '" aria-label="Search deeper" title="Search deeper">' + DEEP_ICON + '</button>' +
+                    '<button type="button" class="phone-row-remove" data-remove="' + field.id + '" data-value="' + encodeURIComponent(item.value) + '" aria-label="Remove">×</button>' +
+                '</div></div>';
+        }
+
+        let phoneFieldId = '';
+
+        function closePhoneField() {
+            hideSheet(document.getElementById('phoneField'));
+            phoneFieldId = '';
+        }
+
+        function closePhoneMore() {
+            hideSheet(document.getElementById('phoneMore'));
+        }
+
+        function syncPhoneField() {
+            if (!phoneFieldId) return;
+            const field = fieldById(phoneFieldId);
+            const input = document.getElementById('field-' + phoneFieldId);
+            const node = document.querySelector('.node[data-field="' + phoneFieldId + '"]');
+            const title = document.getElementById('phoneFieldTitle');
+            const editor = document.getElementById('phoneFieldInput');
+            const platBtn = document.getElementById('phonePlatformBtn');
+            const tzBtn = document.getElementById('phoneTzBtn');
+            const upload = document.getElementById('phoneFieldUpload');
+            const reveal = document.getElementById('phoneReveal');
+            const fact = latestFact(phoneFieldId);
+            const platformId = (fact && fact.platform) || (node && node.dataset.platform) || '';
+            const platformField = isPlatformField(phoneFieldId);
+            const tz = fieldBase(phoneFieldId) === 'timezone';
+            const needsPlatform = platformField && !platformId;
+            if (title && field) title.textContent = field.label;
+            if (platBtn) {
+                platBtn.hidden = !needsPlatform;
+                platBtn.textContent = 'Choose platform';
+            }
+            if (tzBtn) {
+                tzBtn.hidden = !tz;
+                const abbr = node && node.querySelector('.tz-abbr');
+                tzBtn.textContent = (abbr && abbr.textContent && abbr.textContent !== 'Zone') ? abbr.textContent : 'Choose timezone';
+            }
+            if (editor) {
+                editor.hidden = tz || needsPlatform;
+                if (input && document.activeElement !== editor) editor.value = input.value || '';
+                editor.placeholder = field ? (field.placeholder || 'Value') : 'Value';
+                editor.inputMode = fieldBase(phoneFieldId) === 'phone' ? 'tel' : 'text';
+                const hideSecret = fieldBase(phoneFieldId) === 'password' && reveal && reveal.dataset.open !== '1';
+                editor.type = hideSecret ? 'password' : 'text';
+            }
+            if (reveal) {
+                const show = fieldBase(phoneFieldId) === 'password' && !needsPlatform;
+                reveal.hidden = !show;
+                const open = reveal.dataset.open === '1';
+                reveal.innerHTML = open ? EYE_OFF_ICON : EYE_OPEN_ICON;
+                reveal.setAttribute('aria-label', open ? 'Hide password' : 'Show password');
+            }
+            if (upload) upload.hidden = !(field && field.file);
+            syncPhoneFindIcon();
+            renderPhoneLeads(phoneFieldId);
+        }
+
+        function syncPhoneFindIcon() {
+            const btn = document.getElementById('phoneFieldSearch');
+            if (!btn || !phoneFieldId) return;
+            const filled = !!fieldInputValue(phoneFieldId);
+            btn.innerHTML = filled ? DEEP_ICON : FIND_ICON;
+            btn.classList.toggle('ready', filled);
+            btn.setAttribute('aria-label', filled ? 'Search deeper' : 'How to find this');
+            btn.title = filled ? 'Search deeper' : 'How to find this';
+        }
+
+        function renderPhoneLeads(fieldId) {
+            const box = document.getElementById('phoneLeads');
+            const field = fieldById(fieldId);
+            if (!box) return;
+            if (!field) {
+                box.innerHTML = '';
+                return;
+            }
+            const value = fieldInputValue(fieldId);
+            const filled = !!value;
+            const links = searchLinks(fieldId);
+            box.innerHTML =
+                '<div class="phone-leads-title">' + (filled ? 'Search deeper' : 'How to find this') + '</div>' +
+                '<p class="phone-leads-note">' +
+                (filled
+                    ? (fieldId === 'image' ? 'Searches the photo itself, not the file name.' : 'Opens with this value filled in. Copied for sites that need a paste.')
+                    : 'Public sources where a ' + escapeHtml(field.label.toLowerCase()) + ' usually appears.') +
+                (field.caution ? ' ' + escapeHtml(field.caution) : '') +
+                '</p>' +
+                links.map((item) => (
+                    '<button type="button" data-open-lead="' + escapeHtml(item[2] || item[1]) + '" data-lead-mode="' + escapeHtml(item[3] || '') + '">' +
+                    escapeHtml(item[0]) + '</button>'
+                )).join('');
+        }
+
+        function openPhoneField(id) {
+            phoneFieldId = id;
+            activeField = id;
+            const reveal = document.getElementById('phoneReveal');
+            if (reveal) reveal.dataset.open = '';
+            const sheet = document.getElementById('phoneField');
+            showSheet(sheet);
+            closePhoneMore();
+            syncPhoneField();
+            const editor = document.getElementById('phoneFieldInput');
+            if (editor && !editor.hidden) setTimeout(function () { editor.focus(); }, 40);
+            renderProfile();
+        }
+
+        function writePhoneField() {
+            const editor = document.getElementById('phoneFieldInput');
+            const input = document.getElementById('field-' + phoneFieldId);
+            if (!editor || !input || editor.hidden) return;
+            input.hidden = false;
+            input.value = editor.value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
         const MAIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
@@ -3122,6 +3392,12 @@
             dragX: 0,
             dragY: 0,
             zoom: 1,
+            targetZoom: 1,
+            zoomFocusX: null,
+            zoomFocusY: null,
+            zoomWorldX: null,
+            zoomWorldY: null,
+            zoomBusy: false,
             spin: 0,
             dSpin: 0,
             pulse: 1,
@@ -3191,7 +3467,7 @@
                     h: size.height,
                     dragX: orbit.dragX,
                     dragY: orbit.dragY,
-                    zoom: orbit.zoom,
+                    zoom: orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom,
                     homes: Array.from(nodeHomes.entries()),
                     items: items
                 }));
@@ -3207,7 +3483,10 @@
         if (cachedLayout) {
             if (Number.isFinite(cachedLayout.dragX)) orbit.dragX = cachedLayout.dragX;
             if (Number.isFinite(cachedLayout.dragY)) orbit.dragY = cachedLayout.dragY;
-            if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) orbit.zoom = cachedLayout.zoom;
+            if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
+                orbit.zoom = cachedLayout.zoom;
+                orbit.targetZoom = cachedLayout.zoom;
+            }
             (cachedLayout.homes || []).forEach((entry) => {
                 if (entry && entry[0] && entry[1]) nodeHomes.set(entry[0], entry[1]);
             });
@@ -3300,7 +3579,7 @@
             const cx = width / 2;
             const cy = height / 2;
             const pad = 16;
-            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + 20 : 68;
+            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + 12 : 60;
 
             const visibleIds = new Set(nodes.map((node) => node.dataset.field));
 
@@ -3328,8 +3607,8 @@
             const maxNodeH = Math.max.apply(null, items.map((item) => item.h));
             const maxRx = Math.max(80, width / 2 - pad - maxNodeW / 2);
             const maxRy = Math.max(80, height / 2 - pad - maxNodeH / 2);
-            const hubMinX = hubClear + maxNodeW / 2 + 10;
-            const hubMinY = hubClear + maxNodeH / 2 + 10;
+            const hubMinX = hubClear + maxNodeW / 2 + 4;
+            const hubMinY = hubClear + maxNodeH / 2 + 4;
 
             function fieldOrder(id) {
                 const at = FIELDS.findIndex((field) => field.id === id);
@@ -3359,17 +3638,18 @@
                 });
             }
 
-            const boxGap = 32;
+            const boxGap = 22;
             function radiusForRing(n, maxR, minR) {
-                if (n <= 1) return Math.max(minR, 96);
+                if (n <= 1) return Math.max(minR, 84);
                 const need = Math.max(maxNodeW, maxNodeH) + boxGap;
                 return Math.min(maxR, Math.max(minR, need / (2 * Math.sin(Math.PI / n))));
             }
-            const ringSep = Math.max(maxNodeH + 28, 64);
-            const innerFit = radiusForRing(inner.length, Math.min(maxRx, maxRy), Math.max(hubMinX, hubMinY));
+            const ringSep = Math.max(maxNodeH + 20, 52);
+            const pull = 0.88;
+            const innerFit = radiusForRing(inner.length, Math.min(maxRx, maxRy), Math.max(hubMinX, hubMinY)) * pull;
             const innerRx = Math.min(maxRx, Math.max(hubMinX, innerFit));
             const innerRy = Math.min(maxRy, Math.max(hubMinY, innerFit * 0.9));
-            const outerFit = radiusForRing(outer.length, Math.min(maxRx, maxRy), innerFit + ringSep);
+            const outerFit = radiusForRing(outer.length, Math.min(maxRx, maxRy), innerFit + ringSep) * pull;
             const outerRx = Math.min(maxRx, Math.max(innerRx + ringSep, outerFit));
             const outerRy = Math.min(maxRy, Math.max(innerRy + ringSep, outerFit * 0.9));
 
@@ -3506,7 +3786,7 @@
                     for (let j = i + 1; j < items.length; j++) {
                         const a = items[i];
                         const b = items[j];
-                        if (!boxesOverlap(a, b, 24)) continue;
+                        if (!boxesOverlap(a, b, 10)) continue;
                         hits++;
                         const aName = a.node.dataset.field === 'name';
                         const bName = b.node.dataset.field === 'name';
@@ -3615,7 +3895,7 @@
             const height = size.height;
             if (!width || !height || !orbitItems.length) return;
 
-            keepHubOnScreen(width, height);
+            if (!orbit.zoomBusy || orbit.dragging) keepHubOnScreen(width, height);
 
             const zoom = orbit.zoom;
             const cx = width / 2 + orbit.dragX + orbit.parallaxX;
@@ -3632,15 +3912,24 @@
             if (hub) {
                 hub.style.left = cx + 'px';
                 hub.style.top = cy + 'px';
-                hub.style.transform = 'translate(-50%, -50%) scale(' + zoom + ')';
+                hub.style.transform = 'translate(-50%, -50%) translateZ(0) scale(' + zoom + ')';
             }
 
-            const hubDrag = orbit.dragging && (orbit.dragMode === 'hub' || orbit.dragMode === 'pan');
             const nodeGrab = orbit.dragging && orbit.dragMode === 'node' ? orbit.dragItem : null;
-            const hubR = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 * zoom + 4 : 48;
-            const dSpin = (nodeGrab || hubDrag || reduceMotion || orbit.snapLayout) ? 0 : (orbit.dSpin || 0);
-            const spinC = Math.cos(dSpin);
-            const spinS = Math.sin(dSpin);
+            const byId = new Map(orbitItems.map((item) => [item.node.dataset.field, item]));
+
+            function isAncestor(maybeAncestor, item) {
+                if (!maybeAncestor || !item) return false;
+                const root = maybeAncestor.node.dataset.field;
+                let cur = item;
+                const seen = new Set();
+                while (cur && cur.parentId && !seen.has(cur.node.dataset.field)) {
+                    seen.add(cur.node.dataset.field);
+                    if (cur.parentId === root) return true;
+                    cur = byId.get(cur.parentId);
+                }
+                return false;
+            }
 
             const settle = reduceMotion || orbit.snapLayout ? 1 : 1 - Math.exp(-(dt || 16) / 360);
             orbitItems.forEach((item) => {
@@ -3650,174 +3939,118 @@
                     item.ry += ((item.tRy == null ? item.ry : item.tRy) - item.ry) * settle;
                 }
                 const angle = item.angle + orbit.spin;
-                item.tx = cx + Math.cos(angle) * item.rx * orbit.pulse * zoom;
-                item.ty = cy + Math.sin(angle) * item.ry * orbit.pulse * zoom;
+                item.tx = cx + Math.cos(angle) * item.rx * zoom;
+                item.ty = cy + Math.sin(angle) * item.ry * zoom;
                 item.sw = item.w * zoom;
                 item.sh = item.h * zoom;
             });
 
-            orbitItems.forEach((item) => {
-                const limits = nodeScreenLimits(item, width, height);
-                item.tx = limits.tx;
-                item.ty = limits.ty;
-            });
+            const step = Math.min(Math.max(dt || 16, 8), 32) / 16.67;
+            const livePhysics = !reduceMotion && !orbit.snapLayout && (nodeGrab || orbitItems.some((item) => {
+                return Math.hypot(item.vx || 0, item.vy || 0) > 0.12 || Math.hypot((item.x || 0) - item.tx, (item.y || 0) - item.ty) > 0.7;
+            }));
 
-            orbitItems.forEach((item) => {
-                if (item === nodeGrab) {
-                    item.x = orbit.grabX;
-                    item.y = orbit.grabY;
-                    keepNodeOnScreen(item, width, height);
-                    orbit.grabX = item.x;
-                    orbit.grabY = item.y;
-                    item.vx = orbit.grabVX;
-                    item.vy = orbit.grabVY;
-                    return;
-                }
-                if (item.x == null || Number.isNaN(item.x)) {
-                    item.x = item.tx;
-                    item.y = item.ty;
-                    item.vx = 0;
-                    item.vy = 0;
-                } else {
-                    item.x += hvx;
-                    item.y += hvy;
-                    if (dSpin) {
-                        const dx = item.x - cx;
-                        const dy = item.y - cy;
-                        item.x = cx + dx * spinC - dy * spinS;
-                        item.y = cy + dx * spinS + dy * spinC;
-                        const vx = item.vx;
-                        const vy = item.vy;
-                        item.vx = vx * spinC - vy * spinS;
-                        item.vy = vx * spinS + vy * spinC;
-                    }
-                }
-                if (hubDrag) {
-                    item.vx *= 0.8;
-                    item.vy *= 0.8;
-                    return;
-                }
-                if (reduceMotion || orbit.snapLayout) {
-                    item.x = item.tx;
-                    item.y = item.ty;
-                    item.vx = 0;
-                    item.vy = 0;
-                    return;
-                }
-                const step = (dt || 16) / 16;
-                const grav = 0.02 * step;
-                const drag = Math.pow(0.94, step);
-                item.vx = (item.vx + (item.tx - item.x) * grav) * drag;
-                item.vy = (item.vy + (item.ty - item.y) * grav) * drag;
-                const speed = Math.hypot(item.vx, item.vy);
-                if (speed > 7) {
-                    item.vx *= 7 / speed;
-                    item.vy *= 7 / speed;
-                }
-                item.x += item.vx;
-                item.y += item.vy;
-            });
-
-            function separatePair(a, b, axis, amount, dir) {
-                if (a === nodeGrab) {
-                    if (axis === 'x') b.x -= dir * amount * 2;
-                    else b.y -= dir * amount * 2;
-                    if (axis === 'x' && dir * b.vx < 0) b.vx *= 0.35;
-                    if (axis === 'y' && dir * b.vy < 0) b.vy *= 0.35;
-                    return;
-                }
-                if (b === nodeGrab) {
-                    if (axis === 'x') a.x += dir * amount * 2;
-                    else a.y += dir * amount * 2;
-                    if (axis === 'x' && dir * a.vx > 0) a.vx *= 0.35;
-                    if (axis === 'y' && dir * a.vy > 0) a.vy *= 0.35;
-                    return;
-                }
-                if (axis === 'x') {
-                    a.x += dir * amount;
-                    b.x -= dir * amount;
-                    const rel = a.vx - b.vx;
-                    if (dir * rel > 0) {
-                        a.vx -= rel * 0.5;
-                        b.vx += rel * 0.5;
-                    }
-                } else {
-                    a.y += dir * amount;
-                    b.y -= dir * amount;
-                    const rel = a.vy - b.vy;
-                    if (dir * rel > 0) {
-                        a.vy -= rel * 0.5;
-                        b.vy += rel * 0.5;
-                    }
-                }
-            }
-
-            orbitItems.forEach((item) => {
-                if (item === nodeGrab) return;
-                const closestX = clamp(cx, item.x - item.sw / 2, item.x + item.sw / 2);
-                const closestY = clamp(cy, item.y - item.sh / 2, item.y + item.sh / 2);
-                let dx = closestX - cx;
-                let dy = closestY - cy;
-                let dist = Math.hypot(dx, dy);
-                if (dist < 0.001) {
-                    dx = 1;
-                    dy = 0;
-                    dist = 1;
-                }
-                if (dist < hubR) {
-                    const overlap = hubR - dist;
-                    item.x += (dx / dist) * overlap;
-                    item.y += (dy / dist) * overlap;
-                    const inward = item.vx * dx + item.vy * dy;
-                    if (inward < 0) {
-                        item.vx -= (dx / dist) * inward;
-                        item.vy -= (dy / dist) * inward;
-                    }
-                }
-            });
-
-            for (let pass = 0; pass < 2; pass++) {
-                for (let i = 0; i < orbitItems.length; i++) {
-                    for (let j = i + 1; j < orbitItems.length; j++) {
-                        const a = orbitItems[i];
-                        const b = orbitItems[j];
-                        const gap = 18;
-                        const ox = (a.sw + b.sw) / 2 + gap - Math.abs(a.x - b.x);
-                        const oy = (a.sh + b.sh) / 2 + gap - Math.abs(a.y - b.y);
-                        if (ox <= 0 || oy <= 0) continue;
-                        if (ox < oy) {
-                            separatePair(a, b, 'x', ox * 0.5, a.x <= b.x ? -1 : 1);
-                        } else {
-                            separatePair(a, b, 'y', oy * 0.5, a.y <= b.y ? -1 : 1);
-                        }
-                    }
-                }
-            }
-
-            orbitItems.forEach((item) => keepNodeOnScreen(item, width, height));
             if (nodeGrab) {
-                orbit.grabX = nodeGrab.x;
-                orbit.grabY = nodeGrab.y;
+                const parent = nodeGrab.parentId ? byId.get(nodeGrab.parentId) : null;
+                const px = parent ? parent.x : cx;
+                const py = parent ? parent.y : cy;
+                const ptx = parent ? parent.tx : cx;
+                const pty = parent ? parent.ty : cy;
+                const rest = Math.max(Math.hypot(nodeGrab.tx - ptx, nodeGrab.ty - pty), 10);
+                const dx = orbit.grabX - px;
+                const dy = orbit.grabY - py;
+                const cur = Math.hypot(dx, dy);
+                if (cur > rest) {
+                    const extra = cur - rest;
+                    const pull = extra * extra / (extra + 180);
+                    nodeGrab.x = orbit.grabX - (dx / cur) * pull * 0.42;
+                    nodeGrab.y = orbit.grabY - (dy / cur) * pull * 0.42;
+                } else {
+                    nodeGrab.x = orbit.grabX;
+                    nodeGrab.y = orbit.grabY;
+                }
+                nodeGrab.vx = 0;
+                nodeGrab.vy = 0;
+            }
+
+            if (!livePhysics) {
+                orbitItems.forEach((item) => {
+                    if (item === nodeGrab) return;
+                    item.x = item.tx;
+                    item.y = item.ty;
+                    item.vx = 0;
+                    item.vy = 0;
+                });
+            } else {
+                orbitItems.forEach((item) => {
+                    if (item === nodeGrab) return;
+                    const linked = nodeGrab && (isAncestor(nodeGrab, item) || isAncestor(item, nodeGrab));
+                    const kHome = linked ? 0.05 : 0.36;
+                    item.vx = (item.vx || 0) + (item.tx - item.x) * kHome * step;
+                    item.vy = (item.vy || 0) + (item.ty - item.y) * kHome * step;
+                });
+                orbitItems.forEach((item) => {
+                    const parent = item.parentId ? byId.get(item.parentId) : null;
+                    const px = parent ? parent.x : cx;
+                    const py = parent ? parent.y : cy;
+                    const ptx = parent ? parent.tx : cx;
+                    const pty = parent ? parent.ty : cy;
+                    const rest = Math.max(Math.hypot(item.tx - ptx, item.ty - pty), 8);
+                    const dx = item.x - px;
+                    const dy = item.y - py;
+                    const cur = Math.hypot(dx, dy);
+                    if (cur < 0.001) return;
+                    const stretch = cur - rest;
+                    if (Math.abs(stretch) < 0.5) return;
+                    const nx = dx / cur;
+                    const ny = dy / cur;
+                    const kLink = parent ? 0.2 : 0.12;
+                    if (item !== nodeGrab) {
+                        item.vx -= nx * stretch * kLink * step;
+                        item.vy -= ny * stretch * kLink * step;
+                    }
+                    if (parent && parent !== nodeGrab) {
+                        parent.vx = (parent.vx || 0) + nx * stretch * kLink * 0.7 * step;
+                        parent.vy = (parent.vy || 0) + ny * stretch * kLink * 0.7 * step;
+                    }
+                });
+                orbitItems.forEach((item) => {
+                    if (item === nodeGrab) return;
+                    item.vx *= Math.pow(0.8, step);
+                    item.vy *= Math.pow(0.8, step);
+                    item.x += item.vx * step;
+                    item.y += item.vy * step;
+                    if (!nodeGrab && Math.hypot(item.x - item.tx, item.y - item.ty) < 0.45 && Math.hypot(item.vx, item.vy) < 0.2) {
+                        item.x = item.tx;
+                        item.y = item.ty;
+                        item.vx = 0;
+                        item.vy = 0;
+                    }
+                });
             }
 
             orbitItems.forEach((item) => {
-                item.node.style.transform = 'scale(' + zoom + ')';
-                item.node.style.left = (item.x - item.w / 2) + 'px';
-                item.node.style.top = (item.y - item.h / 2) + 'px';
+                item.node.style.left = '0px';
+                item.node.style.top = '0px';
+                item.node.style.transform = 'translate3d(' + (item.x - item.w / 2) + 'px,' + (item.y - item.h / 2) + 'px,0) scale(' + zoom + ')';
             });
             orbitItems.forEach((item) => {
-                const parent = item.parentId && orbitItems.find((other) => other.node.dataset.field === item.parentId);
-                item.line.setAttribute('x1', parent ? parent.x : cx);
-                item.line.setAttribute('y1', parent ? parent.y : cy);
+                const parent = item.parentId && byId.get(item.parentId);
+                const x1 = parent ? parent.x : cx;
+                const y1 = parent ? parent.y : cy;
+                const rest = Math.max(Math.hypot(item.tx - (parent ? parent.tx : cx), item.ty - (parent ? parent.ty : cy)), 8);
+                const stretch = Math.hypot(item.x - x1, item.y - y1) / rest;
+                item.line.setAttribute('x1', x1);
+                item.line.setAttribute('y1', y1);
                 item.line.setAttribute('x2', item.x);
                 item.line.setAttribute('y2', item.y);
                 item.line.setAttribute('stroke-linecap', 'round');
                 if (parent) {
                     item.line.setAttribute('stroke', item.node.classList.contains('filled') ? 'rgba(74,222,128,0.5)' : 'rgba(228,228,231,0.32)');
-                    item.line.setAttribute('stroke-width', '1.5');
+                    item.line.setAttribute('stroke-width', stretch > 1.08 ? '2' : '1.5');
                 } else {
                     item.line.setAttribute('stroke', item.node.classList.contains('filled') ? 'rgba(74,222,128,0.28)' : 'rgba(255,255,255,0.06)');
-                    item.line.setAttribute('stroke-width', '1');
+                    item.line.setAttribute('stroke-width', stretch > 1.12 ? '1.35' : '1');
                 }
             });
             placePlatformMenu();
@@ -4254,7 +4487,7 @@
 
         function closeShare() {
             const sheet = document.getElementById('shareSheet');
-            if (sheet) sheet.hidden = true;
+            hideSheet(sheet);
             const dock = document.getElementById('dock');
             if (dock) dock.classList.remove('picking-share');
         }
@@ -4279,7 +4512,7 @@
             const nativeBtn = document.getElementById('shareNative');
             if (nativeBtn) nativeBtn.hidden = !navigator.share;
             drawShareQr(url);
-            sheet.hidden = false;
+            showSheet(sheet);
             document.getElementById('dock').classList.add('picking-share');
         }
 
@@ -4325,8 +4558,7 @@
         }
 
         function closeHelp() {
-            const guide = document.getElementById('helpGuide');
-            if (guide) guide.hidden = true;
+            hideSheet(document.getElementById('helpGuide'));
         }
 
         function openHelp() {
@@ -4336,8 +4568,7 @@
             closeFieldMenu();
             closeShare();
             closeAddField();
-            const guide = document.getElementById('helpGuide');
-            if (guide) guide.hidden = false;
+            showSheet(document.getElementById('helpGuide'));
         }
 
         function toggleExportMenu() {
@@ -4361,40 +4592,56 @@
             else if (format === 'html') downloadBlob(caseFileName('html'), 'text/html', caseHtml());
         }
 
+        function closeResetConfirm() {
+            hideSheet(document.getElementById('resetConfirm'));
+        }
+
         function resetCase() {
-            if (!confirm('Clear filed facts? Portfolio width and map position stay.')) return;
-            const sidebarNow = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar'));
+            const sheet = document.getElementById('resetConfirm');
+            if (!sheet) return;
+            showSheet(sheet);
+            const cancel = document.getElementById('resetCancel');
+            if (cancel) cancel.focus();
+        }
+
+        function applyResetCase() {
+            closeResetConfirm();
             Object.keys(mediaStore).forEach((id) => {
                 if (mediaStore[id] && mediaStore[id].src && String(mediaStore[id].src).indexOf('blob:') === 0) {
                     URL.revokeObjectURL(mediaStore[id].src);
                 }
                 delete mediaStore[id];
             });
-            closeMediaViewer();
-            closePlatformMenu();
-            closeTimezoneMenu();
-            closeSearchMenu();
-            closeFieldMenu();
-            profile.facts = emptyFacts();
-            profile.analysis = '';
-            profile.nulls = [];
-            saveProfile();
-            activeField = null;
-            document.querySelectorAll('.node').forEach((node) => {
-                delete node.dataset.platform;
-                node.classList.remove('has-platform', 'has-preview', 'filled', 'null', 'active');
-            });
-            renderProfile();
-            renderNodes();
-            updateHubProgress();
-            if (Number.isFinite(sidebarNow)) applySidebarWidth(sidebarNow);
-            recordHistory(true);
+            try { localStorage.clear(); } catch (error) {}
+            try { sessionStorage.clear(); } catch (error) {}
+            try {
+                document.cookie.split(';').forEach((part) => {
+                    const name = part.split('=')[0].trim();
+                    if (!name) return;
+                    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+                    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=' + location.hostname;
+                });
+            } catch (error) {}
+            const reloadFresh = function () {
+                location.replace(location.origin + location.pathname);
+            };
+            if (window.caches && caches.keys) {
+                caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))).catch(function () {}).then(reloadFresh);
+                return;
+            }
+            reloadFresh();
         }
 
         function recenterOrbit() {
             orbit.dragX = 0;
             orbit.dragY = 0;
             orbit.zoom = 1;
+            orbit.targetZoom = 1;
+            orbit.zoomFocusX = null;
+            orbit.zoomFocusY = null;
+            orbit.zoomWorldX = null;
+            orbit.zoomWorldY = null;
+            orbit.zoomBusy = false;
             orbit.parallaxX = 0;
             orbit.parallaxY = 0;
             orbit.targetParallaxX = 0;
@@ -4404,6 +4651,7 @@
         }
 
         try { createNodes(); applyStoredFieldLabels(); applyHiddenFields(); } catch (error) { console.error(error); }
+        try { document.body.classList.toggle('phone', isPhone()); if (isPhone()) setPanelOpen(true); } catch (error) {}
         try { renderProfile(); } catch (error) { console.error(error); }
         try { renderNodes(); } catch (error) { console.error(error); }
         try { initSidebarWidth(); } catch (error) {}
@@ -4595,6 +4843,23 @@
 
         document.getElementById('factsList').addEventListener('click', (event) => {
             if (event.target.closest('a')) return;
+            const find = event.target.closest('[data-search-field]');
+            if (find) {
+                event.preventDefault();
+                event.stopPropagation();
+                openSearchMenu(find.dataset.searchField);
+                return;
+            }
+            const reveal = event.target.closest('[data-reveal]');
+            if (reveal) {
+                event.preventDefault();
+                event.stopPropagation();
+                const key = decodeURIComponent(reveal.dataset.reveal || '');
+                if (revealedPasswords.has(key)) revealedPasswords.delete(key);
+                else revealedPasswords.add(key);
+                renderProfile();
+                return;
+            }
             const button = event.target.closest('[data-remove]');
             if (button) {
                 removeFact(button.dataset.remove, decodeURIComponent(button.dataset.value));
@@ -4602,6 +4867,10 @@
             }
             const row = event.target.closest('[data-focus]');
             if (!row) return;
+            if (isPhone()) {
+                openPhoneField(row.dataset.focus);
+                return;
+            }
             activeField = row.dataset.focus;
             document.querySelectorAll('.node').forEach((item) => {
                 item.classList.toggle('active', item.dataset.field === activeField);
@@ -4610,7 +4879,20 @@
         });
 
         document.getElementById('dockReset').addEventListener('click', resetCase);
+        const resetSheet = document.getElementById('resetConfirm');
+        document.getElementById('resetCancel').addEventListener('click', closeResetConfirm);
+        document.getElementById('resetConfirmBtn').addEventListener('click', applyResetCase);
+        if (resetSheet) resetSheet.addEventListener('click', (event) => {
+            if (event.target.id === 'resetConfirm') closeResetConfirm();
+        });
         document.getElementById('dockRecenter').addEventListener('click', recenterOrbit);
+        const dockAdd = document.getElementById('dockAdd');
+        if (dockAdd) dockAdd.addEventListener('click', (event) => {
+            event.stopPropagation();
+            closePhoneField();
+            closePhoneMore();
+            openAddField();
+        });
         document.getElementById('dockHelp').addEventListener('click', (event) => {
             event.stopPropagation();
             const guide = document.getElementById('helpGuide');
@@ -4626,6 +4908,85 @@
         document.getElementById('dockShare').addEventListener('click', (event) => {
             event.stopPropagation();
             toggleShare();
+        });
+        document.getElementById('phoneHelp').addEventListener('click', openHelp);
+        document.getElementById('phoneAdd').addEventListener('click', () => {
+            closePhoneField();
+            closePhoneMore();
+            openAddField();
+        });
+        document.getElementById('phoneShare').addEventListener('click', () => {
+            closePhoneField();
+            closePhoneMore();
+            openShare();
+        });
+        document.getElementById('phoneMoreBtn').addEventListener('click', () => {
+            closePhoneField();
+            showSheet(document.getElementById('phoneMore'));
+        });
+        document.getElementById('phoneMoreClose').addEventListener('click', closePhoneMore);
+        document.getElementById('phoneMore').addEventListener('click', (event) => {
+            if (event.target.id === 'phoneMore') closePhoneMore();
+        });
+        document.getElementById('phoneUndo').addEventListener('click', () => { closePhoneMore(); undoCase(); });
+        document.getElementById('phoneRedo').addEventListener('click', () => { closePhoneMore(); redoCase(); });
+        document.getElementById('phoneExport').addEventListener('click', () => { closePhoneMore(); toggleExportMenu(); });
+        document.getElementById('phoneReset').addEventListener('click', () => { closePhoneMore(); resetCase(); });
+        document.getElementById('phoneFieldDone').addEventListener('click', () => {
+            writePhoneField();
+            closePhoneField();
+            renderProfile();
+        });
+        document.getElementById('phoneField').addEventListener('click', (event) => {
+            if (event.target.id === 'phoneField') {
+                writePhoneField();
+                closePhoneField();
+                renderProfile();
+            }
+        });
+        document.getElementById('phoneFieldInput').addEventListener('input', () => {
+            writePhoneField();
+            syncPhoneFindIcon();
+            renderPhoneLeads(phoneFieldId);
+        });
+        document.getElementById('phonePlatformBtn').addEventListener('click', () => {
+            const node = document.querySelector('.node[data-field="' + phoneFieldId + '"]');
+            const trigger = node && node.querySelector('.platform-trigger');
+            if (trigger) trigger.click();
+        });
+        document.getElementById('phoneTzBtn').addEventListener('click', () => {
+            const node = document.querySelector('.node[data-field="' + phoneFieldId + '"]');
+            const trigger = node && node.querySelector('.tz-trigger');
+            if (trigger) trigger.click();
+        });
+        const phoneFieldSearch = document.getElementById('phoneFieldSearch');
+        if (phoneFieldSearch) phoneFieldSearch.addEventListener('click', () => {
+            writePhoneField();
+            if (phoneFieldId) openSearchMenu(phoneFieldId);
+        });
+        document.getElementById('phoneLeads').addEventListener('click', (event) => {
+            const option = event.target.closest('[data-open-lead]');
+            if (!option) return;
+            event.stopPropagation();
+            openLead(option.dataset.openLead, fieldInputValue(phoneFieldId), option.dataset.leadMode);
+        });
+        document.getElementById('phoneFieldUpload').addEventListener('click', () => {
+            const node = document.querySelector('.node[data-field="' + phoneFieldId + '"]');
+            const file = node && node.querySelector('input[type="file"]');
+            if (file) file.click();
+        });
+        document.getElementById('phoneFieldClear').addEventListener('click', () => {
+            const editor = document.getElementById('phoneFieldInput');
+            if (editor) editor.value = '';
+            writePhoneField();
+            if (phoneFieldId) clearField(phoneFieldId);
+            syncPhoneField();
+            renderProfile();
+        });
+        document.getElementById('phoneReveal').addEventListener('click', () => {
+            const reveal = document.getElementById('phoneReveal');
+            reveal.dataset.open = reveal.dataset.open === '1' ? '' : '1';
+            syncPhoneField();
         });
         document.getElementById('shareClose').addEventListener('click', closeShare);
         document.getElementById('shareSheet').addEventListener('click', (event) => {
@@ -4646,6 +5007,12 @@
             event.stopPropagation();
             addOrbitField(pick.dataset.addField);
         });
+        document.getElementById('addSheet').addEventListener('wheel', (event) => {
+            const row = event.target.closest('.add-chips');
+            if (!row || row.scrollWidth <= row.clientWidth + 1) return;
+            event.preventDefault();
+            row.scrollLeft += event.deltaY + event.deltaX;
+        }, { passive: false });
         document.getElementById('addPresetFilter').addEventListener('input', renderAddPanel);
         document.getElementById('addCustomForm').addEventListener('submit', (event) => {
             event.preventDefault();
@@ -4677,6 +5044,21 @@
                 return;
             }
             if (event.key === 'Escape') {
+                const phoneField = document.getElementById('phoneField');
+                if (phoneField && !phoneField.hidden) {
+                    closePhoneField();
+                    return;
+                }
+                const phoneMore = document.getElementById('phoneMore');
+                if (phoneMore && !phoneMore.hidden) {
+                    closePhoneMore();
+                    return;
+                }
+                const reset = document.getElementById('resetConfirm');
+                if (reset && !reset.hidden) {
+                    closeResetConfirm();
+                    return;
+                }
                 const help = document.getElementById('helpGuide');
                 if (help && !help.hidden) {
                     closeHelp();
@@ -4706,16 +5088,23 @@
         });
 
         function onViewportChange() {
-            if (!drawerQuery.matches) setPanelOpen(false);
-            const saved = Number(localStorage.getItem(SIDEBAR_KEY));
-            applySidebarWidth(saved || 268);
-            positionNodes();
+            document.body.classList.toggle('phone', isPhone());
+            if (isPhone()) setPanelOpen(true);
+            else setPanelOpen(false);
+            if (!isPhone()) {
+                closePhoneField();
+                closePhoneMore();
+                const saved = Number(localStorage.getItem(SIDEBAR_KEY));
+                applySidebarWidth(saved || 268);
+                positionNodes();
+            }
+            renderProfile();
         }
 
         if (drawerQuery.addEventListener) drawerQuery.addEventListener('change', onViewportChange);
         else drawerQuery.addListener(onViewportChange);
 
-        window.addEventListener('resize', positionNodes);
+        window.addEventListener('resize', () => { if (!isPhone()) positionNodes(); });
         requestAnimationFrame(() => {
             orbit.snapLayout = true;
             positionNodes();
@@ -4725,7 +5114,7 @@
         });
         if (window.ResizeObserver && mapCanvas) {
             const layoutWatch = new ResizeObserver(() => {
-                if (orbit.dragging) return;
+                if (orbit.dragging || isPhone()) return;
                 positionNodes();
             });
             layoutWatch.observe(mapCanvas);
@@ -4772,6 +5161,10 @@
             orbit.prevCY = event.clientY;
             orbit.panVX = 0;
             orbit.panVY = 0;
+            orbit.zoomFocusX = null;
+            orbit.zoomFocusY = null;
+            orbit.zoomWorldX = null;
+            orbit.zoomWorldY = null;
             if (mode === 'pan') {
                 orbit.targetParallaxX = 0;
                 orbit.targetParallaxY = 0;
@@ -4935,6 +5328,7 @@
             const node = document.querySelector('.node.menu-open:not(.tz-open)');
             if (!node) return;
             setUsernameStep(node, option.dataset.pickPlatform, false);
+            if (isPhone()) syncPhoneField();
             closePlatformMenu();
             const input = document.getElementById('field-' + node.dataset.field);
             if (input) input.focus();
@@ -4947,19 +5341,20 @@
             event.stopPropagation();
             const fieldId = document.getElementById('tzMenu').dataset.field;
             applyTimezonePick(fieldId, option.dataset.pickTz);
+            if (isPhone()) syncPhoneField();
         });
 
         document.addEventListener('click', (event) => {
-            if (!event.target.closest('#platformMenu, .platform-trigger, .node.menu-open:not(.tz-open)')) {
+            if (!event.target.closest('#platformMenu, .platform-trigger, #phonePlatformBtn, .node.menu-open:not(.tz-open)')) {
                 closePlatformMenu();
             }
-            if (!event.target.closest('#tzMenu, .tz-trigger, .node.tz-open')) {
+            if (!event.target.closest('#tzMenu, .tz-trigger, #phoneTzBtn, .node.tz-open')) {
                 closeTimezoneMenu();
             }
-            if (!event.target.closest('#searchMenu, [data-search]')) {
+            if (!event.target.closest('#searchMenu, [data-search], #phoneFieldSearch')) {
                 closeSearchMenu();
             }
-            if (!event.target.closest('#exportMenu, #dockExport')) {
+            if (!event.target.closest('#exportMenu, #dockExport, #phoneExport')) {
                 closeExportMenu();
             }
             if (!fieldMenuGuard && !event.target.closest('#fieldMenu, .node-more')) {
@@ -4984,7 +5379,7 @@
         });
 
         if (mapStage) mapStage.addEventListener('contextmenu', (event) => {
-            if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #exportMenu, .media-viewer, .help-guide, .share-sheet, .add-sheet')) return;
+            if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #exportMenu, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
             const node = event.target.closest('.node');
             if (node) {
                 event.preventDefault();
@@ -5015,22 +5410,46 @@
             if (event.target.id === 'mediaViewer') closeMediaViewer();
         });
 
-        if (mapStage) mapStage.addEventListener('wheel', (event) => {
-            if (event.target.closest('select, option, .platform-menu, .tz-menu, .search-menu, .field-menu, .media-viewer, .help-guide, .share-sheet, .add-sheet')) return;
-            event.preventDefault();
-            const oldZoom = orbit.zoom;
-            const next = clamp(oldZoom * (event.deltaY > 0 ? 0.9 : 1.12), 0.4, 2.8);
-            if (next === oldZoom) return;
+        function captureZoomFocus(mx, my) {
+            const size = canvasSize();
+            const zoom = Math.max(orbit.zoom, 0.01);
+            const cx = size.width / 2 + orbit.dragX + orbit.parallaxX;
+            const cy = size.height / 2 + orbit.dragY + orbit.parallaxY;
+            orbit.zoomFocusX = mx;
+            orbit.zoomFocusY = my;
+            orbit.zoomWorldX = (mx - cx) / zoom;
+            orbit.zoomWorldY = (my - cy) / zoom;
+        }
 
+        function applyZoomFocus(nextZoom) {
+            if (orbit.zoomWorldX == null || orbit.zoomFocusX == null) return;
+            const size = canvasSize();
+            orbit.dragX = orbit.zoomFocusX - orbit.zoomWorldX * nextZoom - size.width / 2 - orbit.parallaxX;
+            orbit.dragY = orbit.zoomFocusY - orbit.zoomWorldY * nextZoom - size.height / 2 - orbit.parallaxY;
+        }
+
+        function followZoom(current, target, dt, ms) {
+            if (current <= 0 || target <= 0) return follow(current, target, dt, ms);
+            return Math.exp(follow(Math.log(current), Math.log(target), dt, ms));
+        }
+
+        if (mapStage) mapStage.addEventListener('wheel', (event) => {
+            if (event.target.closest('select, option, .platform-menu, .tz-menu, .search-menu, .field-menu, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
+            event.preventDefault();
             const rect = mapCanvas.getBoundingClientRect();
-            const mx = event.clientX - rect.left;
-            const my = event.clientY - rect.top;
-            const cx = rect.width / 2 + orbit.dragX + orbit.parallaxX;
-            const cy = rect.height / 2 + orbit.dragY + orbit.parallaxY;
-            const factor = next / oldZoom;
-            orbit.dragX = mx - (mx - cx) * factor - rect.width / 2 - orbit.parallaxX;
-            orbit.dragY = my - (my - cy) * factor - rect.height / 2 - orbit.parallaxY;
-            orbit.zoom = next;
+            let delta = event.deltaY;
+            if (event.deltaMode === 1) delta *= 16;
+            else if (event.deltaMode === 2) delta *= rect.height || 800;
+            const current = orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom;
+            const next = clamp(current * Math.exp(-delta * 0.00105), 0.4, 2.8);
+            captureZoomFocus(event.clientX - rect.left, event.clientY - rect.top);
+            orbit.targetZoom = next;
+            orbit.zoomBusy = true;
+            if (reduceMotion) {
+                orbit.zoom = next;
+                applyZoomFocus(next);
+                orbit.zoomBusy = false;
+            }
         }, { passive: false });
 
         let lastTick = performance.now();
@@ -5039,13 +5458,11 @@
             lastTick = now;
             const freezeWorld = orbit.dragging && orbit.dragMode === 'pan';
             orbit.pulse = 1;
-            if (!reduceMotion && !freezeWorld && !(orbit.dragging && orbit.dragMode === 'node')) {
-                orbit.dSpin = dt * 0.000022;
-                orbit.spin += orbit.dSpin;
-            } else {
-                orbit.dSpin = 0;
+            if (orbit.targetZoom == null) orbit.targetZoom = orbit.zoom;
+            if (!reduceMotion && !freezeWorld) {
+                orbit.spin += dt * 0.000024;
             }
-            if (!orbit.dragging) {
+            if (!orbit.dragging && !orbit.zoomBusy) {
                 if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.25) {
                     orbit.dragX += orbit.panVX;
                     orbit.dragY += orbit.panVY;
@@ -5064,16 +5481,29 @@
                 orbit.spotY = orbit.targetSpotY;
             }
             const mouseMs = reduceMotion ? 50 : 180;
-            const gridMs = reduceMotion ? 60 : 280;
             const snapMs = 18;
             orbit.parallaxX = follow(orbit.parallaxX, orbit.targetParallaxX, dt, freezeWorld ? snapMs : mouseMs);
             orbit.parallaxY = follow(orbit.parallaxY, orbit.targetParallaxY, dt, freezeWorld ? snapMs : mouseMs);
             orbit.spotX = follow(orbit.spotX, orbit.targetSpotX, dt, mouseMs);
             orbit.spotY = follow(orbit.spotY, orbit.targetSpotY, dt, mouseMs);
+            const zoomMs = reduceMotion ? 1 : 220;
+            orbit.zoom = followZoom(orbit.zoom, orbit.targetZoom, dt, zoomMs);
+            if (Math.abs(Math.log(orbit.zoom / Math.max(orbit.targetZoom, 0.01))) < 0.00035) {
+                orbit.zoom = orbit.targetZoom;
+            }
+            orbit.zoomBusy = orbit.zoom !== orbit.targetZoom;
+            if (orbit.zoomWorldX != null) applyZoomFocus(orbit.zoom);
+            if (!orbit.zoomBusy) {
+                orbit.zoomFocusX = null;
+                orbit.zoomFocusY = null;
+                orbit.zoomWorldX = null;
+                orbit.zoomWorldY = null;
+            }
+            const gridMs = reduceMotion ? 60 : (orbit.zoomBusy ? 1 : 280);
             const drift = reduceMotion ? 1 : 1.75;
-            orbit.gridShiftX = follow(orbit.gridShiftX, orbit.dragX + orbit.parallaxX * drift, dt, freezeWorld ? 40 : gridMs);
-            orbit.gridShiftY = follow(orbit.gridShiftY, orbit.dragY + orbit.parallaxY * drift, dt, freezeWorld ? 40 : gridMs);
-            applyOrbit(dt);
+            orbit.gridShiftX = follow(orbit.gridShiftX, orbit.dragX + orbit.parallaxX * drift, dt, freezeWorld || orbit.zoomBusy ? 1 : gridMs);
+            orbit.gridShiftY = follow(orbit.gridShiftY, orbit.dragY + orbit.parallaxY * drift, dt, freezeWorld || orbit.zoomBusy ? 1 : gridMs);
+            if (!isPhone()) applyOrbit(dt);
             const sec = Math.floor(now / 1000);
             if (sec !== tickOrbit.clockSec) {
                 tickOrbit.clockSec = sec;
