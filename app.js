@@ -3121,6 +3121,26 @@
             return copy;
         }
 
+        function cloneFactsShallow(facts) {
+            const src = facts || {};
+            const out = {};
+            Object.keys(src).forEach((id) => {
+                const list = src[id];
+                if (!Array.isArray(list)) {
+                    out[id] = list;
+                    return;
+                }
+                out[id] = list.map((item) => (item && typeof item === 'object') ? Object.assign({}, item) : item);
+            });
+            return out;
+        }
+
+        function faceStamp(src) {
+            const s = String(src || '');
+            if (!s) return '';
+            return s.length + ':' + s.slice(0, 12) + s.slice(-16);
+        }
+
         function saveProfileImages(profileId, facts) {
             const id = String(profileId || '');
             if (!id) return Promise.resolve();
@@ -3179,8 +3199,6 @@
             if (typeof setFieldThumb === 'function') setFieldThumb('image');
             if (typeof renderProfile === 'function') renderProfile();
             if (typeof renderNodes === 'function') renderNodes();
-            if (typeof updateHubFace === 'function') updateHubFace();
-            if (typeof renderProfileRail === 'function') renderProfileRail();
             if (typeof photosSheetOpen === 'function' && photosSheetOpen() && typeof renderPhotosSheet === 'function') {
                 renderPhotosSheet();
             }
@@ -3260,13 +3278,13 @@
         const history = { past: [], future: [], applying: false, timer: 0 };
 
         function snapshotProfile() {
-            return JSON.parse(JSON.stringify({
+            return {
                 analysis: profile.analysis || '',
-                facts: profile.facts || emptyFacts(),
-                nulls: Array.isArray(profile.nulls) ? profile.nulls : [],
-                missing: Array.isArray(profile.nulls) ? profile.nulls : [],
-                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms : []
-            }));
+                facts: slimFactsForStorage(profile.facts || emptyFacts()),
+                nulls: Array.isArray(profile.nulls) ? profile.nulls.slice() : [],
+                missing: Array.isArray(profile.nulls) ? profile.nulls.slice() : [],
+                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : []
+            };
         }
 
         function snapshotsEqual(a, b) {
@@ -3383,8 +3401,24 @@
         function saveProfileEntry(entry) {
             if (!entry || !entry.id) return;
             saveProfileImages(entry.id, entry.facts);
-            const slim = JSON.parse(JSON.stringify(entry));
-            slim.facts = slimFactsForStorage(slim.facts);
+            const slim = {
+                id: entry.id,
+                kind: entry.kind,
+                title: entry.title,
+                named: entry.named,
+                createdAt: entry.createdAt,
+                updatedAt: entry.updatedAt,
+                analysis: entry.analysis || '',
+                facts: slimFactsForStorage(entry.facts),
+                nulls: Array.isArray(entry.nulls) ? entry.nulls.slice() : [],
+                missing: Array.isArray(entry.nulls) ? entry.nulls.slice() : (Array.isArray(entry.missing) ? entry.missing.slice() : []),
+                added: entry.added,
+                labels: entry.labels,
+                hidden: entry.hidden,
+                layout: entry.layout,
+                peerHomes: entry.peerHomes,
+                customPlatforms: entry.customPlatforms
+            };
             writeStoredJson(profileDataKey(entry.id), slim);
         }
 
@@ -3581,10 +3615,10 @@
         }
 
         function captureWorkspace(id, prev) {
-            const snap = typeof snapshotProfile === 'function' ? snapshotProfile() : {
+            const snap = {
                 analysis: (profile && profile.analysis) || '',
-                facts: (profile && profile.facts) || {},
-                nulls: (profile && Array.isArray(profile.nulls)) ? profile.nulls : []
+                facts: cloneFactsShallow(profile && profile.facts),
+                nulls: (profile && Array.isArray(profile.nulls)) ? profile.nulls.slice() : []
             };
             const title = prev && prev.named ? prev.title : (displayProfileName({
                 id: id,
@@ -3883,31 +3917,38 @@
         function renderProfileRail() {
             const list = document.getElementById('profileRailList');
             if (!list || !profileLibrary) return;
-            const stamp = profileLibrary.order.map((id) => {
+            const rows = profileLibrary.order.map((id) => {
                 const entry = profileLibrary.items[id] || { id: id };
                 const live = id === profileLibrary.activeId;
                 const facts = live ? profile.facts : entry.facts;
                 const name = displayProfileName(live ? Object.assign({}, entry, { facts: facts, id: id }) : entry);
                 const face = compactFaceFrom(facts);
                 const linked = linkedProfileIds(id).length;
-                return id + (live ? '*' : '') + ':' + name + ':' + (face ? String(face.length) + face.slice(-20) : profileLetter(name)) + ':L' + linked;
-            }).join('|');
+                return {
+                    id: id,
+                    live: live,
+                    name: name,
+                    face: face,
+                    linked: linked,
+                    stamp: id + (live ? '*' : '') + ':' + name + ':' + (face ? 'I' + faceStamp(face) : profileLetter(name)) + ':L' + linked
+                };
+            });
+            const stamp = rows.map((row) => row.stamp).join('|');
             if (list.dataset.stamp === stamp) return;
             list.dataset.stamp = stamp;
-            list.innerHTML = profileLibrary.order.map((id) => {
-                const entry = profileLibrary.items[id] || { id: id };
-                const live = id === profileLibrary.activeId;
-                const facts = live ? profile.facts : entry.facts;
-                const name = displayProfileName(live ? Object.assign({}, entry, { facts: facts, id: id }) : entry);
-                const face = compactFaceFrom(facts);
-                const active = live ? ' active' : '';
-                const linked = linkedProfileIds(id).length > 0;
-                const mark = face
-                    ? '<img alt="" src="' + escapeHtml(face) + '">'
-                    : '<span>' + escapeHtml(profileLetter(name)) + '</span>';
-                const label = linked ? name + ' · linked' : name;
-                return '<button type="button" class="profile-rail-item' + active + '" data-profile="' + escapeHtml(id) + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '" aria-current="' + (live ? 'true' : 'false') + '"><span class="profile-rail-face">' + mark + '</span>' + (linked ? PROFILE_LINK_BADGE : '') + '</button>';
+            list.innerHTML = rows.map((row) => {
+                const active = row.live ? ' active' : '';
+                const mark = row.face
+                    ? '<img alt="" data-rail-face="' + escapeHtml(row.id) + '">'
+                    : '<span>' + escapeHtml(profileLetter(row.name)) + '</span>';
+                const label = row.linked ? row.name + ' · linked' : row.name;
+                return '<button type="button" class="profile-rail-item' + active + '" data-profile="' + escapeHtml(row.id) + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '" aria-current="' + (row.live ? 'true' : 'false') + '"><span class="profile-rail-face">' + mark + '</span>' + (row.linked ? PROFILE_LINK_BADGE : '') + '</button>';
             }).join('');
+            rows.forEach((row) => {
+                if (!row.face) return;
+                const img = list.querySelector('img[data-rail-face="' + row.id + '"]');
+                if (img) img.src = row.face;
+            });
         }
 
         function closeProfileMenu() {
@@ -4323,6 +4364,7 @@
                 return;
             }
             history.past.push(snap);
+            if (history.past.length > 40) history.past.splice(0, history.past.length - 40);
             history.future = [];
             updateHistoryButtons();
         }
@@ -4357,6 +4399,7 @@
             updateHubProgress();
             history.applying = false;
             updateHistoryButtons();
+            if (typeof hydrateActiveImages === 'function') hydrateActiveImages();
         }
 
         function undoCase() {
@@ -4384,10 +4427,20 @@
         }
 
         function setPanelOpen(open) {
-            if (isPhone()) open = true;
-            profilePanel.classList.toggle('open', open);
-            backdrop.hidden = !open || !drawerQuery.matches || isPhone();
-            backdrop.classList.toggle('visible', open && drawerQuery.matches && !isPhone());
+            const next = !!open;
+            profilePanel.classList.toggle('open', next);
+            document.body.classList.toggle('panel-open', next);
+            const phone = isPhone();
+            backdrop.hidden = !next || !drawerQuery.matches || phone;
+            backdrop.classList.toggle('visible', next && drawerQuery.matches && !phone);
+            const toggle = document.getElementById('profileToggle');
+            if (toggle) toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+            const dockPort = document.getElementById('dockPortfolio');
+            if (dockPort) dockPort.setAttribute('aria-expanded', next ? 'true' : 'false');
+            if (phone && !next) {
+                if (typeof positionNodes === 'function') positionNodes();
+                if (typeof kickOrbit === 'function') kickOrbit();
+            }
         }
 
         function latestFact(id) {
@@ -4964,14 +5017,18 @@
             thumb.hidden = false;
             node.classList.add('has-preview');
             if (fieldId === 'image') {
-                const safe = String(media.src).replace(/"/g, '');
-                thumb.innerHTML = '<img alt="" src="' + safe + '">';
-                const img = thumb.querySelector('img');
-                if (img) {
-                    img.onerror = function () {
-                        thumb.innerHTML = IMAGE_ICON;
-                    };
+                const src = String(media.src || '');
+                let img = thumb.querySelector('img');
+                if (!img) {
+                    thumb.textContent = '';
+                    img = document.createElement('img');
+                    img.alt = '';
+                    thumb.appendChild(img);
                 }
+                if (img.getAttribute('src') !== src) img.src = src;
+                img.onerror = function () {
+                    thumb.innerHTML = IMAGE_ICON;
+                };
                 updateHubFace();
             } else {
                 thumb.innerHTML = AUDIO_ICON;
@@ -5001,7 +5058,7 @@
             if (!hub || !face) return;
             const src = filedPortraitSrc();
             if (src) {
-                face.src = src;
+                if (face.getAttribute('src') !== src) face.src = src;
                 face.hidden = false;
                 hub.classList.add('has-face');
                 face.onerror = function () {
@@ -5797,12 +5854,13 @@
                 return;
             }
             const ids = linkedProfileIds();
-            const stamp = ids.map((id) => {
+            const rows = ids.map((id) => {
                 const entry = profileLibrary.items[id];
                 const name = displayProfileName(entry);
                 const face = compactFaceFrom(entry && entry.facts);
-                return id + ':' + name + ':' + (face ? String(face.length) + face.slice(-12) : 'L');
-            }).join('|');
+                return { id: id, name: name, face: face, stamp: id + ':' + name + ':' + (face ? 'I' + faceStamp(face) : 'L') };
+            });
+            const stamp = rows.map((row) => row.stamp).join('|');
             if (layer.dataset.stamp === stamp && peerBodies.length === ids.length) {
                 peerBodies.forEach((body) => {
                     const el = layer.querySelector('[data-peer="' + body.id + '"]');
@@ -5811,18 +5869,20 @@
                 return;
             }
             layer.dataset.stamp = stamp;
-            layer.innerHTML = ids.map((id) => {
-                const entry = profileLibrary.items[id];
-                const name = displayProfileName(entry);
-                const face = compactFaceFrom(entry && entry.facts);
-                const mark = face
-                    ? '<img class="peer-hub-face" alt="" src="' + escapeHtml(face) + '">'
-                    : '<span class="peer-hub-letter">' + escapeHtml(profileLetter(name)) + '</span>';
-                return '<div class="peer-hub" data-peer="' + escapeHtml(id) + '" title="' + escapeHtml(name) + '" role="button" tabindex="0" aria-label="' + escapeHtml(name) + '">' +
+            layer.innerHTML = rows.map((row) => {
+                const mark = row.face
+                    ? '<img class="peer-hub-face" alt="" data-peer-face="' + escapeHtml(row.id) + '">'
+                    : '<span class="peer-hub-letter">' + escapeHtml(profileLetter(row.name)) + '</span>';
+                return '<div class="peer-hub" data-peer="' + escapeHtml(row.id) + '" title="' + escapeHtml(row.name) + '" role="button" tabindex="0" aria-label="' + escapeHtml(row.name) + '">' +
                     mark +
-                    '<span class="peer-hub-name">' + escapeHtml(name) + '</span>' +
+                    '<span class="peer-hub-name">' + escapeHtml(row.name) + '</span>' +
                     '</div>';
             }).join('');
+            rows.forEach((row) => {
+                if (!row.face) return;
+                const img = layer.querySelector('img[data-peer-face="' + row.id + '"]');
+                if (img) img.src = row.face;
+            });
             if (lines) {
                 const size = canvasSize();
                 lines.setAttribute('viewBox', '0 0 ' + size.width + ' ' + size.height);
@@ -7597,7 +7657,9 @@
             userZoomed: false,
             fitZoom: 1,
             fitZooming: false,
-            fitCount: -1
+            fitCount: -1,
+            raf: 0,
+            tickAt: 0
         };
         const LAYOUT_KEY = 'osint-orbit-layout-v1';
         const nodeHomes = new Map();
@@ -8356,6 +8418,7 @@
             applyOrbit(orbit.snapLayout ? 1000 : 16);
             if (orbit.snapLayout && mapCanvas) mapCanvas.classList.add('orbit-ready');
             scheduleSaveLayout();
+            if (typeof kickOrbit === 'function') kickOrbit();
         }
 
         const mapGrid = document.getElementById('mapGrid');
@@ -8388,9 +8451,16 @@
 
         function applyMapGrid() {
             if (!mapGrid) return;
-            mapGrid.style.setProperty('--grid-x', orbit.gridShiftX + 'px');
-            mapGrid.style.setProperty('--grid-y', orbit.gridShiftY + 'px');
-            mapGrid.style.setProperty('--grid-z', String(orbit.zoom));
+            const x = orbit.gridShiftX + 'px';
+            const y = orbit.gridShiftY + 'px';
+            const z = String(orbit.zoom);
+            if (orbit._gx === x && orbit._gy === y && orbit._gz === z) return;
+            orbit._gx = x;
+            orbit._gy = y;
+            orbit._gz = z;
+            mapGrid.style.setProperty('--grid-x', x);
+            mapGrid.style.setProperty('--grid-y', y);
+            mapGrid.style.setProperty('--grid-z', z);
         }
 
         function setGridSpot() {}
@@ -9565,7 +9635,7 @@
         }
 
         try { createNodes(); applyStoredFieldLabels(); applyHiddenFields(); } catch (error) { console.error(error); }
-        try { document.body.classList.toggle('phone', isPhone()); if (isPhone()) setPanelOpen(true); } catch (error) {}
+        try { document.body.classList.toggle('phone', isPhone()); if (isPhone()) setPanelOpen(false); } catch (error) {}
         try { initProfileLibrary(); } catch (error) { console.error(error); }
         try { renderProfile(); } catch (error) { console.error(error); }
         try { renderNodes(); } catch (error) { console.error(error); }
@@ -9849,7 +9919,7 @@
                 sheet.focus();
                 return;
             }
-            if (isPhone()) {
+            if (isPhone() && !profilePanel.classList.contains('open')) {
                 openPhoneField(row.dataset.focus);
                 return;
             }
@@ -10022,6 +10092,8 @@
             closePhoneField();
             showSheet(document.getElementById('phoneMore'));
         });
+        const phoneMoreHelp = document.getElementById('phoneMoreHelp');
+        if (phoneMoreHelp) phoneMoreHelp.addEventListener('click', () => { closePhoneMore(); openHelp(); });
         document.getElementById('phoneMoreClose').addEventListener('click', closePhoneMore);
         document.getElementById('phoneMore').addEventListener('click', (event) => {
             if (event.target.id === 'phoneMore') closePhoneMore();
@@ -10236,6 +10308,19 @@
 
         document.getElementById('profileToggle').addEventListener('click', () => setPanelOpen(true));
         document.getElementById('profileClose').addEventListener('click', () => setPanelOpen(false));
+        const dockPortfolio = document.getElementById('dockPortfolio');
+        if (dockPortfolio) {
+            dockPortfolio.addEventListener('click', () => {
+                setPanelOpen(!profilePanel.classList.contains('open'));
+            });
+        }
+        const dockMore = document.getElementById('dockMore');
+        if (dockMore) {
+            dockMore.addEventListener('click', () => {
+                closePhoneField();
+                showSheet(document.getElementById('phoneMore'));
+            });
+        }
         backdrop.addEventListener('click', () => setPanelOpen(false));
         const profileRailList = document.getElementById('profileRailList');
         if (profileRailList) {
@@ -10383,22 +10468,21 @@
 
         function onViewportChange() {
             document.body.classList.toggle('phone', isPhone());
-            if (isPhone()) setPanelOpen(true);
-            else setPanelOpen(false);
+            setPanelOpen(false);
             if (!isPhone()) {
                 closePhoneField();
                 closePhoneMore();
                 const saved = Number(localStorage.getItem(SIDEBAR_KEY));
                 applySidebarWidth(saved && saved !== 268 && saved !== 320 ? saved : SIDEBAR_DEFAULT);
-                positionNodes();
             }
+            if (typeof positionNodes === 'function') positionNodes();
             renderProfile();
         }
 
         if (drawerQuery.addEventListener) drawerQuery.addEventListener('change', onViewportChange);
         else drawerQuery.addListener(onViewportChange);
 
-        window.addEventListener('resize', () => { if (!isPhone()) positionNodes(); });
+        window.addEventListener('resize', () => { if (typeof positionNodes === 'function') positionNodes(); });
         requestAnimationFrame(() => {
             const animate = !reduceMotion && !(typeof isPhone === 'function' && isPhone());
             orbit.snapLayout = true;
@@ -10418,7 +10502,7 @@
         });
         if (window.ResizeObserver && mapCanvas) {
             const layoutWatch = new ResizeObserver(() => {
-                if (orbit.dragging || isPhone()) return;
+                if (orbit.dragging) return;
                 positionNodes();
             });
             layoutWatch.observe(mapCanvas);
@@ -10488,6 +10572,7 @@
             closeFieldMenu();
             syncCanvasBox();
             orbit.dragging = true;
+            if (typeof kickOrbit === 'function') kickOrbit();
             orbit.dragMode = mode || 'pan';
             orbit.dragItem = item || null;
             orbit.dragStartX = event.clientX;
@@ -10713,6 +10798,7 @@
             const strength = reduceMotion ? 8 : 18;
             orbit.targetParallaxX = nx * strength;
             orbit.targetParallaxY = ny * strength;
+            if (typeof kickOrbit === 'function') kickOrbit();
         }
 
         document.addEventListener('pointermove', updatePointerParallax, { passive: true, capture: true });
@@ -10997,21 +11083,46 @@
             orbit.zoomBusy = true;
             applyZoomFocus(next);
             if (reduceMotion) orbit.zoomBusy = false;
+            if (typeof kickOrbit === 'function') kickOrbit();
         }, { passive: false });
 
-        let lastTick = performance.now();
-        function tickOrbit(now) {
-            const dt = Math.min(48, now - lastTick);
-            lastTick = now;
-            syncCanvasBox();
-            const freezeWorld = !!orbit.dragging
-                || (!orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12);
-            orbit.pulse = 1;
-            if (orbit.targetZoom == null) orbit.targetZoom = orbit.zoom;
-            if (!reduceMotion) {
-                // Keep a barely-visible drift; fast spin reintroduces overlaps every frame.
-                orbit.spin += dt * 0.000012;
+        function orbitIsBusy() {
+            if (document.hidden) return false;
+            if (orbit.dragging) return true;
+            if (orbit.zoomBusy || orbit.zoomWorldX != null) return true;
+            if (Math.abs((orbit.zoom || 1) - (orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom)) > 0.0008) return true;
+            if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.08) return true;
+            if (Math.abs((orbit.parallaxX || 0) - (orbit.targetParallaxX || 0)) > 0.12) return true;
+            if (Math.abs((orbit.parallaxY || 0) - (orbit.targetParallaxY || 0)) > 0.12) return true;
+            if (orbit.targetSpotX != null && Math.abs((orbit.spotX || 0) - orbit.targetSpotX) > 0.2) return true;
+            if (orbit.targetSpotY != null && Math.abs((orbit.spotY || 0) - orbit.targetSpotY) > 0.2) return true;
+            if (Math.hypot(orbit.hubLiveVX || 0, orbit.hubLiveVY || 0) > 0.12) return true;
+            const drift = reduceMotion ? 1 : 2.05;
+            if (Math.abs((orbit.gridShiftX || 0) - ((orbit.gridPanX || 0) + (orbit.parallaxX || 0) * drift)) > 0.25) return true;
+            if (Math.abs((orbit.gridShiftY || 0) - ((orbit.gridPanY || 0) + (orbit.parallaxY || 0) * drift)) > 0.25) return true;
+            for (let i = 0; i < orbitItems.length; i++) {
+                const item = orbitItems[i];
+                if (item.comingHome || (item.bloomWait || 0) > 0) return true;
+                if (Math.abs(item.vx || 0) > 0.05 || Math.abs(item.vy || 0) > 0.05) return true;
             }
+            for (let i = 0; i < peerBodies.length; i++) {
+                const body = peerBodies[i];
+                if (Math.abs(body.vx || 0) > 0.05 || Math.abs(body.vy || 0) > 0.05) return true;
+            }
+            return false;
+        }
+
+        function kickOrbit() {
+            if (!orbit || orbit.raf || document.hidden) return;
+            orbit.tickAt = performance.now();
+            orbit.raf = requestAnimationFrame(tickOrbit);
+        }
+
+        function tickOrbit(now) {
+            const dt = Math.min(48, now - (orbit.tickAt || now));
+            orbit.tickAt = now;
+            if (orbit.dragging || !canvasBox.width) syncCanvasBox();
+            if (orbit.targetZoom == null) orbit.targetZoom = orbit.zoom;
             if (!orbit.dragging && !orbit.zoomBusy) {
                 if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12) {
                     orbit.dragX += orbit.panVX;
@@ -11032,6 +11143,8 @@
                 orbit.spotX = orbit.targetSpotX;
                 orbit.spotY = orbit.targetSpotY;
             }
+            const freezeWorld = !!orbit.dragging
+                || (!orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12);
             const zoomMs = reduceMotion ? 1 : (orbit.fitZooming && !orbit.zoomWorldX ? 640 : 48);
             orbit.zoom = followZoom(orbit.zoom, orbit.targetZoom, dt, zoomMs);
             if (Math.abs(Math.log(orbit.zoom / Math.max(orbit.targetZoom, 0.01))) < 0.0008) {
@@ -11050,7 +11163,7 @@
             const drift = reduceMotion ? 1 : 2.05;
             orbit.gridShiftX = follow(orbit.gridShiftX, orbit.gridPanX + orbit.parallaxX * drift, dt, freezeCam ? 1 : gridMs);
             orbit.gridShiftY = follow(orbit.gridShiftY, orbit.gridPanY + orbit.parallaxY * drift, dt, freezeCam ? 1 : gridMs);
-            if (!isPhone()) applyOrbit(dt);
+            if (!isPhone() || !profilePanel.classList.contains('open')) applyOrbit(dt);
             if (orbit.zoom === orbit.targetZoom) {
                 orbit.zoomBusy = false;
                 orbit.fitZooming = false;
@@ -11059,11 +11172,21 @@
                 orbit.zoomWorldX = null;
                 orbit.zoomWorldY = null;
             }
-            const sec = Math.floor(now / 1000);
-            if (sec !== tickOrbit.clockSec) {
-                tickOrbit.clockSec = sec;
-                updateTimezoneClocks();
-            }
-            requestAnimationFrame(tickOrbit);
+            if (orbitIsBusy()) orbit.raf = requestAnimationFrame(tickOrbit);
+            else orbit.raf = 0;
         }
-        requestAnimationFrame(tickOrbit);
+        kickOrbit();
+        setInterval(function () {
+            if (document.hidden) return;
+            updateTimezoneClocks();
+        }, 1000);
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) {
+                if (orbit.raf) {
+                    cancelAnimationFrame(orbit.raf);
+                    orbit.raf = 0;
+                }
+                return;
+            }
+            kickOrbit();
+        });
