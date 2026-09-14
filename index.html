@@ -3,21 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>OrbINT</title>
+    <title>OrbINT — OSINT case file</title>
+    <meta name="description" content="OrbINT is a local-first OSINT case file. Map names, phones, emails, usernames, vehicles, and records onto a subject orbit, then jump to the next search from every field.">
+    <meta name="theme-color" content="#09090b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OrbINT">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="OrbINT">
+    <meta property="og:title" content="OrbINT — OSINT case file">
+    <meta property="og:description" content="File every fact onto a subject orbit. Search from each field. Keep the case on this device.">
+    <meta property="og:url" content="https://delexoo.github.io/OrbINT/">
+    <meta property="og:image" content="https://delexoo.github.io/OrbINT/icons/app-512.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="OrbINT — OSINT case file">
+    <meta name="twitter:description" content="A local-first orbit map for OSINT case work.">
+    <meta name="twitter:image" content="https://delexoo.github.io/OrbINT/icons/app-512.png">
+    <link rel="canonical" href="https://delexoo.github.io/OrbINT/">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/app-192.png">
+    <link rel="apple-touch-icon" href="icons/app-180.png">
     <style>
         :root {
             --bg: #09090b;
-            --panel: #09090b;
-            --line: #27272a;
+            --panel: #0c0c0e;
+            --line: #222226;
             --text: #fafafa;
             --muted: #a1a1aa;
             --faint: #71717a;
             --accent: #67e8f9;
             --warn: #fbbf24;
-            --sidebar: 320px;
-            --sidebar-min: 248px;
-            --sidebar-max: 620px;
-            --rail: 52px;
+            --sidebar: 400px;
+            --sidebar-min: 280px;
+            --sidebar-max: 640px;
+            --rail: 56px;
             --safe-t: env(safe-area-inset-top, 0px);
             --safe-r: env(safe-area-inset-right, 0px);
             --safe-b: env(safe-area-inset-bottom, 0px);
@@ -74,9 +94,9 @@
             flex-direction: column;
             align-items: center;
             gap: 8px;
-            padding: 10px 0 12px;
+            padding: 14px 0 14px;
             border-right: 1px solid var(--line);
-            background: #08080a;
+            background: #09090b;
             min-height: 0;
             user-select: none;
         }
@@ -90,50 +110,80 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
-            padding: 2px 0;
+            gap: 10px;
+            padding: 4px 0;
         }
 
         .profile-rail-item {
             appearance: none;
             position: relative;
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             padding: 0;
-            border: 1px solid var(--line);
-            border-radius: 50%;
-            background: #18181b;
-            color: #d4d4d8;
-            overflow: hidden;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            background: #141416;
+            color: #a1a1aa;
+            overflow: visible;
             cursor: pointer;
             flex-shrink: 0;
             display: grid;
             place-items: center;
         }
 
-        .profile-rail-item img {
+        .profile-rail-face {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: inherit;
+            display: grid;
+            place-items: center;
+        }
+
+        .profile-rail-face img {
             width: 100%;
             height: 100%;
             object-fit: cover;
             display: block;
         }
 
-        .profile-rail-item span {
-            font-size: 13px;
+        .profile-rail-face span {
+            font-size: 12px;
             font-weight: 600;
             line-height: 1;
             letter-spacing: -0.02em;
         }
 
+        .profile-link-badge {
+            position: absolute;
+            right: -3px;
+            bottom: -3px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #111113;
+            border: 1.5px solid #09090b;
+            color: var(--accent);
+            display: grid;
+            place-items: center;
+            pointer-events: none;
+            box-shadow: 0 0 0 1px rgba(103, 232, 249, 0.28);
+            z-index: 1;
+        }
+
+        .profile-link-badge svg {
+            width: 9px;
+            height: 9px;
+            display: block;
+        }
+
         .profile-rail-item:hover {
-            border-color: #3f3f46;
             background: #1c1c20;
+            color: #e4e4e7;
         }
 
         .profile-rail-item.active {
-            border-color: #4ade80;
-            border-radius: 12px;
-            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.18);
+            color: #e4e4e7;
         }
 
         .profile-rail-tools {
@@ -141,8 +191,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 4px;
-            padding-top: 8px;
+            gap: 2px;
+            padding-top: 10px;
             border-top: 1px solid var(--line);
             flex-shrink: 0;
         }
@@ -150,25 +200,28 @@
         .profile-rail-tools button {
             appearance: none;
             position: relative;
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             padding: 0;
             border: 0;
-            border-radius: 10px;
+            border-radius: 8px;
             background: transparent;
-            color: var(--text);
+            color: var(--faint);
             cursor: pointer;
             display: grid;
             place-items: center;
         }
 
         .profile-rail-tools button svg {
-            width: 16px;
-            height: 16px;
+            width: 15px;
+            height: 15px;
             display: block;
         }
 
-        .profile-rail-tools button:hover { background: #18181b; }
+        .profile-rail-tools button:hover {
+            background: #18181b;
+            color: var(--text);
+        }
 
         .profile-rail-tools button::after {
             content: attr(data-tip);
@@ -275,23 +328,29 @@
         }
 
         .profile-head {
-            padding: 20px 20px 16px;
+            padding: 22px 22px 16px;
         }
 
         .profile-head-row {
             display: flex;
-            align-items: center;
-            gap: 12px;
+            align-items: flex-start;
+            gap: 16px;
         }
 
         .target-face {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
+            appearance: none;
+            width: 108px;
+            height: 108px;
+            padding: 0;
+            border: 0;
+            border-radius: 8px;
             overflow: hidden;
-            background: #18181b;
+            background: #27272a;
             flex-shrink: 0;
-            display: none;
+            display: block;
+            position: relative;
+            cursor: pointer;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
         }
 
         .target-face.visible { display: block; }
@@ -301,19 +360,94 @@
             height: 100%;
             object-fit: cover;
             display: block;
+            pointer-events: none;
         }
 
-        .target-id { min-width: 0; flex: 1; }
+        .target-face-hint {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 8px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 55%);
+            color: #fafafa;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .target-face:hover .target-face-hint,
+        .target-face:focus-visible .target-face-hint { opacity: 1; }
+
+        .target-id { min-width: 0; flex: 1; padding-top: 2px; }
+
+        .subject-name-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
 
         .subject-name {
-            font-size: 18px;
-            font-weight: 500;
-            letter-spacing: -0.02em;
-            line-height: 1.25;
+            flex: 1;
+            min-width: 0;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.2;
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            cursor: text;
         }
+
+        .subject-edit {
+            appearance: none;
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            margin-top: 1px;
+            padding: 5px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: #71717a;
+            cursor: pointer;
+        }
+
+        .subject-edit svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+
+        .subject-edit:hover,
+        .subject-name-row:hover .subject-edit { color: #e4e4e7; }
+
+        .subject-name-input {
+            flex: 1;
+            min-width: 0;
+            margin: 0;
+            padding: 0 0 3px;
+            border: 0;
+            border-bottom: 1px solid #3f3f46;
+            border-radius: 0;
+            background: transparent;
+            color: var(--text);
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.2;
+            outline: none;
+        }
+
+        .subject-name-row.editing .subject-name,
+        .subject-name-row.editing .subject-edit { display: none; }
+
+        .subject-name-row:not(.editing) .subject-name-input { display: none; }
 
         .icon-btn {
             display: none;
@@ -330,68 +464,17 @@
         }
 
         .meta {
-            margin-top: 4px;
-            font-size: 12px;
-            color: var(--faint);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #a1a1aa;
+            line-height: 1.45;
         }
 
-        .profile-socials {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 10px;
-        }
-
-        .profile-socials:empty { display: none; }
-
-        .profile-social {
-            width: 28px;
-            height: 28px;
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            background: #111113;
-            color: #d4d4d8;
-            display: grid;
-            place-items: center;
-            text-decoration: none;
-            flex-shrink: 0;
-        }
-
-        .profile-social img,
-        .profile-social svg {
-            width: 14px;
-            height: 14px;
-            display: block;
-        }
-
-        .profile-social:hover {
-            border-color: #4ade80;
-            color: #86efac;
-            background: #14532d;
-        }
+        .profile-socials,
+        .case-kicker,
+        .coverage { display: none !important; }
 
         .meta[hidden] { display: none !important; }
-
-        .case-kicker { display: none; }
-        .coverage { display: none; }
-        .coverage-row { display: none; }
-
-        .bar {
-            height: 2px;
-            background: #18181b;
-            overflow: hidden;
-        }
-
-        .bar span {
-            display: block;
-            height: 100%;
-            width: 0;
-            background: #4ade80;
-            transition: width 0.3s ease;
-        }
 
         .btn {
             appearance: none;
@@ -442,72 +525,303 @@
 
         .profile-body {
             overflow: auto;
-            padding: 0 20px 28px;
+            padding: 0 22px 40px;
             flex: 1;
         }
 
         .section[hidden] { display: none !important; }
-        .section + .section { margin-top: 28px; }
+        .section + .section { margin-top: 8px; }
 
         .section h3 {
-            font-size: 11px;
-            font-weight: 500;
-            letter-spacing: 0.06em;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: var(--faint);
-            margin-bottom: 10px;
+            color: var(--text);
+            margin: 18px 0 8px;
         }
 
-        .group + .group { margin-top: 14px; }
+        .dossier .group {
+            padding: 0;
+        }
 
-        .group-label {
-            font-size: 10px;
-            letter-spacing: 0.08em;
+        .dossier .group + .group {
+            margin-top: 18px;
+            border-top: 0;
+        }
+
+        .dossier .group-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: var(--faint);
-            margin-bottom: 2px;
+            color: var(--text);
+            margin: 0 0 6px;
         }
 
         .fact-row {
             display: grid;
-            grid-template-columns: 64px minmax(0, 1fr) 16px;
-            gap: 8px;
-            align-items: baseline;
-            min-height: 24px;
+            grid-template-columns: minmax(8.5rem, 40%) minmax(0, 1fr) auto;
+            gap: 4px 14px;
+            align-items: start;
+            min-height: 22px;
             padding: 4px 0;
+            margin: 0;
+            border-radius: 0;
             cursor: pointer;
         }
 
-        .fact-row.secret {
-            grid-template-columns: 64px minmax(0, 1fr) 18px 16px;
+        .fact-row.sheet {
+            grid-template-columns: minmax(8.5rem, 40%) minmax(0, 1fr);
             align-items: center;
+            cursor: default;
+        }
+
+        .fact-row.sheet.secret {
+            grid-template-columns: minmax(8.5rem, 40%) minmax(0, 1fr) auto;
+        }
+
+        .fact-row.sheet.place {
+            grid-template-columns: minmax(8.5rem, 40%) minmax(0, 1fr) auto;
+        }
+
+        .fact-maps,
+        .id-maps,
+        .phone-maps {
+            appearance: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            width: auto;
+            height: 22px;
+            padding: 0 7px 0 5px;
+            border: 0;
+            border-radius: 5px;
+            background: rgba(59, 130, 246, 0.12);
+            color: #93c5fd;
+            opacity: 1;
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: 0.03em;
+            line-height: 1;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .fact-maps svg,
+        .id-maps svg,
+        .phone-maps svg {
+            width: 12px;
+            height: 12px;
+            display: block;
+        }
+
+        .fact-row .fact-maps { opacity: 1; }
+
+        .fact-maps:hover,
+        .id-maps:hover,
+        .phone-maps:hover {
+            color: #dbeafe;
+            background: rgba(59, 130, 246, 0.22);
+        }
+
+        .fact-maps:disabled,
+        .phone-maps:disabled {
+            opacity: 0.32;
+            color: #71717a;
+            background: transparent;
+            cursor: default;
+        }
+
+        .meta#idStack {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .id-address {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .id-maps {
+            margin-top: 1px;
+        }
+
+        .fact-row.sheet .fact-reveal {
+            opacity: 0.5;
+        }
+
+        .fact-row.sheet .fact-reveal:hover,
+        .fact-row.sheet:focus-within .fact-reveal { opacity: 1; }
+
+        .fact-row .sheet-input,
+        .fact-row .sheet-area {
+            width: 100%;
+            min-width: 0;
+            margin: 0;
+            padding: 1px 0 3px;
+            border: 0;
+            border-bottom: 1px solid transparent;
+            border-radius: 0;
+            background: transparent;
+            color: #e4e4e7;
+            font: inherit;
+            font-size: 13px;
+            line-height: 1.45;
+            outline: none;
+        }
+
+        .fact-row .sheet-area {
+            resize: vertical;
+            min-height: 36px;
+            line-height: 1.45;
+        }
+
+        .fact-row .sheet-input:focus,
+        .fact-row .sheet-area:focus {
+            border-bottom-color: #3f3f46;
+        }
+
+        .fact-row .sheet-input::placeholder,
+        .fact-row .sheet-area::placeholder {
+            color: #52525b;
+        }
+
+        .sheet-platform {
+            appearance: none;
+            width: 100%;
+            min-width: 0;
+            margin: 0;
+            padding: 1px 0 3px;
+            border: 0;
+            border-bottom: 1px solid transparent;
+            background: transparent;
+            color: #71717a;
+            font: inherit;
+            font-size: 13px;
+            line-height: 1.45;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .sheet-platform:hover { color: #e4e4e7; }
+
+        .sheet-platform[hidden],
+        .sheet-platform-value[hidden] { display: none !important; }
+
+        .sheet-platform-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .sheet-platform-mark {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            padding: 0;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: #a1a1aa;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+        }
+
+        .sheet-platform-mark:hover { color: #fafafa; }
+
+        .sheet-platform-mark img,
+        .sheet-platform-mark svg {
+            width: 18px;
+            height: 18px;
+            display: block;
+            object-fit: contain;
+        }
+
+        .dossier-add {
+            appearance: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            margin-top: 22px;
+            height: 36px;
+            padding: 0 12px;
+            border: 1px dashed #3f3f46;
+            border-radius: 8px;
+            background: transparent;
+            color: #a1a1aa;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .dossier-add:hover {
+            color: #fafafa;
+            border-color: #71717a;
+        }
+
+        .fact-row.secret {
+            grid-template-columns: minmax(8.5rem, 40%) minmax(0, 1fr) auto;
+            align-items: start;
         }
 
         .fact-row a {
-            color: inherit;
+            color: #f87171;
             text-decoration: none;
         }
 
-        .fact-row a:hover { color: #86efac; }
+        .fact-row a:hover { color: #fca5a5; text-decoration: underline; }
 
-        .fact-row:hover em,
-        .fact-row.active em { color: #fff; }
-
-        .fact-row span {
-            color: var(--faint);
-            font-size: 12px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        .fact-row:hover,
+        .fact-row.active {
+            background: transparent;
         }
 
-        .fact-row em {
+        .fact-row:hover em,
+        .fact-row.active em { color: #fafafa; }
+
+        .fact-row span,
+        .fact-label {
+            color: #a1a1aa;
+            font-size: 13px;
+            line-height: 1.45;
+            padding-top: 0;
+            overflow: visible;
+            white-space: normal;
+        }
+
+        .fact-row em,
+        .fact-value {
             font-style: normal;
             font-size: 13px;
+            line-height: 1.45;
             color: #e4e4e7;
+            min-width: 0;
             overflow: hidden;
-            text-overflow: ellipsis;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            user-select: text;
+        }
+
+        .fact-row:not(.wrap) em,
+        .fact-row:not(.wrap) .fact-value {
             white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .fact-row.mono em,
+        .fact-row.mono .fact-value {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
         }
 
         .fact-row.wrap em {
@@ -516,15 +830,29 @@
             text-overflow: unset;
         }
 
+        .fact-tools {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 2px;
+            min-width: 22px;
+            margin-top: -1px;
+        }
+
         .fact-row button {
             appearance: none;
             border: 0;
             background: transparent;
             color: var(--faint);
             cursor: pointer;
+            width: 22px;
+            height: 22px;
             font-size: 16px;
             line-height: 1;
             opacity: 0;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
         }
 
         .fact-row:hover button,
@@ -532,12 +860,13 @@
         .fact-row button:hover { color: var(--text); }
 
         .fact-row .fact-reveal {
-            width: 18px;
-            height: 18px;
+            width: 22px;
+            height: 22px;
             padding: 0;
-            opacity: 0.55;
+            opacity: 0.45;
             display: grid;
             place-items: center;
+            flex-shrink: 0;
         }
 
         .fact-row .fact-reveal svg {
@@ -550,10 +879,19 @@
         .fact-row:hover .fact-reveal,
         .fact-row:focus-within .fact-reveal { opacity: 1; }
 
+        .fact-row .fact-maps,
+        .fact-row:hover .fact-maps,
+        .fact-row:focus-within .fact-maps {
+            width: auto;
+            height: 22px;
+            opacity: 1;
+        }
+
         .empty-note {
             font-size: 13px;
             color: var(--faint);
-            padding-top: 4px;
+            padding: 18px 8px 8px;
+            line-height: 1.55;
         }
 
         .empty-brief {
@@ -591,8 +929,9 @@
         .analysis {
             white-space: pre-wrap;
             font-size: 13px;
-            line-height: 1.55;
+            line-height: 1.6;
             color: var(--muted);
+            padding: 12px 8px 8px;
         }
 
         .map {
@@ -644,19 +983,26 @@
             z-index: 7;
         }
 
-        .map-canvas { position: absolute; inset: 0; }
+        .map-canvas { position: absolute; inset: 0; cursor: grab; }
 
         .map-canvas:not(.orbit-ready) .node,
-        .map-canvas:not(.orbit-ready) svg.links {
+        .map-canvas:not(.orbit-ready) .hub,
+        .map-canvas:not(.orbit-ready) .peer-hubs {
+            visibility: hidden;
+        }
+
+        .map:not(.orbit-ready) svg.links,
+        .map:not(.orbit-ready) svg.peer-links {
             visibility: hidden;
         }
 
         .hub {
+            --hub-size: 220px;
             position: absolute;
             left: 50%;
             top: 50%;
-            width: 96px;
-            height: 96px;
+            width: var(--hub-size);
+            height: var(--hub-size);
             transform: translate(-50%, -50%);
             border-radius: 50%;
             border: 1px solid var(--line);
@@ -666,18 +1012,20 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            z-index: 5;
+            z-index: 7;
             cursor: grab;
             user-select: none;
             touch-action: none;
             -webkit-user-drag: none;
+            overflow: visible;
         }
 
         .hub::before {
             content: "";
             position: absolute;
-            inset: -16px;
+            inset: -28px;
             border-radius: 50%;
+            pointer-events: none;
         }
 
         .hub:active { cursor: grabbing; }
@@ -742,27 +1090,50 @@
             background: #18181b;
         }
 
-        .hub.has-face .hub-title { visibility: hidden; }
+        .hub.has-face::after {
+            content: "";
+            position: absolute;
+            inset: 4px;
+            border-radius: 50%;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.28) 55%, rgba(0, 0, 0, 0.12) 100%);
+            z-index: 1;
+            pointer-events: none;
+        }
 
         .hub-title {
-            position: relative;
-            z-index: 1;
-            font-size: 16px;
-            font-weight: 600;
-            letter-spacing: -0.03em;
-            max-width: 80px;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 3;
+            width: 72%;
+            font-size: 24px;
+            font-weight: 650;
+            letter-spacing: -0.04em;
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            white-space: normal;
+            line-height: 1.15;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .hub.has-face .hub-title {
+            color: #fafafa;
+            text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
         }
 
         .hub-add {
             appearance: none;
             position: absolute;
-            right: -10px;
-            bottom: -10px;
-            width: 34px;
-            height: 34px;
+            left: 50%;
+            top: 50%;
+            right: auto;
+            bottom: auto;
+            width: 44px;
+            height: 44px;
             padding: 0;
             border: 1px solid var(--line);
             border-radius: 50%;
@@ -774,6 +1145,7 @@
             place-items: center;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
             overflow: visible;
+            transform: translate(-50%, -50%) rotate(-45deg) translateY(calc(var(--hub-size) / 2)) rotate(45deg);
         }
 
         .hub-add-ring {
@@ -853,22 +1225,24 @@
         .add-sheet.is-in { opacity: 1; }
 
         .add-card {
-            width: min(520px, 100%);
+            width: min(480px, 100%);
             max-width: 100%;
             min-width: 0;
-            max-height: min(86vh, 780px);
+            max-height: min(84vh, 720px);
             overflow-x: hidden;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             border: 1px solid #27272a;
-            border-radius: 16px;
+            border-radius: 14px;
             background: #0a0a0c;
-            box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
-            padding: 22px 22px 20px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+            padding: 16px 16px 14px;
             transform: translateY(20px);
             opacity: 0.85;
             transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
+            scrollbar-width: thin;
+            scrollbar-color: #3f3f46 transparent;
         }
 
         .add-sheet.is-in .add-card {
@@ -877,16 +1251,16 @@
         }
 
         .add-card h2 {
-            font-size: 20px;
+            font-size: 17px;
             font-weight: 560;
-            letter-spacing: -0.035em;
+            letter-spacing: -0.03em;
         }
 
         .add-card h3 {
-            margin: 16px 0 8px;
-            font-size: 12px;
+            margin: 12px 0 6px;
+            font-size: 11px;
             font-weight: 600;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
             color: #71717a;
         }
@@ -902,121 +1276,420 @@
 
         .add-chips {
             display: flex;
-            flex-flow: row nowrap;
-            gap: 6px;
+            flex-flow: row wrap;
+            gap: 5px;
             width: 100%;
             max-width: 100%;
             min-width: 0;
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 2px 0 8px;
-            scroll-snap-type: x proximity;
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior-x: contain;
-            scrollbar-width: thin;
-            scrollbar-color: #3f3f46 transparent;
+            overflow: visible;
+            padding: 0 0 2px;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
 
         .add-chips::-webkit-scrollbar {
-            height: 4px;
-        }
-
-        .add-chips::-webkit-scrollbar-thumb {
-            background: #3f3f46;
-            border-radius: 99px;
+            width: 0;
+            height: 0;
+            display: none;
         }
 
         .add-chips button {
             flex: 0 0 auto;
-            scroll-snap-align: start;
             white-space: nowrap;
         }
 
         .add-chips > button {
             appearance: none;
-            border: 1px solid var(--line);
+            border: 1px solid #27272a;
             background: #111113;
-            color: var(--text);
-            border-radius: 999px;
-            padding: 6px 12px;
-            font-size: 13px;
+            color: #e4e4e7;
+            border-radius: 6px;
+            padding: 4px 9px;
+            font-size: 12px;
+            line-height: 1.3;
             cursor: pointer;
         }
 
         .add-chips > button:hover {
             background: #18181b;
-            border-color: #4ade80;
+            border-color: #3f3f46;
+            color: #fafafa;
         }
 
         .add-empty {
-            font-size: 13px;
+            margin: 8px 0 4px;
+            font-size: 12px;
             color: #71717a;
         }
 
+        .add-group {
+            margin-top: 10px;
+        }
+
+        .add-group:first-child { margin-top: 4px; }
+
         .add-group-label {
-            margin: 8px 0 4px;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.04em;
+            margin: 0 0 5px;
+            font-size: 10px;
+            font-weight: 650;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
             color: #52525b;
         }
 
-        .add-group-label:first-child { margin-top: 2px; }
+        .add-filter-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            margin: 10px 0 4px;
+        }
+
+        .add-filter-icon {
+            position: absolute;
+            left: 9px;
+            width: 13px;
+            height: 13px;
+            color: #52525b;
+            pointer-events: none;
+        }
 
         .add-filter {
             width: 100%;
-            height: 34px;
-            margin-bottom: 8px;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            background: #111113;
+            height: 30px;
+            margin: 0;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            background: #0f0f11;
             color: var(--text);
-            padding: 0 12px;
+            padding: 0 64px 0 28px;
             font: inherit;
-            font-size: 13px;
+            font-size: 12.5px;
         }
+
+        .add-filter::placeholder { color: #52525b; }
 
         .add-filter:focus {
             outline: none;
             border-color: #3f3f46;
+            background: #111113;
         }
+
+        .add-filter-count {
+            position: absolute;
+            right: 8px;
+            font-size: 10px;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+            color: #52525b;
+            pointer-events: none;
+        }
+
+        .add-filter-count[hidden] { display: none !important; }
 
         .add-form {
             display: grid;
             gap: 8px;
         }
 
+        .add-form-top {
+            margin: 2px 0 2px;
+        }
+
+        .add-form-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr) auto;
+            gap: 6px;
+            align-items: center;
+        }
+
         .add-form input {
             width: 100%;
-            height: 36px;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            background: #111113;
+            height: 30px;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            background: #0f0f11;
             color: var(--text);
-            padding: 0 12px;
+            padding: 0 10px;
             font: inherit;
-            font-size: 13px;
+            font-size: 12.5px;
         }
 
         .add-form input:focus {
             outline: none;
             border-color: #3f3f46;
+            background: #111113;
         }
+
+        .add-form input::placeholder { color: #52525b; }
 
         .add-form button {
             appearance: none;
-            height: 36px;
-            border: 1px solid #166534;
-            border-radius: 10px;
-            background: #14532d;
-            color: #bbf7d0;
+            height: 30px;
+            padding: 0 12px;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            background: #141416;
+            color: #e4e4e7;
+            font-size: 12px;
+            font-weight: 550;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .add-form button:hover {
+            background: #1a1a1d;
+            border-color: #3f3f46;
+        }
+
+        .toolkit-card {
+            width: min(520px, 100%);
+            max-height: min(86vh, 780px);
+            overflow: hidden;
+            min-height: 0;
+            padding: 14px 14px 12px;
+        }
+
+        .toolkit-card .share-top {
+            margin-bottom: 2px;
+        }
+
+        .toolkit-card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+        }
+
+        .toolkit-lead {
+            margin: 2px 0 0;
+            font-size: 12px;
+            color: #71717a;
+            line-height: 1.4;
+        }
+
+        .toolkit-lead a {
+            color: #a1a1aa;
+            text-decoration: none;
+        }
+
+        .toolkit-lead a:hover {
+            color: #e4e4e7;
+            text-decoration: underline;
+        }
+
+        .toolkit-search-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            margin: 12px 0 6px;
+        }
+
+        .toolkit-search-wrap svg {
+            position: absolute;
+            left: 10px;
+            width: 13px;
+            height: 13px;
+            color: #52525b;
+            pointer-events: none;
+        }
+
+        .toolkit-search-wrap .add-filter {
+            height: 32px;
+            padding-left: 30px;
+            padding-right: 12px;
+            border-radius: 8px;
             font-size: 13px;
+        }
+
+        .toolkit-meta {
+            margin: 0 0 4px;
+            font-size: 11px;
+            color: #52525b;
+            letter-spacing: 0.01em;
+        }
+
+        .toolkit-focus {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 8px;
+            padding: 6px 8px;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            background: #0c1218;
+            font-size: 12px;
+            color: #93c5fd;
+        }
+
+        .toolkit-focus[data-on="1"] { display: flex; }
+
+        .toolkit-focus strong {
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .toolkit-focus button {
+            appearance: none;
+            margin-left: auto;
+            border: 0;
+            background: transparent;
+            color: #64748b;
+            font: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 2px 4px;
+        }
+
+        .toolkit-focus button:hover { color: #e2e8f0; }
+
+        .toolkit-list {
+            overflow: auto;
+            min-height: 0;
+            flex: 1;
+            margin-top: 2px;
+            padding-right: 2px;
+        }
+
+        .toolkit-section {
+            margin-top: 10px;
+        }
+
+        .toolkit-section:first-child { margin-top: 2px; }
+
+        .toolkit-section-label {
+            margin: 0 0 4px 2px;
+            font-size: 10px;
+            font-weight: 650;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #52525b;
+        }
+
+        .toolkit-cat {
+            border-bottom: 1px solid #18181b;
+        }
+
+        .toolkit-cat:last-child { border-bottom: 0; }
+
+        .toolkit-cat-toggle {
+            appearance: none;
+            width: 100%;
+            min-height: 30px;
+            display: grid;
+            grid-template-columns: 12px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 8px;
+            text-align: left;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: #d4d4d8;
+            padding: 5px 4px;
+            font: inherit;
+            font-size: 12.5px;
             font-weight: 500;
+            letter-spacing: -0.01em;
             cursor: pointer;
         }
 
-        .add-form button:hover { background: #166534; }
+        .toolkit-cat-toggle:hover {
+            background: #111113;
+            color: #fafafa;
+        }
+
+        .toolkit-cat-toggle[aria-expanded="true"] {
+            color: #fafafa;
+        }
+
+        .toolkit-cat-chevron {
+            width: 12px;
+            height: 12px;
+            color: #52525b;
+            transition: transform 0.16s ease;
+        }
+
+        .toolkit-cat-toggle[aria-expanded="true"] .toolkit-cat-chevron {
+            transform: rotate(90deg);
+            color: #a1a1aa;
+        }
+
+        .toolkit-cat-title {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .toolkit-cat-count {
+            font-size: 11px;
+            font-weight: 500;
+            color: #52525b;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .toolkit-cat-toggle[aria-expanded="true"] .toolkit-cat-count {
+            color: #71717a;
+        }
+
+        .toolkit-tools {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            padding: 0 0 6px 20px;
+        }
+
+        .toolkit-tools[hidden] { display: none !important; }
+
+        .toolkit-tool {
+            appearance: none;
+            width: 100%;
+            min-height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            text-align: left;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: #a1a1aa;
+            padding: 3px 6px;
+            font: inherit;
+            font-size: 12px;
+            line-height: 1.3;
+            cursor: pointer;
+        }
+
+        .toolkit-tool:hover {
+            background: #141417;
+            color: #fafafa;
+        }
+
+        .toolkit-tool span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .toolkit-tool em {
+            flex: 0 0 auto;
+            max-width: 42%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-style: normal;
+            font-size: 10.5px;
+            color: #3f3f46;
+        }
+
+        .toolkit-tool:hover em { color: #71717a; }
+
+        .toolkit-empty {
+            margin: 18px 8px;
+            font-size: 12px;
+            color: #52525b;
+            text-align: center;
+        }
 
         .node {
             position: absolute;
@@ -1063,7 +1736,7 @@
         .node:hover,
         .node.active {
             background: #111113;
-            z-index: 6;
+            z-index: 5;
         }
 
         .node.branch:not(.platform-node) {
@@ -1305,6 +1978,31 @@
         .search-btn:hover { color: var(--text); }
         .search-btn.ready:hover { color: #86efac; }
 
+        .secret-reveal {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+        }
+
+        .secret-reveal svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+        }
+
+        .secret-reveal:hover,
+        .secret-reveal.open { color: var(--text); }
+
+        .secret-reveal[hidden] { display: none !important; }
+
         .search-menu {
             position: absolute;
             z-index: 21;
@@ -1360,10 +2058,177 @@
 
         .node.off { display: none !important; }
 
+        .peer-hubs {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 6;
+        }
+
+        .peer-hub {
+            appearance: none;
+            position: absolute;
+            z-index: 6;
+            width: 92px;
+            height: 92px;
+            padding: 0;
+            border: 1px solid var(--line);
+            border-radius: 50%;
+            background: #0c0c0e;
+            color: var(--text);
+            cursor: grab;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .peer-hub-face {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+        }
+
+        .peer-hub-letter {
+            position: absolute;
+            inset: 0;
+            display: none;
+            place-items: center;
+            font-size: 22px;
+            font-weight: 650;
+            color: #a1a1aa;
+            pointer-events: none;
+        }
+
+        .peer-hub-name {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            width: 78%;
+            padding: 0;
+            background: none;
+            color: #fafafa;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            text-align: center;
+            line-height: 1.2;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+            pointer-events: none;
+        }
+
+        .peer-hub:hover {
+            border-color: #3f3f46;
+            background: #111113;
+        }
+
+        .peer-hub.dragging {
+            cursor: grabbing;
+            z-index: 9;
+        }
+
+        .peer-hub-fly {
+            z-index: 12;
+            pointer-events: none;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+            transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+                top 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+                width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+                height 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .map.profile-fly .node,
+        .map.profile-fly svg.links,
+        .map.profile-fly svg.peer-links,
+        .map.profile-fly .peer-hubs,
+        .map.profile-fly .hub {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease;
+        }
+
+        .map.profile-fly .peer-hub-fly {
+            opacity: 1;
+            pointer-events: none;
+        }
+
+        .map.profile-fly .map-canvas {
+            pointer-events: none;
+            cursor: default;
+        }
+
+        @keyframes profile-bloom {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .map.profile-enter .node,
+        .map.profile-enter svg.links,
+        .map.profile-enter svg.peer-links,
+        .map.profile-enter .peer-hubs {
+            animation: profile-bloom 0.48s ease both;
+        }
+
+        @keyframes boot-fade {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes hub-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .map.boot-enter .node,
+        .map.boot-enter svg.links,
+        .map.boot-enter svg.peer-links,
+        .map.boot-enter .peer-hubs {
+            animation: profile-bloom 0.55s ease both;
+        }
+
+        .map.boot-enter .hub {
+            animation: hub-in 0.42s ease both;
+        }
+
+        .profile-panel {
+            animation: boot-fade 0.45s ease both;
+        }
+
+        .dock-anchor,
+        .donate {
+            animation: boot-fade 0.5s ease 0.06s both;
+        }
+
+        svg.peer-links line {
+            stroke: #67e8f9;
+            stroke-width: 1.6;
+            stroke-linecap: round;
+            stroke-dasharray: 5 6;
+            opacity: 0.72;
+        }
+
+        .map.panning .peer-hub { pointer-events: none; }
+
         .field-menu {
             position: absolute;
             z-index: 22;
             width: 220px;
+            max-height: min(70vh, 520px);
+            overflow: auto;
             display: flex;
             flex-direction: column;
             padding: 6px;
@@ -1431,6 +2296,7 @@
 
         .node.renaming .node-copy > input:not(.node-rename) { display: none; }
         .node.renaming .search-btn,
+        .node.renaming .secret-reveal,
         .node.renaming .node-clear,
         .node.renaming .file-btn,
         .node.renaming .platform-trigger,
@@ -1438,6 +2304,9 @@
         .node.renaming .tz-clock,
         .node.renaming .tz-pick,
         .node.renaming .tz-trigger,
+        .node.renaming .cc-pick,
+        .node.renaming .cc-trigger,
+        .node.renaming .cc-name,
         .node.renaming select { display: none; }
 
         .node-rename {
@@ -1480,10 +2349,16 @@
 
         .node.tz-node { width: 186px; }
         .node.tz-node.filled,
-        .node.tz-node.null { width: 248px; }
-        .node.tz-node .node-copy { gap: 6px; }
+        .node.tz-node.null { width: 232px; }
+        .node.tz-node .node-copy { gap: 5px; }
 
-        .tz-pick {
+        .node.cc-node { width: 210px; }
+        .node.cc-node.filled,
+        .node.cc-node.null { width: 248px; }
+        .node.cc-node .node-copy { gap: 5px; }
+
+        .tz-pick,
+        .cc-pick {
             display: inline-flex;
             align-items: center;
             gap: 3px;
@@ -1492,11 +2367,14 @@
         }
 
         .node.filled .tz-pick,
-        .node.null .tz-pick {
+        .node.null .tz-pick,
+        .node.filled .cc-pick,
+        .node.null .cc-pick {
             flex: 0 0 auto;
         }
 
-        .tz-abbr {
+        .tz-abbr,
+        .cc-abbr {
             flex: none;
             font-size: 12px;
             font-weight: 650;
@@ -1506,16 +2384,32 @@
             line-height: 32px;
         }
 
-        .tz-pick.empty .tz-abbr {
+        .tz-pick.empty .tz-abbr,
+        .cc-pick.empty .cc-abbr {
             color: #71717a;
             font-weight: 500;
             letter-spacing: 0;
         }
 
-        .node.filled .tz-abbr { color: #bbf7d0; }
-        .node.null .tz-abbr { color: #fecaca; }
+        .node.filled .tz-abbr,
+        .node.filled .cc-abbr { color: #bbf7d0; }
+        .node.null .tz-abbr,
+        .node.null .cc-abbr { color: #fecaca; }
 
-        .tz-trigger {
+        .cc-name {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 32px;
+            cursor: pointer;
+        }
+
+        .tz-trigger,
+        .cc-trigger {
             appearance: none;
             flex: none;
             width: 12px;
@@ -1530,11 +2424,15 @@
             cursor: pointer;
         }
 
-        .tz-pick.empty .tz-trigger { color: #71717a; }
-        .node.filled .tz-trigger { color: #86efac; }
-        .node.null .tz-trigger { color: #fecaca; }
+        .tz-pick.empty .tz-trigger,
+        .cc-pick.empty .cc-trigger { color: #71717a; }
+        .node.filled .tz-trigger,
+        .node.filled .cc-trigger { color: #86efac; }
+        .node.null .tz-trigger,
+        .node.null .cc-trigger { color: #fecaca; }
 
-        .tz-trigger::after {
+        .tz-trigger::after,
+        .cc-trigger::after {
             content: "";
             width: 0;
             height: 0;
@@ -1545,12 +2443,17 @@
         }
 
         .tz-trigger:hover,
-        .tz-abbr:hover {
+        .tz-abbr:hover,
+        .cc-trigger:hover,
+        .cc-abbr:hover,
+        .cc-name:hover {
             color: #fff;
         }
 
         .node.filled .tz-trigger:hover,
-        .node.filled .tz-abbr:hover { color: #dcfce7; }
+        .node.filled .tz-abbr:hover,
+        .node.filled .cc-trigger:hover,
+        .node.filled .cc-abbr:hover { color: #dcfce7; }
 
         .tz-menu {
             position: absolute;
@@ -1684,8 +2587,8 @@
         }
 
         .tz-clock {
-            flex: 1;
-            min-width: 4.6em;
+            flex: 0 0 auto;
+            min-width: 4.4em;
             font-size: 12px;
             font-variant-numeric: tabular-nums;
             color: #86efac;
@@ -1698,11 +2601,17 @@
         .node[data-field="username"],
         .node[data-field="password"],
         .node.platform-node,
-        .node.branch.platform-node { width: 236px; }
+        .node.branch.platform-node { width: 214px; }
+
+        .node.secret-node.platform-node,
+        .node.branch.secret-node.platform-node { width: 232px; }
 
         .node.email-node,
         .node[data-field="email"],
         .node[data-field="email2"] { width: 214px; }
+
+        .node[data-field="os"],
+        .node[data-field="phoneos"] { width: 214px; }
 
         .platform-trigger {
             appearance: none;
@@ -1854,16 +2763,23 @@
         }
 
         @media (max-width: 1100px) {
-            .profile-head, .profile-body { padding-left: 20px; padding-right: 20px; }
             .node { width: 150px; }
             .node.branch:not(.platform-node) { width: 136px; }
             .node.tz-node { width: 150px; }
             .node.tz-node.filled,
-            .node.tz-node.null { width: 228px; }
+            .node.tz-node.null { width: 216px; }
+            .node.cc-node { width: 180px; }
+            .node.cc-node.filled,
+            .node.cc-node.null { width: 220px; }
             .node.email-node { width: 190px; }
+            .node[data-field="os"],
+            .node[data-field="phoneos"] { width: 196px; }
             .node.platform-node,
-            .node.branch.platform-node { width: 210px; }
-            .hub { width: 84px; height: 84px; }
+            .node.branch.platform-node { width: 196px; }
+            .node.secret-node.platform-node,
+            .node.branch.secret-node.platform-node { width: 214px; }
+            .hub { --hub-size: 188px; }
+            .hub-title { font-size: 21px; }
         }
 
         @media (max-width: 820px) {
@@ -1889,60 +2805,33 @@
             }
             .profile-panel.open { transform: none; }
             .profile-head {
-                padding: 18px 20px 16px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            }
-            .case-kicker {
-                display: block;
-                margin: 0 0 10px;
-                font-size: 11px;
-                font-weight: 600;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-                color: #4ade80;
+                padding: 20px 20px 12px;
+                border-bottom: 0;
             }
             .target-face {
-                width: 52px;
-                height: 52px;
-                border: 1px solid #27272a;
-                box-shadow: 0 0 0 4px #111113;
+                width: 88px;
+                height: 88px;
+                border-radius: 8px;
+                box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
             }
             .subject-name {
-                font-size: 24px;
-                font-weight: 600;
+                font-size: 22px;
+                font-weight: 700;
                 letter-spacing: -0.03em;
                 overflow: visible;
                 text-overflow: unset;
+                display: block;
+                -webkit-line-clamp: unset;
             }
             .meta {
                 white-space: normal;
                 overflow: visible;
                 text-overflow: unset;
-                line-height: 1.4;
-                margin-top: 5px;
-            }
-            .coverage {
-                display: block;
-                margin-top: 16px;
-            }
-            .coverage-row {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 8px;
-            }
-            .coverage-label {
-                font-size: 12px;
-                font-weight: 500;
-                color: #a1a1aa;
-            }
-            .bar {
-                height: 3px;
-                border-radius: 99px;
-                background: #18181b;
+                line-height: 1.45;
+                margin-top: 8px;
             }
             .bar span { border-radius: 99px; }
-            .profile-body { padding: 18px 16px 28px; width: 100%; }
+            .profile-body { padding: 4px 20px 32px; width: 100%; }
             .phone-facts,
             .phone-facts .phone-group,
             .phone-facts .phone-group-card {
@@ -1999,6 +2888,10 @@
                 border-radius: 20px 20px 0 0;
                 padding-bottom: calc(20px + var(--safe-b));
             }
+            .add-form-row {
+                grid-template-columns: minmax(0, 1fr) auto;
+            }
+            .add-form-row #addCustomHint { display: none; }
             .search-menu,
             .platform-menu,
             .tz-menu,
@@ -2194,6 +3087,143 @@
         .share-sheet.is-in .share-card {
             transform: none;
             opacity: 1;
+        }
+
+        .install-sheet[hidden] { display: none !important; }
+
+        .install-sheet {
+            position: fixed;
+            inset: 0;
+            z-index: 46;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.72);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            transition: opacity 0.28s ease;
+        }
+
+        .install-sheet.is-in { opacity: 1; }
+
+        .install-card {
+            width: min(400px, 100%);
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #27272a;
+            border-radius: 20px;
+            background: #0c0c0e;
+            box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
+            padding: 22px 22px 18px;
+            transform: translateY(16px) scale(0.98);
+            opacity: 0.85;
+            transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
+        }
+
+        .install-sheet.is-in .install-card {
+            transform: none;
+            opacity: 1;
+        }
+
+        .install-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .install-mark {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #111113;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+            flex-shrink: 0;
+        }
+
+        .install-mark img {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .install-kicker {
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #a1a1aa;
+            margin-bottom: 6px;
+        }
+
+        .install-card h2 {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.04em;
+            line-height: 1.25;
+        }
+
+        .install-lead {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #a1a1aa;
+            line-height: 1.5;
+        }
+
+        .install-steps {
+            list-style: none;
+            margin: 18px 0 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .install-steps[hidden] { display: none !important; }
+
+        .install-steps li {
+            display: grid;
+            grid-template-columns: 22px minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+            padding: 11px 12px;
+            border-radius: 12px;
+            background: #111113;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #e4e4e7;
+        }
+
+        .install-steps b {
+            width: 22px;
+            height: 22px;
+            border-radius: 7px;
+            background: #18181b;
+            color: #a1a1aa;
+            font-size: 11px;
+            font-weight: 600;
+            display: grid;
+            place-items: center;
+        }
+
+        .install-steps span { min-width: 0; }
+
+        .install-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .install-actions button {
+            appearance: none;
+            height: 36px;
+            padding: 0 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
         }
 
         .share-top {
@@ -3053,6 +4083,21 @@
 
         .phone-reveal svg { width: 18px; height: 18px; display: block; }
 
+        .phone-field-row .phone-maps {
+            width: auto;
+            min-width: 48px;
+            height: 48px;
+            padding: 0 12px;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            background: #111113;
+            color: #93c5fd;
+            font-size: 13px;
+            gap: 6px;
+        }
+
+        .phone-field-row .phone-maps svg { width: 16px; height: 16px; }
+
         .phone-card-actions {
             display: flex;
             gap: 8px;
@@ -3092,10 +4137,23 @@
         .phone-more-list .danger { color: #fecaca; }
 
         @media (prefers-reduced-motion: reduce) {
-            .profile-panel, .bar span, .node, svg.links line, .hub-ring-fill, .hub-ring-null, .hub-add-ring-fill, .node-clear, .search-btn { transition: none; }
+            .profile-panel, .bar span, .node, svg.links line, .hub-ring-fill, .hub-ring-null, .hub-add-ring-fill, .node-clear, .search-btn, .secret-reveal { transition: none; }
             .search-btn.icon-pop svg, .node.just-added { animation: none; }
-            .phone-sheet, .add-sheet, .share-sheet, .help-guide, .confirm-sheet,
-            .phone-card, .add-card, .share-card, .confirm-card {
+            .peer-hub-fly { transition: none; }
+            .map.profile-enter .node,
+            .map.profile-enter svg.links,
+            .map.profile-enter svg.peer-links,
+            .map.profile-enter .peer-hubs,
+            .map.boot-enter .node,
+            .map.boot-enter svg.links,
+            .map.boot-enter svg.peer-links,
+            .map.boot-enter .peer-hubs,
+            .map.boot-enter .hub,
+            .profile-panel,
+            .dock-anchor,
+            .donate { animation: none; }
+            .phone-sheet, .add-sheet, .share-sheet, .help-guide, .confirm-sheet, .install-sheet,
+            .phone-card, .add-card, .share-card, .confirm-card, .install-card {
                 transition: none;
                 transform: none;
                 opacity: 1;
@@ -3123,17 +4181,26 @@
         </nav>
         <div class="profile-main">
             <header class="profile-head">
-                <p class="case-kicker">Case file</p>
                 <div class="profile-head-row">
-                    <div class="target-face visible" id="targetFace"><img alt="" src="icons/defaultprofile.jpg"></div>
+                    <button type="button" class="target-face visible" id="targetFace" aria-label="Upload profile photo">
+                        <img alt="" src="icons/defaultprofile.jpg">
+                        <span class="target-face-hint">Upload</span>
+                    </button>
+                    <input id="profilePhotoFile" type="file" accept="image/*" hidden>
                     <div class="target-id">
-                        <h1 class="subject-name" id="subjectName">Anonymous</h1>
-                        <p class="meta" id="idStack">Unidentified · File facts to build this profile</p>
+                        <div class="subject-name-row" id="subjectNameRow">
+                            <h1 class="subject-name" id="subjectName">Anonymous</h1>
+                            <button type="button" class="subject-edit" id="subjectEdit" aria-label="Edit name">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            </button>
+                            <input class="subject-name-input" id="subjectNameInput" type="text" maxlength="80" placeholder="Full name" spellcheck="false" autocomplete="off">
+                        </div>
+                        <p class="meta" id="idStack">File facts on the orbit to fill this sheet.</p>
                     </div>
                     <button class="icon-btn" id="profileClose" type="button" aria-label="Close profile">×</button>
                 </div>
-                <div class="profile-socials" id="profileSocials"></div>
-                <div class="coverage">
+                <div class="profile-socials" id="profileSocials" hidden></div>
+                <div class="coverage" hidden>
                     <div class="coverage-row">
                         <span class="coverage-label" id="coverageLabel">0 filed</span>
                     </div>
@@ -3165,7 +4232,9 @@
         </div>
         <button class="btn map-toggle" id="profileToggle" type="button">Target</button>
         <svg class="links" id="linkLayer"></svg>
+        <svg class="links peer-links" id="peerLinkLayer"></svg>
         <div class="map-canvas" id="mapCanvas">
+            <div class="peer-hubs" id="peerHubs"></div>
             <div class="hub" id="hub">
                 <svg class="hub-ring" viewBox="0 0 100 100" aria-hidden="true">
                     <circle class="hub-ring-track" cx="50" cy="50" r="46"></circle>
@@ -3233,12 +4302,13 @@
                 <div class="node-copy">
                     <label>Password</label>
                     <button class="platform-trigger" type="button">Choose platform</button>
-                    <input id="field-password" type="text" placeholder="Password" spellcheck="false" autocomplete="off" hidden>
+                    <input id="field-password" type="password" placeholder="Password" spellcheck="false" autocomplete="off" hidden>
                     <button class="search-btn" type="button" data-search="password" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
                     <button class="node-clear" type="button" data-clear="password" aria-label="Remove">×</button>
                 </div>
             </div>
             <div class="node" data-field="address" style="left: calc(50% + 238px - 93px); top: calc(50% + -24px - 17px);">
+                <button class="media-thumb" type="button" data-open-media="address" hidden aria-label="Open in Google Maps" title="Google Maps"></button>
                 <div class="node-copy">
                     <label for="field-address">Address</label>
                     <input id="field-address" type="text" inputmode="text" placeholder="Street, city" spellcheck="false" autocomplete="off">
@@ -3246,23 +4316,20 @@
                     <button class="node-clear" type="button" data-clear="address" aria-label="Remove">×</button>
                 </div>
             </div>
-            <div class="node" data-field="audio" style="left: calc(50% + 218px - 93px); top: calc(50% + 71px - 17px);">
-                <button class="media-thumb" type="button" data-open-media="audio" hidden aria-label="Open Audio"></button>
+            <div class="node" data-field="age" style="left: calc(50% + 218px - 93px); top: calc(50% + 71px - 17px);">
                 <div class="node-copy">
-                    <label for="field-audio">Audio</label>
-                    <input id="field-audio" type="text" inputmode="text" placeholder="URL or upload" spellcheck="false" autocomplete="off">
-                    <button class="search-btn" type="button" data-search="audio" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
-                    <button class="file-btn" type="button" data-file="audio">+</button>
-                    <button class="node-clear" type="button" data-clear="audio" aria-label="Remove">×</button>
+                    <label for="field-age">Age</label>
+                    <input id="field-age" type="text" inputmode="numeric" placeholder="Age" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="age" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="age" aria-label="Remove">×</button>
                 </div>
-                <input type="file" accept="audio/*" hidden data-upload="audio">
             </div>
-            <div class="node" data-field="wifi" style="left: calc(50% + 181px - 93px); top: calc(50% + 111px - 17px);">
+            <div class="node" data-field="dob" style="left: calc(50% + 181px - 93px); top: calc(50% + 111px - 17px);">
                 <div class="node-copy">
-                    <label for="field-wifi">Wi-Fi</label>
-                    <input id="field-wifi" type="text" inputmode="text" placeholder="SSID" spellcheck="false" autocomplete="off">
-                    <button class="search-btn" type="button" data-search="wifi" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
-                    <button class="node-clear" type="button" data-clear="wifi" aria-label="Remove">×</button>
+                    <label for="field-dob">Birthday</label>
+                    <input id="field-dob" type="text" inputmode="text" placeholder="Date of birth" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="dob" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="dob" aria-label="Remove">×</button>
                 </div>
             </div>
             <div class="node" data-field="ip" style="left: calc(50% + 130px - 93px); top: calc(50% + 143px - 17px);">
@@ -3282,12 +4349,12 @@
                     <button class="node-clear" type="button" data-clear="plate" aria-label="Remove">×</button>
                 </div>
             </div>
-            <div class="node" data-field="record" style="left: calc(50% + 0px - 93px); top: calc(50% + 170px - 17px);">
+            <div class="node" data-field="vehicle" style="left: calc(50% + 0px - 93px); top: calc(50% + 170px - 17px);">
                 <div class="node-copy">
-                    <label for="field-record">Record</label>
-                    <input id="field-record" type="text" inputmode="text" placeholder="Case or document" spellcheck="false" autocomplete="off">
-                    <button class="search-btn" type="button" data-search="record" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
-                    <button class="node-clear" type="button" data-clear="record" aria-label="Remove">×</button>
+                    <label for="field-vehicle">Vehicle</label>
+                    <input id="field-vehicle" type="text" inputmode="text" placeholder="Make and model" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="vehicle" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="vehicle" aria-label="Remove">×</button>
                 </div>
             </div>
             <div class="node" data-field="domain" style="left: calc(50% + -68px - 93px); top: calc(50% + 163px - 17px);">
@@ -3326,10 +4393,44 @@
             </div>
             <div class="node" data-field="company" style="left: calc(50% + -218px - 93px); top: calc(50% + -71px - 17px);">
                 <div class="node-copy">
-                    <label for="field-company">Work</label>
+                    <label for="field-company">Company</label>
                     <input id="field-company" type="text" inputmode="text" placeholder="Employer or workplace" spellcheck="false" autocomplete="off">
                     <button class="search-btn" type="button" data-search="company" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
                     <button class="node-clear" type="button" data-clear="company" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="occupation" style="left: calc(50% + -238px - 93px); top: calc(50% + 24px - 17px);">
+                <div class="node-copy">
+                    <label for="field-occupation">Occupation</label>
+                    <input id="field-occupation" type="text" inputmode="text" placeholder="Job title or trade" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="occupation" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="occupation" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node cc-node" data-field="countrycode" style="left: calc(50% + 68px - 93px); top: calc(50% + -163px - 17px);">
+                <div class="node-copy">
+                    <label>Country code</label>
+                    <span class="cc-pick empty"><span class="cc-abbr">Code</span><button class="cc-trigger" type="button" aria-label="Choose country code" aria-haspopup="listbox"></button></span>
+                    <input id="field-countrycode" type="hidden" value="">
+                    <span class="cc-name" hidden></span>
+                    <button class="search-btn" type="button" data-search="countrycode" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="countrycode" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="phoneos" style="left: calc(50% + 130px - 93px); top: calc(50% + -143px - 17px);">
+                <div class="node-copy">
+                    <label for="field-phoneos">Phone OS</label>
+                    <input id="field-phoneos" type="text" inputmode="text" placeholder="iOS 18, Android 15…" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="phoneos" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="phoneos" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="os" style="left: calc(50% + 181px - 93px); top: calc(50% + -111px - 17px);">
+                <div class="node-copy">
+                    <label for="field-os">Computer OS</label>
+                    <input id="field-os" type="text" inputmode="text" placeholder="Windows 11, macOS…" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="os" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="os" aria-label="Remove">×</button>
                 </div>
             </div>
             <div class="node" data-field="vin" style="left: calc(50% + -130px - 93px); top: calc(50% + -143px - 17px);">
@@ -3343,6 +4444,7 @@
         </div>
         <div class="platform-menu" id="platformMenu" hidden></div>
         <div class="tz-menu" id="tzMenu" hidden></div>
+        <div class="tz-menu" id="ccMenu" hidden></div>
         <div class="search-menu" id="searchMenu" hidden></div>
         <div class="field-menu" id="fieldMenu" hidden></div>
         <div class="media-viewer" id="mediaViewer" hidden>
@@ -3365,21 +4467,48 @@
                 </div>
                 <button class="help-close" id="addClose" type="button" aria-label="Close">×</button>
             </div>
+            <form class="add-form add-form-top" id="addCustomForm">
+                <div class="add-form-row">
+                    <input id="addCustomLabel" type="text" maxlength="28" placeholder="Create your own…" autocomplete="off" spellcheck="false">
+                    <input id="addCustomHint" type="text" maxlength="40" placeholder="Description" autocomplete="off" spellcheck="false">
+                    <button type="submit">Add</button>
+                </div>
+            </form>
             <div id="addHiddenBlock" hidden>
-                <h3>Bring back</h3>
+                <div class="add-group-label">Bring back</div>
                 <div class="add-chips" id="addHiddenList"></div>
             </div>
             <div id="addPresetBlock">
-                <h3>Existing fields</h3>
-                <input class="add-filter" id="addPresetFilter" type="search" placeholder="Filter fields" autocomplete="off" spellcheck="false">
+                <div class="add-filter-wrap">
+                    <svg class="add-filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>
+                    <input class="add-filter" id="addPresetFilter" type="search" placeholder="Search fields…" autocomplete="off" spellcheck="false">
+                    <span class="add-filter-count" id="addFilterCount" hidden></span>
+                </div>
                 <div id="addPresetList"></div>
             </div>
-            <h3>Create your own</h3>
-            <form class="add-form" id="addCustomForm">
-                <input id="addCustomLabel" type="text" maxlength="28" placeholder="Field name" autocomplete="off" spellcheck="false">
-                <input id="addCustomHint" type="text" maxlength="40" placeholder="Placeholder (optional)" autocomplete="off" spellcheck="false">
-                <button type="submit">Add field</button>
-            </form>
+        </div>
+    </div>
+
+    <div class="add-sheet" id="toolkitSheet" hidden>
+        <div class="add-card toolkit-card" role="dialog" aria-modal="true" aria-labelledby="toolkitTitle">
+            <div class="share-top">
+                <div>
+                    <div class="share-kicker">Catalog</div>
+                    <h2 id="toolkitTitle">OSINT toolkit</h2>
+                    <p class="toolkit-lead">Browse by topic. Click a category to open tools. Source: <a href="https://github.com/Delexoo/freeuniversitytools" target="_blank" rel="noopener noreferrer">Free University Tools</a>.</p>
+                </div>
+                <button class="help-close" id="toolkitClose" type="button" aria-label="Close">×</button>
+            </div>
+            <div class="toolkit-search-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input class="add-filter" id="toolkitFilter" type="search" placeholder="Search categories or tools" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="toolkit-focus" id="toolkitFocus" data-on="0">
+                <span>Showing tools for <strong id="toolkitFocusLabel"></strong></span>
+                <button type="button" id="toolkitFocusClear">Show all</button>
+            </div>
+            <p class="toolkit-meta" id="toolkitMeta"></p>
+            <div class="toolkit-list" id="toolkitList"></div>
         </div>
     </div>
 
@@ -3400,6 +4529,23 @@
                 <button type="button" id="shareCopy">Copy</button>
             </div>
             <button type="button" class="share-native" id="shareNative">Share</button>
+        </div>
+    </div>
+
+    <div class="install-sheet" id="installSheet" hidden>
+        <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="installTitle" aria-describedby="installLead">
+            <div class="install-top">
+                <div class="install-mark"><img src="icons/app-192.png" alt=""></div>
+                <button class="help-close" id="installClose" type="button" aria-label="Close">×</button>
+            </div>
+            <p class="install-kicker" id="installKicker">Home screen</p>
+            <h2 id="installTitle">Install OrbINT</h2>
+            <p class="install-lead" id="installLead">Add this case file to this device like an app. It works on iPhone, iPad, Android, Windows, and Mac.</p>
+            <ol class="install-steps" id="installSteps"></ol>
+            <div class="install-actions">
+                <button type="button" class="confirm-cancel" id="installDismiss">Not now</button>
+                <button type="button" class="confirm-ok" id="installGo">Install</button>
+            </div>
         </div>
     </div>
 
@@ -3489,7 +4635,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="help-callout">OrbINT is the full workstation: identity, accounts, infrastructure, vehicles and registration, credentials, records, media, and anything you add. File the fact, then search from the pill.</div>
+                    <div class="help-callout">OrbINT is the full workstation: identity, accounts, infrastructure, vehicles and registration, credentials, records, media, and anything you add. File the fact, then search from the pill. The dock Toolkit holds the broader OSINT catalog when you need a source that is not on the pill.</div>
                 </section>
 
                 <section class="help-section">
@@ -3516,7 +4662,7 @@
                             <em>EST · Eastern Time</em>
                         </div>
                         <div class="help-field">
-                            <b>Work</b>
+                            <b>Company</b>
                             <span>Employer, workplace, or legal name. Search opens filings, EDGAR, ownership, and sanctions lists.</span>
                             <em>Northwind Analytics LLC</em>
                         </div>
@@ -3534,12 +4680,14 @@
                     <div class="help-ex" style="margin-top:12px">
                         <span class="help-kbd">Scroll</span>
                         <span class="help-kbd">Zoom</span>
+                        <span class="help-kbd">Drag empty space</span>
+                        <span class="help-kbd">Pan</span>
                         <span class="help-kbd">Middle-drag</span>
                         <span class="help-kbd">Pan</span>
                         <span class="help-kbd">Drag hub</span>
                         <span class="help-kbd">Move orbit</span>
                     </div>
-                    <p style="margin-top:12px">The + on the hub adds a field. Pick a hidden or extra one, or type a name to create your own. Right-click a field to copy, cut, paste, rename, clear, search, or remove that pill from the orbit. Right-click empty map space for Help, Recenter, Undo, Redo, Export, Share, and Reset. Recenter restores the default view. Drag the right edge of the left sheet to resize the portfolio. Reset wipes every profile, the map, and saved layout, then reloads a fresh page.</p>
+                    <p style="margin-top:12px">The + on the hub adds a field. Pick a hidden or extra one, or type a name to create your own. Right-click a field to copy, cut, paste, rename, clear, search, or remove that pill from the orbit. Right-click empty map space to drop a linked profile where you clicked, or for Help, Recenter, Undo, Redo, Export, Share, and Reset. Right-click the center circle to link this case to other profiles; linked subjects appear on the map with a line between them. Click a linked circle to open that case. Recenter restores the default view. Drag the right edge of the left sheet to resize the portfolio. Reset wipes every profile, the map, and saved layout, then reloads a fresh page.</p>
                 </section>
 
                 <section class="help-section">
@@ -3547,7 +4695,8 @@
                     <p>Keep more than one subject. The rail on the left of the portfolio is the case shelf.</p>
                     <div class="help-dock">
                         <div><b>Switch</b>Click a face to open that profile. The orbit and facts follow it.</div>
-                        <div><b>New</b>Start a blank case. Name it now or leave it untitled.</div>
+                        <div><b>New</b>The rail plus starts a separate blank case. Right-click empty map space to drop a linked circle where you clicked. No name needed — file it when you have one.</div>
+                        <div><b>Link</b>Right-click the hub to connect this case to another profile. A cyan mark on the rail face means this case has a linked subject. A line stays between them on the map.</div>
                         <div><b>Upload</b>Import an OrbINT .json profile, including files from Export.</div>
                         <div><b>Rename</b>The pencil names the current profile. Right-click a face to rename, duplicate, download, or delete.</div>
                     </div>
@@ -3557,11 +4706,13 @@
                     <h3>Dock</h3>
                     <div class="help-dock">
                         <div><b>Help</b>This guide.</div>
+                        <div><b>Toolkit</b>The OSINT catalog from Free University Tools. Browse by category, or open more tools from a field search.</div>
                         <div><b>Recenter</b>Reset zoom and pan. Does not touch facts.</div>
                         <div><b>Playtest</b>Fill every visible field with random sample data. Undo restores the previous case.</div>
                         <div><b>Undo / Redo</b>Step through filed changes. Ctrl+Z and Ctrl+Y. Unlimited in this session.</div>
                         <div><b>Export</b>Download .txt, .md, .json, or .html.</div>
                         <div><b>Share</b>QR code, copy link, or the system share sheet for this site.</div>
+                        <div><b>Install app</b>Add OrbINT to the home screen, dock, or Start menu on this device.</div>
                         <div><b>Reset</b>Wipe every profile, the map, custom fields, and saved width, then reload fresh.</div>
                     </div>
                 </section>
@@ -3585,6 +4736,9 @@
         <button type="button" id="dockHelp" data-tip="Help" aria-label="Help">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.4 2.4 0 1 1 3.3 2.2c-.8.4-1.3 1-1.3 1.8V14"/><path d="M12 17.2h.01"/></svg>
         </button>
+        <button type="button" id="dockToolkit" data-tip="OSINT toolkit" aria-label="OSINT toolkit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </button>
         <button class="dock-add" type="button" id="dockAdd" data-tip="Add" aria-label="Add field">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -3605,6 +4759,9 @@
         </button>
         <button type="button" id="dockShare" data-tip="Share" aria-label="Share">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="M8.2 13.2l5.6 3.3M13.8 7.5l-5.6 3.3"/></svg>
+        </button>
+        <button type="button" id="dockInstall" data-tip="Install app" aria-label="Install app">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
         </button>
         <button class="dock-reset" type="button" id="dockReset" data-tip="Reset" aria-label="Reset">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 1 0 2.2-6.5M4 5v4h4"/></svg>
@@ -3638,9 +4795,11 @@
             </div>
             <button class="phone-choice" type="button" id="phonePlatformBtn" hidden>Choose platform</button>
             <button class="phone-choice" type="button" id="phoneTzBtn" hidden>Choose timezone</button>
+            <button class="phone-choice" type="button" id="phoneCcBtn" hidden>Choose country</button>
             <div class="phone-field-row">
                 <input id="phoneFieldInput" type="text" autocomplete="off" spellcheck="false">
                 <button class="phone-reveal" type="button" id="phoneReveal" hidden aria-label="Show password"></button>
+                <button class="phone-maps" type="button" id="phoneMaps" hidden aria-label="Open in Google Maps" title="Google Maps"></button>
             </div>
             <div class="phone-card-actions">
                 <button type="button" id="phoneFieldUpload" hidden>Upload</button>
@@ -3660,13 +4819,16 @@
                 <button type="button" id="phoneUndo">Undo</button>
                 <button type="button" id="phoneRedo">Redo</button>
                 <button type="button" id="phonePlaytest">Playtest</button>
+                <button type="button" id="phoneToolkit">OSINT toolkit</button>
                 <button type="button" id="phoneExport">Export</button>
+                <button type="button" id="phoneInstall">Install app</button>
                 <a id="phoneDonate" href="https://buy.stripe.com/9B63cu3RE2ouaKgcHLcjS00" target="_blank" rel="noopener noreferrer">Donate</a>
                 <button class="danger" type="button" id="phoneReset">Reset</button>
             </div>
         </div>
     </div>
 
+    <script src="osint-tools.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

@@ -1,9 +1,16 @@
         const GROUPS = [
-            { id: 'identity', label: 'Identity', fields: ['name', 'username', 'image'] },
-            { id: 'contact', label: 'Contact', fields: ['phone', 'email', 'password'] },
-            { id: 'location', label: 'Location', fields: ['address', 'ip', 'wifi'] },
-            { id: 'entity', label: 'Entity', fields: ['company', 'domain', 'crypto'] },
-            { id: 'evidence', label: 'Evidence', fields: ['audio', 'vin', 'plate', 'record'] },
+            { id: 'identity', label: 'Identity', fields: ['name', 'image'] },
+            { id: 'person', label: 'Person', fields: [] },
+            { id: 'spii', label: 'Sensitive', fields: [] },
+            { id: 'contact', label: 'Phone', fields: ['phone', 'countrycode', 'phoneos'] },
+            { id: 'life', label: 'Life', fields: ['age', 'dob'] },
+            { id: 'online', label: 'Online', fields: ['email', 'username', 'password', 'domain'] },
+            { id: 'device', label: 'Device', fields: ['os'] },
+            { id: 'entity', label: 'Employment', fields: ['company', 'occupation'] },
+            { id: 'finance', label: 'Finance', fields: ['crypto'] },
+            { id: 'location', label: 'Location', fields: ['address', 'ip'] },
+            { id: 'travel', label: 'Travel', fields: [] },
+            { id: 'evidence', label: 'Other', fields: ['vehicle', 'vin', 'plate'] },
             { id: 'notes', label: 'Notes', fields: ['timezone', 'notes'] },
             { id: 'custom', label: 'Custom', fields: [] }
         ];
@@ -143,6 +150,82 @@
         function isPlatformField(id) {
             const base = fieldBase(id);
             return base === 'username' || base === 'password';
+        }
+
+        function storedFieldPlatform(fieldId) {
+            const facts = (profile.facts && profile.facts[fieldId]) || [];
+            for (let i = facts.length - 1; i >= 0; i--) {
+                const item = facts[i];
+                if (item && item.platform && platformById(item.platform)) return item.platform;
+            }
+            return '';
+        }
+
+        function fieldPlatformId(fieldId) {
+            const stored = storedFieldPlatform(fieldId);
+            if (stored) return stored;
+            const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+            const raw = (node && node.dataset.platform) || '';
+            if (platformById(raw)) return raw;
+            const fact = typeof latestFact === 'function' ? latestFact(fieldId) : null;
+            const value = (fact && fact.value) || (document.getElementById('field-' + fieldId) || {}).value || '';
+            if (typeof platformFromUrl === 'function' && looksLikeUrl(value)) {
+                const fromUrl = platformFromUrl(value);
+                if (fromUrl) return fromUrl.id;
+            }
+            return '';
+        }
+
+        function setFieldPlatform(fieldId, platformId) {
+            if (!isPlatformField(fieldId)) return;
+            profile.facts = profile.facts || {};
+            profile.facts[fieldId] = profile.facts[fieldId] || [];
+            let current = profile.facts[fieldId][profile.facts[fieldId].length - 1];
+            const platform = platformById(platformId);
+            if (!current) {
+                if (!platform) return;
+                current = { value: '', platform: platform.id, addedAt: new Date().toISOString() };
+                profile.facts[fieldId].push(current);
+            } else if (platform) {
+                current.platform = platform.id;
+            } else {
+                delete current.platform;
+                if (!String(current.value || '').trim()) profile.facts[fieldId].pop();
+            }
+            const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+            if (node) node.dataset.platform = platform ? platform.id : '';
+            if (typeof saveProfile === 'function') saveProfile();
+        }
+
+        const SECRET_FIELD_RE = /\b(password|passwd|passphrase|passcode|pin|ssn|national[- ]?id|drivers?[- ]?license|passport|tax[- ]?id|iban|routing|bank[- ]?account|credit[- ]?card|medicare|medical|biometric|dna|secret|token|api[- ]?key|private[- ]?key|seed[- ]?phrase|recovery[- ]?code|2fa|totp|otp|session|cookie)\b/i;
+
+        function isSecretField(id) {
+            const base = fieldBase(id);
+            if (base === 'password') return true;
+            const field = fieldById(id);
+            if (field && (field.group === 'spii' || fieldGroupId(field) === 'spii')) return true;
+            const preset = EXTRA_PRESETS.find((item) => item.id === base);
+            if (preset && preset.group === 'spii') return true;
+            const blob = [base, field && field.id, field && field.label, field && field.placeholder, preset && preset.label].filter(Boolean).join(' ');
+            return SECRET_FIELD_RE.test(blob);
+        }
+
+        function secretIsOpen(fieldId) {
+            return revealedPasswords.has(fieldId);
+        }
+
+        function secretAriaLabel(fieldId, open) {
+            const noun = fieldBase(fieldId) === 'password' ? 'password' : 'value';
+            return (open ? 'Hide ' : 'Show ') + noun;
+        }
+
+        function isMapsField(id) {
+            return fieldBase(id) === 'address';
+        }
+
+        function isThumbField(id) {
+            const base = fieldBase(id);
+            return base === 'image' || base === 'audio' || base === 'ip' || base === 'address';
         }
 
         function isEmailField(id) {
@@ -292,24 +375,6 @@
                 ]
             },
             {
-                id: 'audio',
-                label: 'Audio',
-                placeholder: 'URL or upload',
-                file: 'audio/*',
-                leads: (v) => [
-                    ['Transcribe and search', 'Keywords, place names, announcements', 'https://www.google.com/search?q=' + encodeURIComponent(v)]
-                ]
-            },
-            {
-                id: 'wifi',
-                label: 'Wi-Fi',
-                placeholder: 'SSID',
-                leads: (v) => [
-                    ['Wigle', 'If the SSID was logged by wardrivers', 'https://wigle.net/search?ssid=' + encodeURIComponent(v)],
-                    ['Owner hint', 'Family names or ISP defaults in the SSID', 'https://www.google.com/search?q=' + encodeURIComponent(v + ' wifi ssid')]
-                ]
-            },
-            {
                 id: 'ip',
                 label: 'IP',
                 placeholder: '1.2.3.4',
@@ -333,12 +398,75 @@
                 ]
             },
             {
-                id: 'record',
-                label: 'Record',
-                placeholder: 'Case or document',
+                id: 'vehicle',
+                label: 'Vehicle',
+                placeholder: 'Make and model',
                 leads: (v) => [
-                    ['Court / docket search', 'Public case details and parties', 'https://www.google.com/search?q=' + encodeURIComponent(v + ' court records')],
-                    ['News', 'Reporting around the filing', 'https://news.google.com/search?q=' + encodeURIComponent(v)]
+                    ['Google', 'Public mentions', 'https://www.google.com/search?q=' + encodeURIComponent(v)],
+                    ['Images', 'Photos of this vehicle', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v)],
+                    ['News', 'Reporting', 'https://news.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'age',
+                label: 'Age',
+                placeholder: 'Age',
+                leads: (v) => [
+                    ['Google', 'Age with a name or place', 'https://www.google.com/search?q=' + encodeURIComponent(v + ' years old')],
+                    ['People search', 'Directories that list age', 'https://www.truepeoplesearch.com/']
+                ]
+            },
+            {
+                id: 'dob',
+                label: 'Birthday',
+                placeholder: 'Date of birth',
+                leads: (v) => [
+                    ['Google', 'Quoted date with a name', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '"')],
+                    ['FamilySearch', 'Vital records', 'https://www.familysearch.org/search/'],
+                    ['News', 'Mentions of the date', 'https://news.google.com/search?q=' + encodeURIComponent(v)]
+                ]
+            },
+            {
+                id: 'countrycode',
+                label: 'Country code',
+                placeholder: 'Country',
+                leads: (v) => {
+                    const meta = countryCodeMeta(v);
+                    const q = meta ? meta.dial + ' ' + meta.name : v;
+                    return [
+                        ['Country calling codes', 'ITU / dialing reference', 'https://www.countrycode.org/'],
+                        ['Google', 'Dialing code and carriers', 'https://www.google.com/search?q=' + encodeURIComponent(q + ' country calling code')]
+                    ];
+                }
+            },
+            {
+                id: 'phoneos',
+                label: 'Phone OS',
+                placeholder: 'iOS 18, Android 15…',
+                leads: (v) => [
+                    ['Google', 'Mobile OS mentions', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '"')],
+                    ['Apple', 'iOS release notes', 'https://support.apple.com/en-us/HT201222'],
+                    ['Android', 'Release notes', 'https://developer.android.com/about/versions']
+                ]
+            },
+            {
+                id: 'os',
+                label: 'Computer OS',
+                placeholder: 'Windows 11, macOS…',
+                leads: (v) => [
+                    ['Google', 'Desktop OS mentions', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '"')],
+                    ['Microsoft', 'Windows support', 'https://learn.microsoft.com/windows/release-health/'],
+                    ['Apple', 'macOS releases', 'https://support.apple.com/en-us/HT201222']
+                ]
+            },
+            {
+                id: 'occupation',
+                label: 'Occupation',
+                placeholder: 'Job title or trade',
+                leads: (v) => [
+                    ['LinkedIn', 'People with this title', 'https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(v)],
+                    ['Google', 'Public mentions', 'https://www.google.com/search?q=' + encodeURIComponent(v)],
+                    ['News', 'Reporting', 'https://news.google.com/search?q=' + encodeURIComponent(v)]
                 ]
             },
             {
@@ -382,7 +510,7 @@
             },
             {
                 id: 'company',
-                label: 'Work',
+                label: 'Company',
                 placeholder: 'Employer or workplace',
                 leads: (v) => [
                     ['OpenCorporates', 'Company filings worldwide', 'https://opencorporates.com/companies?q=' + encodeURIComponent(v)],
@@ -486,6 +614,30 @@
                 ['OpenStreetMap', 'Map features', 'https://www.openstreetmap.org/'],
                 ['County assessor', 'Local property records', gq('property assessor')]
             ],
+            occupation: () => [
+                ['LinkedIn', 'People by title', 'https://www.linkedin.com/search/results/people/'],
+                ['Google', 'Title + city / employer', gq('job title')],
+                ['News', 'Mentions of the role', 'https://news.google.com/']
+            ],
+            age: () => [
+                ['TruePeopleSearch', 'Directories that list age', 'https://www.truepeoplesearch.com/'],
+                ['Google', 'Age with a name', gq('years old')]
+            ],
+            dob: () => [
+                ['FamilySearch', 'Vital records', 'https://www.familysearch.org/search/'],
+                ['Google', 'Quoted birthday', gq('born')],
+                ['News', 'Public mentions', 'https://news.google.com/']
+            ],
+            countrycode: () => [
+                ['Country calling codes', 'Dialing reference', 'https://www.countrycode.org/'],
+                ['ITU', 'Country codes', 'https://www.itu.int/'],
+                ['Google', 'Dialing code', gq('country calling code')]
+            ],
+            vehicle: () => [
+                ['Google', 'Make and model mentions', gq('vehicle')],
+                ['Google Images', 'Photos', 'https://images.google.com/'],
+                ['NHTSA', 'Safety / recalls', 'https://www.nhtsa.gov/']
+            ],
             audio: () => [
                 ['Google', 'Search words you hear in the clip', gq('transcript')],
                 ['YouTube', 'If the clip was posted publicly', 'https://www.youtube.com/'],
@@ -588,6 +740,17 @@
                 ['urlscan', 'Public scan history', 'https://urlscan.io/'],
                 ['BuiltWith', 'Tech stack of a host', 'https://builtwith.com/'],
                 ['VirusTotal', 'URL reputation', 'https://www.virustotal.com/gui/home/url']
+            ],
+            os: () => [
+                ['Google', 'Desktop OS mentions', gq('Windows OR macOS OR Linux')],
+                ['Microsoft', 'Windows releases', 'https://learn.microsoft.com/windows/release-health/'],
+                ['Apple', 'macOS releases', 'https://support.apple.com/macos'],
+                ['DistroWatch', 'Linux distros', 'https://distrowatch.com/']
+            ],
+            phoneos: () => [
+                ['Google', 'Mobile OS mentions', gq('iOS OR Android')],
+                ['Apple', 'iOS versions', 'https://support.apple.com/en-us/HT201222'],
+                ['Android', 'Platform versions', 'https://developer.android.com/about/versions']
             ]
         };
 
@@ -801,6 +964,51 @@
                 ['News', 'Reporting', 'https://news.google.com/search?q=' + encodeURIComponent(v)],
                 ...engineSet(quoted(v))
             ],
+            occupation: (v) => [
+                ['LinkedIn', 'People with this title', 'https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(v)],
+                ['Google', 'Public mentions', gq(quoted(v))],
+                ['News', 'Reporting', 'https://news.google.com/search?q=' + encodeURIComponent(v)],
+                ...engineSet(quoted(v))
+            ],
+            os: (v) => [
+                ['Google', 'Desktop OS mentions', gq(quoted(v))],
+                ['Microsoft', 'Windows support', 'https://learn.microsoft.com/search/?terms=' + encodeURIComponent(v)],
+                ['Apple', 'macOS notes', 'https://support.apple.com/macos'],
+                ...engineSet(quoted(v))
+            ],
+            phoneos: (v) => [
+                ['Google', 'Mobile OS mentions', gq(quoted(v))],
+                ['Apple', 'iOS notes', 'https://support.apple.com/en-us/HT201222'],
+                ['Android', 'Platform versions', 'https://developer.android.com/about/versions'],
+                ...engineSet(quoted(v))
+            ],
+            age: (v) => [
+                ['TruePeopleSearch', 'Directories that list age', 'https://www.truepeoplesearch.com/'],
+                ['Google', 'Age with a name or place', gq(v + ' years old')],
+                ...engineSet(quoted(v) + ' years old')
+            ],
+            dob: (v) => [
+                ['FamilySearch', 'Vital records', 'https://www.familysearch.org/search/'],
+                ['Google', 'Quoted date', gq(quoted(v))],
+                ['News', 'Mentions', 'https://news.google.com/search?q=' + encodeURIComponent(v)],
+                ...engineSet(quoted(v))
+            ],
+            countrycode: (v) => {
+                const meta = countryCodeMeta(v);
+                const q = meta ? meta.dial + ' ' + meta.name : v;
+                return [
+                    ['Country calling codes', 'Dialing reference', 'https://www.countrycode.org/' + encodeURIComponent((meta && meta.id) || v)],
+                    ['Google', 'Dialing code and carriers', gq(q + ' country calling code')],
+                    ...engineSet(quoted(q))
+                ];
+            },
+            vehicle: (v) => [
+                ['Google', 'Public mentions', gq(quoted(v))],
+                ['Google Images', 'Photos', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v)],
+                ['NHTSA', 'Safety / recalls', 'https://www.nhtsa.gov/recalls'],
+                ['News', 'Reporting', 'https://news.google.com/search?q=' + encodeURIComponent(v)],
+                ...engineSet(quoted(v))
+            ],
             geo: (v) => [
                 ['Google Maps', 'Street and satellite', 'https://www.google.com/maps/search/' + encodeURIComponent(v)],
                 ['OpenStreetMap', 'Map features', 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)],
@@ -845,55 +1053,243 @@
         };
 
         const EXTRA_PRESETS = [
+            // Identity
             { id: 'social', label: 'Social', placeholder: 'URL or handle', group: 'identity' },
             { id: 'alias', label: 'Alias', placeholder: 'Other name', group: 'identity' },
             { id: 'nickname', label: 'Nickname', placeholder: 'Handle or nickname', group: 'identity' },
-            { id: 'maiden', label: 'Maiden name', placeholder: 'Previous surname', group: 'identity' },
             { id: 'middle', label: 'Middle name', placeholder: 'Middle name', group: 'identity' },
+            { id: 'maiden', label: "Mother's maiden name", placeholder: 'Previous surname', group: 'identity' },
+            { id: 'formername', label: 'Former name', placeholder: 'Previous legal name', group: 'identity' },
+            { id: 'aka', label: 'AKA', placeholder: 'Also known as', group: 'identity' },
             { id: 'family', label: 'Family', placeholder: 'Relative or associate', group: 'identity' },
-            { id: 'age', label: 'Age', placeholder: 'Age', group: 'identity' },
-            { id: 'dob', label: 'Birthday', placeholder: 'Date of birth', group: 'identity' },
+            { id: 'spouse', label: 'Spouse / partner', placeholder: 'Name', group: 'identity' },
+            { id: 'child', label: 'Child', placeholder: 'Name', group: 'identity' },
+            { id: 'parent', label: 'Parent', placeholder: 'Name', group: 'identity' },
+            { id: 'sibling', label: 'Sibling', placeholder: 'Name', group: 'identity' },
+            { id: 'roommate', label: 'Roommate', placeholder: 'Name', group: 'identity' },
+            { id: 'employercontact', label: 'Work contact', placeholder: 'Colleague or HR', group: 'identity' },
             { id: 'gender', label: 'Gender', placeholder: 'As publicly stated', group: 'identity' },
-            { id: 'appearance', label: 'Appearance', placeholder: 'Build, hair, clothing', group: 'identity' },
+            { id: 'pronouns', label: 'Pronouns', placeholder: 'he/him, they/them…', group: 'identity' },
+            { id: 'nationality', label: 'Nationality', placeholder: 'Citizenship or origin', group: 'identity' },
+            { id: 'ethnicity', label: 'Ethnicity', placeholder: 'As publicly stated', group: 'identity' },
+            { id: 'religion', label: 'Religion', placeholder: 'As publicly stated', group: 'identity' },
+            { id: 'language', label: 'Language', placeholder: 'Spoken language', group: 'identity' },
+            { id: 'accent', label: 'Accent', placeholder: 'Speech note', group: 'identity' },
             { id: 'school', label: 'School', placeholder: 'School or university', group: 'identity' },
             { id: 'degree', label: 'Degree', placeholder: 'Degree or certification', group: 'identity' },
+            { id: 'graduation', label: 'Graduation year', placeholder: 'YYYY', group: 'identity' },
             { id: 'military', label: 'Military', placeholder: 'Service or unit', group: 'identity' },
-            { id: 'nationality', label: 'Nationality', placeholder: 'Citizenship or origin', group: 'identity' },
-            { id: 'language', label: 'Language', placeholder: 'Spoken language', group: 'identity' },
-            { id: 'passport', label: 'Passport', placeholder: 'Country or public mention', group: 'identity' },
-            { id: 'occupation', label: 'Occupation', placeholder: 'Job title or trade', group: 'identity' },
+            { id: 'rank', label: 'Rank', placeholder: 'Military or org rank', group: 'identity' },
             { id: 'bio', label: 'Bio', placeholder: 'Public bio text', group: 'identity' },
-            { id: 'email2', label: 'Alt email', placeholder: 'Second email', group: 'contact' },
+            { id: 'signature', label: 'Signature', placeholder: 'Name style or mark', group: 'identity' },
+            { id: 'avatar', label: 'Avatar URL', placeholder: 'Profile image URL', group: 'identity' },
+
+            // Person / physical
+            { id: 'height', label: 'Height', placeholder: 'e.g. 5\'10" or 178 cm', group: 'person' },
+            { id: 'weight', label: 'Weight', placeholder: 'e.g. 165 lb', group: 'person' },
+            { id: 'build', label: 'Build', placeholder: 'Slim, athletic, heavy…', group: 'person' },
+            { id: 'eyecolor', label: 'Eye color', placeholder: 'Brown, blue, hazel…', group: 'person' },
+            { id: 'haircolor', label: 'Hair color', placeholder: 'Color', group: 'person' },
+            { id: 'hairstyle', label: 'Hair style', placeholder: 'Length or style', group: 'person' },
+            { id: 'skintone', label: 'Skin tone', placeholder: 'Description', group: 'person' },
+            { id: 'facialhair', label: 'Facial hair', placeholder: 'Beard, clean-shaven…', group: 'person' },
+            { id: 'tattoo', label: 'Tattoo', placeholder: 'Location and design', group: 'person' },
+            { id: 'piercing', label: 'Piercing', placeholder: 'Location', group: 'person' },
+            { id: 'scar', label: 'Scar / mark', placeholder: 'Visible mark', group: 'person' },
+            { id: 'disability', label: 'Disability / aid', placeholder: 'As observed or stated', group: 'person' },
+            { id: 'glasses', label: 'Glasses', placeholder: 'Yes / style', group: 'person' },
+            { id: 'clothing', label: 'Clothing', placeholder: 'Last seen wearing', group: 'person' },
+            { id: 'appearance', label: 'Appearance', placeholder: 'Build, hair, clothing', group: 'person' },
+            { id: 'voice', label: 'Voice', placeholder: 'Tone or sample note', group: 'person' },
+            { id: 'gait', label: 'Gait / walk', placeholder: 'How they move', group: 'person' },
+            { id: 'handed', label: 'Handedness', placeholder: 'Left / right', group: 'person' },
+            { id: 'bloodtype', label: 'Blood type', placeholder: 'A+, O−…', group: 'person' },
+            { id: 'allergy', label: 'Allergy', placeholder: 'Known allergy', group: 'person' },
+            { id: 'pet', label: 'Pet', placeholder: 'Animal or name', group: 'person' },
+            { id: 'hobby', label: 'Hobby', placeholder: 'Interest or sport', group: 'person' },
+            { id: 'habit', label: 'Habit', placeholder: 'Routine or pattern', group: 'person' },
+            { id: 'personality', label: 'Personality', placeholder: 'Observed traits', group: 'person' },
+
+            // Sensitive / SPII
+            { id: 'ssn', label: 'SSN / national ID', placeholder: 'Only if already public', group: 'spii', caution: 'Sensitive identifier. File only from lawful public sources.' },
+            { id: 'passport', label: 'Passport no.', placeholder: 'Number or country', group: 'spii', caution: 'Sensitive travel ID. File only from lawful public sources.' },
+            { id: 'driverslicense', label: "Driver's license", placeholder: 'Number or state', group: 'spii', caution: 'Sensitive ID. File only from lawful public sources.' },
+            { id: 'stateid', label: 'State ID', placeholder: 'Number or state', group: 'spii' },
+            { id: 'taxid', label: 'Tax ID / EIN', placeholder: 'TIN, EIN, VAT…', group: 'spii' },
+            { id: 'medicare', label: 'Health ID', placeholder: 'Member or policy ID', group: 'spii', caution: 'Health data is highly sensitive.' },
+            { id: 'medical', label: 'Medical note', placeholder: 'Publicly known condition', group: 'spii', caution: 'Health data is highly sensitive.' },
+            { id: 'biometric', label: 'Biometric', placeholder: 'Fingerprint, face ID note', group: 'spii', caution: 'Biometric data is highly sensitive.' },
+            { id: 'dna', label: 'DNA / genealogy', placeholder: 'Kit or match note', group: 'spii', caution: 'Genetic data is highly sensitive.' },
+            { id: 'creditcard', label: 'Card (last 4)', placeholder: '•••• 1234', group: 'spii', caution: 'Never store full card numbers.' },
+            { id: 'bankaccount', label: 'Bank account', placeholder: 'Last digits or bank', group: 'spii', caution: 'Financial account data is sensitive.' },
+            { id: 'routing', label: 'Routing number', placeholder: 'ABA / sort code', group: 'spii' },
+            { id: 'iban', label: 'IBAN', placeholder: 'International account', group: 'spii' },
+            { id: 'pin', label: 'PIN', placeholder: 'Only if already leaked', group: 'spii', caution: 'Credential. Do not use to sign in.' },
+            { id: 'securityq', label: 'Security question', placeholder: 'Question or answer', group: 'spii' },
+            { id: 'recoveryemail', label: 'Recovery email', placeholder: 'Backup email', group: 'spii' },
+            { id: 'recoveryphone', label: 'Recovery phone', placeholder: 'Backup number', group: 'spii' },
+            { id: 'seedphrase', label: 'Seed phrase', placeholder: 'Only if already exposed', group: 'spii', caution: 'Wallet seed. Extremely sensitive.' },
+            { id: 'privatekey', label: 'Private key', placeholder: 'Only if already exposed', group: 'spii', caution: 'Cryptographic key. Extremely sensitive.' },
+            { id: 'apikey', label: 'API key', placeholder: 'Token or key ID', group: 'spii' },
+            { id: 'session', label: 'Session / cookie', placeholder: 'Token note', group: 'spii' },
+            { id: 'voterid', label: 'Voter ID', placeholder: 'ID or precinct', group: 'spii' },
+            { id: 'casenumber', label: 'Court case no.', placeholder: 'Docket or case ID', group: 'spii' },
+            { id: 'inmate', label: 'Inmate ID', placeholder: 'Booking or DOC number', group: 'spii' },
+
+            // Contact
             { id: 'phone2', label: 'Alt phone', placeholder: 'Second number', group: 'contact' },
-            { id: 'telegram', label: 'Telegram', placeholder: '@username or t.me', group: 'contact' },
-            { id: 'discord', label: 'Discord', placeholder: 'user#0000 or handle', group: 'contact' },
-            { id: 'skype', label: 'Skype', placeholder: 'Skype name', group: 'contact' },
-            { id: 'signal', label: 'Signal', placeholder: 'Public mention', group: 'contact' },
+            { id: 'phone3', label: 'Work phone', placeholder: 'Office or desk', group: 'contact' },
+            { id: 'phonevoip', label: 'VoIP / Google Voice', placeholder: 'Number', group: 'contact' },
             { id: 'fax', label: 'Fax', placeholder: 'Fax number', group: 'contact' },
-            { id: 'pgp', label: 'PGP', placeholder: 'Key ID or fingerprint', group: 'contact' },
-            { id: 'city', label: 'City', placeholder: 'City', group: 'location' },
-            { id: 'country', label: 'Country', placeholder: 'Country', group: 'location' },
-            { id: 'postal', label: 'Postal', placeholder: 'ZIP or postal code', group: 'location' },
-            { id: 'region', label: 'Region', placeholder: 'State, province, county', group: 'location' },
-            { id: 'neighborhood', label: 'Neighborhood', placeholder: 'Area or district', group: 'location' },
-            { id: 'landmark', label: 'Landmark', placeholder: 'Place or building', group: 'location' },
-            { id: 'hotel', label: 'Hotel', placeholder: 'Hotel or stay', group: 'location' },
-            { id: 'airport', label: 'Airport', placeholder: 'IATA or name', group: 'location' },
-            { id: 'w3w', label: 'What3words', placeholder: 'word.word.word', group: 'location' },
-            { id: 'poi', label: 'POI', placeholder: 'Point of interest', group: 'location' },
-            { id: 'geo', label: 'Geo', placeholder: 'Place or lat, lng', group: 'location' },
+            { id: 'extension', label: 'Ext.', placeholder: 'PBX extension', group: 'contact' },
+            { id: 'carrier', label: 'Carrier', placeholder: 'Verizon, T-Mobile…', group: 'contact' },
+            { id: 'sms', label: 'SMS / text', placeholder: 'Number or thread note', group: 'contact' },
+            { id: 'pager', label: 'Pager', placeholder: 'Pager number', group: 'contact' },
+            { id: 'whatsappnum', label: 'WhatsApp number', placeholder: '+1…', group: 'contact' },
+
+            // Life
+            { id: 'birthplace', label: 'Birthplace', placeholder: 'City or hospital', group: 'life' },
+            { id: 'birthyear', label: 'Birth year', placeholder: 'YYYY', group: 'life' },
+            { id: 'zodiac', label: 'Zodiac', placeholder: 'Sign', group: 'life' },
+            { id: 'anniversary', label: 'Anniversary', placeholder: 'Date', group: 'life' },
+            { id: 'deathdate', label: 'Date of death', placeholder: 'If deceased', group: 'life' },
+            { id: 'marital', label: 'Marital status', placeholder: 'Single, married…', group: 'life' },
+            { id: 'children', label: 'Children count', placeholder: 'Number', group: 'life' },
+            { id: 'education', label: 'Education level', placeholder: 'HS, BA, PhD…', group: 'life' },
+            { id: 'employerhistory', label: 'Past employer', placeholder: 'Previous workplace', group: 'life' },
+            { id: 'criminal', label: 'Criminal record', placeholder: 'Public case note', group: 'life' },
+            { id: 'lawsuit', label: 'Lawsuit', placeholder: 'Civil case note', group: 'life' },
+            { id: 'obituary', label: 'Obituary', placeholder: 'URL or text', group: 'life' },
+
+            // Online
+            { id: 'email2', label: 'Alt email', placeholder: 'Second email', group: 'online' },
+            { id: 'emailwork', label: 'Work email', placeholder: 'name@company.com', group: 'online' },
+            { id: 'emailschool', label: 'School email', placeholder: '.edu address', group: 'online' },
+            { id: 'telegram', label: 'Telegram', placeholder: '@username or t.me', group: 'online' },
+            { id: 'discord', label: 'Discord', placeholder: 'user#0000 or handle', group: 'online' },
+            { id: 'skype', label: 'Skype', placeholder: 'Skype name', group: 'online' },
+            { id: 'signal', label: 'Signal', placeholder: 'Public mention', group: 'online' },
+            { id: 'matrix', label: 'Matrix / Element', placeholder: '@user:server', group: 'online' },
+            { id: 'irc', label: 'IRC', placeholder: 'nick or channel', group: 'online' },
+            { id: 'pgp', label: 'PGP', placeholder: 'Key ID or fingerprint', group: 'online' },
+            { id: 'sshkey', label: 'SSH key', placeholder: 'Fingerprint or URL', group: 'online' },
+            { id: 'useragent', label: 'Browser user agent', placeholder: 'Browser string', group: 'online' },
+            { id: 'browser', label: 'Browser', placeholder: 'Chrome, Safari…', group: 'online' },
+            { id: 'cookie', label: 'Cookie / tracker', placeholder: 'ID or note', group: 'online' },
+            { id: 'forum', label: 'Forum', placeholder: 'Board or profile URL', group: 'online' },
+            { id: 'blog', label: 'Blog', placeholder: 'URL', group: 'online' },
+            { id: 'portfolio', label: 'Portfolio', placeholder: 'Site URL', group: 'online' },
+            { id: 'dating', label: 'Dating profile', placeholder: 'Site or handle', group: 'online' },
+            { id: 'gaming', label: 'Gaming ID', placeholder: 'Gamertag or Steam', group: 'online' },
+            { id: 'nft', label: 'NFT / wallet ENS', placeholder: 'ENS or collection', group: 'online' },
+            { id: 'tor', label: 'Tor / onion', placeholder: '.onion or note', group: 'online' },
+            { id: 'pastebin', label: 'Paste', placeholder: 'Paste URL', group: 'online' },
+            { id: 'leak', label: 'Breach / leak', placeholder: 'Source or dump name', group: 'online' },
+            { id: 'darkweb', label: 'Dark web mention', placeholder: 'Market or alias', group: 'online' },
+
+            // Device
+            { id: 'imei', label: 'IMEI', placeholder: '15-digit IMEI', group: 'device' },
+            { id: 'meid', label: 'MEID', placeholder: 'Device MEID', group: 'device' },
+            { id: 'imsi', label: 'IMSI', placeholder: 'SIM IMSI', group: 'device' },
+            { id: 'iccid', label: 'ICCID', placeholder: 'SIM card ID', group: 'device' },
+            { id: 'phoneimei', label: 'Phone model', placeholder: 'iPhone 15, Pixel…', group: 'device' },
+            { id: 'serial', label: 'Serial number', placeholder: 'Device serial', group: 'device' },
+            { id: 'udid', label: 'UDID / device ID', placeholder: 'Mobile device ID', group: 'device' },
+            { id: 'androidid', label: 'Android ID', placeholder: 'SSAID or GAID', group: 'device' },
+            { id: 'idfa', label: 'IDFA / IDFV', placeholder: 'Apple ad ID', group: 'device' },
+            { id: 'mac', label: 'MAC', placeholder: 'AA:BB:CC:DD:EE:FF', group: 'device', caution: 'Vendor from the OUI, plus any log or record that already has this address.' },
+            { id: 'bluetooth', label: 'Bluetooth MAC', placeholder: 'BT address', group: 'device' },
+            { id: 'wifimac', label: 'Wi-Fi BSSID', placeholder: 'AP MAC', group: 'device' },
+            { id: 'osversion', label: 'OS version', placeholder: 'Build or version', group: 'device' },
+            { id: 'browserfp', label: 'Browser fingerprint', placeholder: 'Hash or note', group: 'device' },
+            { id: 'canvasfp', label: 'Canvas fingerprint', placeholder: 'Hash', group: 'device' },
+            { id: 'screen', label: 'Screen', placeholder: '1920×1080', group: 'device' },
+            { id: 'timezone_device', label: 'Device timezone', placeholder: 'Offset or zone', group: 'device' },
+            { id: 'language_device', label: 'Device language', placeholder: 'en-US…', group: 'device' },
+            { id: 'battery', label: 'Battery', placeholder: '% or note', group: 'device' },
+            { id: 'carrier_device', label: 'SIM carrier', placeholder: 'Carrier on device', group: 'device' },
+            { id: 'vpn', label: 'VPN / proxy', placeholder: 'Provider or IP', group: 'device' },
+            { id: 'router', label: 'Router', placeholder: 'Model or MAC', group: 'device' },
+            { id: 'iot', label: 'IoT device', placeholder: 'Camera, TV, etc.', group: 'device' },
+            { id: 'laptop', label: 'Laptop / PC', placeholder: 'Make and model', group: 'device' },
+            { id: 'tablet', label: 'Tablet', placeholder: 'Make and model', group: 'device' },
+            { id: 'wearable', label: 'Wearable', placeholder: 'Watch or band', group: 'device' },
+            { id: 'camera', label: 'Camera', placeholder: 'Make / EXIF model', group: 'device' },
+            { id: 'drone', label: 'Drone', placeholder: 'Model or registration', group: 'device' },
+            { id: 'uuid', label: 'UUID', placeholder: 'ID or GUID', group: 'device' },
+            { id: 'installid', label: 'App install ID', placeholder: 'App-specific ID', group: 'device' },
+
+            // Employment
             { id: 'title', label: 'Job title', placeholder: 'Role or title', group: 'entity' },
+            { id: 'department', label: 'Department', placeholder: 'Team or division', group: 'entity' },
             { id: 'industry', label: 'Industry', placeholder: 'Sector', group: 'entity' },
             { id: 'ein', label: 'Company ID', placeholder: 'EIN, CRN, or filing no.', group: 'entity' },
+            { id: 'duns', label: 'D-U-N-S', placeholder: 'DUNS number', group: 'entity' },
             { id: 'trademark', label: 'Trademark', placeholder: 'Mark or serial', group: 'entity' },
+            { id: 'linkedinurl', label: 'LinkedIn URL', placeholder: 'Profile URL', group: 'entity' },
+            { id: 'badge', label: 'Badge / employee ID', placeholder: 'ID number', group: 'entity' },
+            { id: 'office', label: 'Office', placeholder: 'Building or floor', group: 'entity' },
+            { id: 'salary', label: 'Salary band', placeholder: 'Public range only', group: 'entity' },
             { id: 'callsign', label: 'Callsign', placeholder: 'Radio or ham call', group: 'entity' },
             { id: 'asn', label: 'ASN', placeholder: 'AS12345', group: 'entity' },
             { id: 'vessel', label: 'Vessel', placeholder: 'Name or IMO', group: 'entity' },
             { id: 'aircraft', label: 'Aircraft', placeholder: 'Tail number', group: 'entity' },
             { id: 'nonprofit', label: 'Nonprofit', placeholder: 'Org name', group: 'entity' },
             { id: 'brand', label: 'Brand', placeholder: 'Product or brand', group: 'entity' },
-            { id: 'vehicle', label: 'Vehicle', placeholder: 'Make and model', group: 'evidence' },
-            { id: 'mac', label: 'MAC', placeholder: 'AA:BB:CC:DD:EE:FF', group: 'evidence', caution: 'Vendor from the OUI, plus any log, leak, or network record that already has this address.' },
+            { id: 'license_pro', label: 'Professional license', placeholder: 'License no. or board', group: 'entity' },
+            { id: 'union', label: 'Union / guild', placeholder: 'Organization', group: 'entity' },
+
+            // Finance
+            { id: 'bank', label: 'Bank', placeholder: 'Institution name', group: 'finance' },
+            { id: 'paypal', label: 'PayPal', placeholder: 'Email or username', group: 'finance' },
+            { id: 'venmo', label: 'Venmo', placeholder: '@handle', group: 'finance' },
+            { id: 'cashapp', label: 'Cash App', placeholder: '$cashtag', group: 'finance' },
+            { id: 'zelle', label: 'Zelle', placeholder: 'Email or phone', group: 'finance' },
+            { id: 'wise', label: 'Wise / Revolut', placeholder: 'Handle or email', group: 'finance' },
+            { id: 'stock', label: 'Stock / ticker', placeholder: 'Symbol or broker', group: 'finance' },
+            { id: 'crypto_wallet', label: 'Wallet address', placeholder: '0x… or bc1…', group: 'finance' },
+            { id: 'crypto_tx', label: 'TX hash', placeholder: 'Transaction ID', group: 'finance' },
+            { id: 'exchange', label: 'Exchange', placeholder: 'Binance, Coinbase…', group: 'finance' },
+            { id: 'einvoice', label: 'Invoice', placeholder: 'Number or URL', group: 'finance' },
+            { id: 'donation', label: 'Donation / tip', placeholder: 'Link or handle', group: 'finance' },
+
+            // Location
+            { id: 'city', label: 'City', placeholder: 'City', group: 'location' },
+            { id: 'country', label: 'Country', placeholder: 'Country', group: 'location' },
+            { id: 'postal', label: 'Postal', placeholder: 'ZIP or postal code', group: 'location' },
+            { id: 'region', label: 'Region', placeholder: 'State, province, county', group: 'location' },
+            { id: 'county', label: 'County', placeholder: 'County', group: 'location' },
+            { id: 'neighborhood', label: 'Neighborhood', placeholder: 'Area or district', group: 'location' },
+            { id: 'landmark', label: 'Landmark', placeholder: 'Place or building', group: 'location' },
+            { id: 'poi', label: 'POI', placeholder: 'Point of interest', group: 'location' },
+            { id: 'geo', label: 'Coordinates', placeholder: 'lat, lng', group: 'location' },
+            { id: 'pluscode', label: 'Plus Code', placeholder: 'Open Location Code', group: 'location' },
+            { id: 'w3w', label: 'What3words', placeholder: 'word.word.word', group: 'location' },
+            { id: 'timezone_loc', label: 'Local timezone', placeholder: 'Zone at location', group: 'location' },
+            { id: 'property', label: 'Property / parcel', placeholder: 'APN or address', group: 'location' },
+            { id: 'landlord', label: 'Landlord', placeholder: 'Owner or manager', group: 'location' },
+            { id: 'mailing', label: 'Mailing address', placeholder: 'PO box or mail', group: 'location' },
+            { id: 'previous_addr', label: 'Previous address', placeholder: 'Former residence', group: 'location' },
+            { id: 'workplace_addr', label: 'Work address', placeholder: 'Office location', group: 'location' },
+            { id: 'celltower', label: 'Cell tower', placeholder: 'CID / LAC note', group: 'location' },
+
+            // Travel
+            { id: 'hotel', label: 'Hotel', placeholder: 'Hotel or stay', group: 'travel' },
+            { id: 'airport', label: 'Airport', placeholder: 'IATA or name', group: 'travel' },
+            { id: 'flight', label: 'Flight', placeholder: 'Flight number', group: 'travel' },
+            { id: 'airline', label: 'Airline', placeholder: 'Carrier', group: 'travel' },
+            { id: 'pnr', label: 'PNR / booking', placeholder: 'Confirmation code', group: 'travel' },
+            { id: 'visa', label: 'Visa', placeholder: 'Type or country', group: 'travel' },
+            { id: 'border', label: 'Border crossing', placeholder: 'Port or date', group: 'travel' },
+            { id: 'passportstamp', label: 'Entry stamp', placeholder: 'Country / date', group: 'travel' },
+            { id: 'cruise', label: 'Cruise / ship', placeholder: 'Ship or booking', group: 'travel' },
+            { id: 'rentalcar', label: 'Rental car', placeholder: 'Company or plate', group: 'travel' },
+            { id: 'rideshare', label: 'Rideshare', placeholder: 'Uber / Lyft note', group: 'travel' },
+            { id: 'loyalty', label: 'Loyalty / FF', placeholder: 'Frequent flyer no.', group: 'travel' },
+
+            // Evidence / other
+            { id: 'audio', label: 'Audio', placeholder: 'URL or upload', group: 'evidence', file: 'audio/*' },
+            { id: 'record', label: 'Record', placeholder: 'Case or document', group: 'evidence' },
             { id: 'barcode', label: 'Barcode', placeholder: 'UPC, QR, or URL', group: 'evidence' },
             { id: 'color', label: 'Color', placeholder: 'Color or paint', group: 'evidence' },
             { id: 'document', label: 'Document', placeholder: 'Title or exhibit', group: 'evidence' },
@@ -901,10 +1297,19 @@
             { id: 'filename', label: 'Filename', placeholder: 'File name', group: 'evidence' },
             { id: 'video', label: 'Video', placeholder: 'URL or upload name', group: 'evidence' },
             { id: 'screenshot', label: 'Screenshot', placeholder: 'URL or note', group: 'evidence' },
-            { id: 'imei', label: 'IMEI', placeholder: 'Device IMEI', group: 'evidence' },
-            { id: 'uuid', label: 'UUID', placeholder: 'ID or GUID', group: 'evidence' },
-            { id: 'useragent', label: 'User-agent', placeholder: 'Browser string', group: 'evidence' },
             { id: 'exif', label: 'EXIF', placeholder: 'Camera or GPS note', group: 'evidence' },
+            { id: 'metadata', label: 'Metadata', placeholder: 'File or page meta', group: 'evidence' },
+            { id: 'weapon', label: 'Weapon', placeholder: 'Type or serial (public)', group: 'evidence' },
+            { id: 'firearm', label: 'Firearm serial', placeholder: 'Only if public record', group: 'evidence' },
+            { id: 'drug', label: 'Substance', placeholder: 'Public case note', group: 'evidence' },
+            { id: 'evidence_bag', label: 'Exhibit ID', placeholder: 'Bag or tag', group: 'evidence' },
+            { id: 'photo_id', label: 'Photo ID note', placeholder: 'Doc type seen', group: 'evidence' },
+            { id: 'vehicle_color', label: 'Vehicle color', placeholder: 'Paint color', group: 'evidence' },
+            { id: 'vehicle_make', label: 'Vehicle make', placeholder: 'Ford, Toyota…', group: 'evidence' },
+            { id: 'vehicle_model', label: 'Vehicle model', placeholder: 'Model name', group: 'evidence' },
+            { id: 'vehicle_year', label: 'Vehicle year', placeholder: 'YYYY', group: 'evidence' },
+
+            // Notes / casework
             { id: 'source', label: 'Source', placeholder: 'Where this came from', group: 'notes' },
             { id: 'quote', label: 'Quote', placeholder: 'Public statement', group: 'notes' },
             { id: 'event', label: 'Event', placeholder: 'Date or incident', group: 'notes' },
@@ -912,7 +1317,17 @@
             { id: 'hashtag', label: 'Hashtag', placeholder: '#tag', group: 'notes' },
             { id: 'mention', label: 'Mention', placeholder: '@account or name', group: 'notes' },
             { id: 'date', label: 'Date', placeholder: 'When', group: 'notes' },
-            { id: 'status', label: 'Status', placeholder: 'Open, linked, dead end', group: 'notes' }
+            { id: 'status', label: 'Status', placeholder: 'Open, linked, dead end', group: 'notes' },
+            { id: 'confidence', label: 'Confidence', placeholder: 'Low / med / high', group: 'notes' },
+            { id: 'theory', label: 'Theory', placeholder: 'Working hypothesis', group: 'notes' },
+            { id: 'lead', label: 'Lead', placeholder: 'Next step', group: 'notes' },
+            { id: 'deadend', label: 'Dead end', placeholder: 'What failed', group: 'notes' },
+            { id: 'priority', label: 'Priority', placeholder: 'P1 / P2 / P3', group: 'notes' },
+            { id: 'tag', label: 'Tag', placeholder: 'Case tag', group: 'notes' },
+            { id: 'timeline', label: 'Timeline', placeholder: 'Sequence note', group: 'notes' },
+            { id: 'witness', label: 'Witness', placeholder: 'Name or handle', group: 'notes' },
+            { id: 'tipster', label: 'Tipster', placeholder: 'Anonymous tip note', group: 'notes' },
+            { id: 'media_outlet', label: 'Media outlet', placeholder: 'Press source', group: 'notes' }
         ];
         const ADDED_KEY = 'osint-added-fields';
 
@@ -926,7 +1341,7 @@
                 group: spec.group || 'custom',
                 parent: spec.parent || '',
                 cloneOf: spec.cloneOf || '',
-                file: spec.file || '',
+                file: spec.file || (extra && extra.file) || '',
                 custom: !!spec.custom,
                 caution: spec.caution || (extra && extra.caution) || '',
                 leads: (v, fact) => {
@@ -1084,6 +1499,131 @@
             { id: 'Pacific/Fiji', abbr: 'FJT', name: 'Fiji Time', group: 'Pacific', aliases: ['fiji'] }
         ];
 
+        const COUNTRY_CODES = [
+            { id: 'US', dial: '+1', name: 'United States', group: 'Americas', aliases: ['usa', 'america'] },
+            { id: 'CA', dial: '+1', name: 'Canada', group: 'Americas', aliases: ['canada'] },
+            { id: 'MX', dial: '+52', name: 'Mexico', group: 'Americas', aliases: ['mexico'] },
+            { id: 'BR', dial: '+55', name: 'Brazil', group: 'Americas', aliases: ['brazil'] },
+            { id: 'AR', dial: '+54', name: 'Argentina', group: 'Americas', aliases: ['argentina'] },
+            { id: 'CL', dial: '+56', name: 'Chile', group: 'Americas', aliases: ['chile'] },
+            { id: 'CO', dial: '+57', name: 'Colombia', group: 'Americas', aliases: ['colombia'] },
+            { id: 'PE', dial: '+51', name: 'Peru', group: 'Americas', aliases: ['peru'] },
+            { id: 'VE', dial: '+58', name: 'Venezuela', group: 'Americas', aliases: ['venezuela'] },
+            { id: 'GB', dial: '+44', name: 'United Kingdom', group: 'Europe', aliases: ['uk', 'britain', 'england'] },
+            { id: 'IE', dial: '+353', name: 'Ireland', group: 'Europe', aliases: ['ireland'] },
+            { id: 'FR', dial: '+33', name: 'France', group: 'Europe', aliases: ['france'] },
+            { id: 'DE', dial: '+49', name: 'Germany', group: 'Europe', aliases: ['germany', 'deutschland'] },
+            { id: 'ES', dial: '+34', name: 'Spain', group: 'Europe', aliases: ['spain'] },
+            { id: 'IT', dial: '+39', name: 'Italy', group: 'Europe', aliases: ['italy'] },
+            { id: 'PT', dial: '+351', name: 'Portugal', group: 'Europe', aliases: ['portugal'] },
+            { id: 'NL', dial: '+31', name: 'Netherlands', group: 'Europe', aliases: ['holland', 'netherlands'] },
+            { id: 'BE', dial: '+32', name: 'Belgium', group: 'Europe', aliases: ['belgium'] },
+            { id: 'CH', dial: '+41', name: 'Switzerland', group: 'Europe', aliases: ['switzerland'] },
+            { id: 'AT', dial: '+43', name: 'Austria', group: 'Europe', aliases: ['austria'] },
+            { id: 'SE', dial: '+46', name: 'Sweden', group: 'Europe', aliases: ['sweden'] },
+            { id: 'NO', dial: '+47', name: 'Norway', group: 'Europe', aliases: ['norway'] },
+            { id: 'DK', dial: '+45', name: 'Denmark', group: 'Europe', aliases: ['denmark'] },
+            { id: 'FI', dial: '+358', name: 'Finland', group: 'Europe', aliases: ['finland'] },
+            { id: 'PL', dial: '+48', name: 'Poland', group: 'Europe', aliases: ['poland'] },
+            { id: 'CZ', dial: '+420', name: 'Czechia', group: 'Europe', aliases: ['czech', 'czechia'] },
+            { id: 'RO', dial: '+40', name: 'Romania', group: 'Europe', aliases: ['romania'] },
+            { id: 'HU', dial: '+36', name: 'Hungary', group: 'Europe', aliases: ['hungary'] },
+            { id: 'GR', dial: '+30', name: 'Greece', group: 'Europe', aliases: ['greece'] },
+            { id: 'TR', dial: '+90', name: 'Turkey', group: 'Europe', aliases: ['turkey', 'turkiye'] },
+            { id: 'RU', dial: '+7', name: 'Russia', group: 'Europe', aliases: ['russia'] },
+            { id: 'UA', dial: '+380', name: 'Ukraine', group: 'Europe', aliases: ['ukraine'] },
+            { id: 'EG', dial: '+20', name: 'Egypt', group: 'Africa', aliases: ['egypt'] },
+            { id: 'ZA', dial: '+27', name: 'South Africa', group: 'Africa', aliases: ['south africa'] },
+            { id: 'NG', dial: '+234', name: 'Nigeria', group: 'Africa', aliases: ['nigeria'] },
+            { id: 'KE', dial: '+254', name: 'Kenya', group: 'Africa', aliases: ['kenya'] },
+            { id: 'GH', dial: '+233', name: 'Ghana', group: 'Africa', aliases: ['ghana'] },
+            { id: 'MA', dial: '+212', name: 'Morocco', group: 'Africa', aliases: ['morocco'] },
+            { id: 'AE', dial: '+971', name: 'United Arab Emirates', group: 'Middle East', aliases: ['uae', 'dubai'] },
+            { id: 'SA', dial: '+966', name: 'Saudi Arabia', group: 'Middle East', aliases: ['saudi'] },
+            { id: 'IL', dial: '+972', name: 'Israel', group: 'Middle East', aliases: ['israel'] },
+            { id: 'IQ', dial: '+964', name: 'Iraq', group: 'Middle East', aliases: ['iraq'] },
+            { id: 'IR', dial: '+98', name: 'Iran', group: 'Middle East', aliases: ['iran'] },
+            { id: 'QA', dial: '+974', name: 'Qatar', group: 'Middle East', aliases: ['qatar'] },
+            { id: 'KW', dial: '+965', name: 'Kuwait', group: 'Middle East', aliases: ['kuwait'] },
+            { id: 'IN', dial: '+91', name: 'India', group: 'Asia', aliases: ['india'] },
+            { id: 'PK', dial: '+92', name: 'Pakistan', group: 'Asia', aliases: ['pakistan'] },
+            { id: 'BD', dial: '+880', name: 'Bangladesh', group: 'Asia', aliases: ['bangladesh'] },
+            { id: 'CN', dial: '+86', name: 'China', group: 'Asia', aliases: ['china'] },
+            { id: 'HK', dial: '+852', name: 'Hong Kong', group: 'Asia', aliases: ['hong kong'] },
+            { id: 'TW', dial: '+886', name: 'Taiwan', group: 'Asia', aliases: ['taiwan'] },
+            { id: 'JP', dial: '+81', name: 'Japan', group: 'Asia', aliases: ['japan'] },
+            { id: 'KR', dial: '+82', name: 'South Korea', group: 'Asia', aliases: ['korea'] },
+            { id: 'SG', dial: '+65', name: 'Singapore', group: 'Asia', aliases: ['singapore'] },
+            { id: 'MY', dial: '+60', name: 'Malaysia', group: 'Asia', aliases: ['malaysia'] },
+            { id: 'TH', dial: '+66', name: 'Thailand', group: 'Asia', aliases: ['thailand'] },
+            { id: 'VN', dial: '+84', name: 'Vietnam', group: 'Asia', aliases: ['vietnam'] },
+            { id: 'PH', dial: '+63', name: 'Philippines', group: 'Asia', aliases: ['philippines'] },
+            { id: 'ID', dial: '+62', name: 'Indonesia', group: 'Asia', aliases: ['indonesia'] },
+            { id: 'AU', dial: '+61', name: 'Australia', group: 'Oceania', aliases: ['australia'] },
+            { id: 'NZ', dial: '+64', name: 'New Zealand', group: 'Oceania', aliases: ['new zealand'] },
+            { id: 'FJ', dial: '+679', name: 'Fiji', group: 'Oceania', aliases: ['fiji'] }
+        ];
+
+        function countryCodeMeta(value) {
+            const resolved = resolveCountryCodeValue(value);
+            return COUNTRY_CODES.find((item) => item.id === resolved) || null;
+        }
+
+        function resolveCountryCodeValue(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            const upper = raw.toUpperCase();
+            if (COUNTRY_CODES.some((item) => item.id === upper)) return upper;
+            const lower = raw.toLowerCase().replace(/^\+/, '').replace(/\s+/g, ' ').trim();
+            const dialPart = raw.split('·')[0].trim();
+            const namePart = raw.indexOf('·') !== -1 ? raw.split('·').slice(1).join('·').trim().toLowerCase() : '';
+            const hit = COUNTRY_CODES.find((item) => {
+                const dial = item.dial.replace(/^\+/, '');
+                return item.name.toLowerCase() === lower ||
+                    item.name.toLowerCase() === namePart ||
+                    item.dial === raw ||
+                    item.dial === dialPart ||
+                    item.dial === '+' + lower ||
+                    dial === lower ||
+                    (item.aliases || []).indexOf(lower) !== -1;
+            });
+            return hit ? hit.id : '';
+        }
+
+        function syncCountryCodeTrigger(node) {
+            if (!node) return;
+            const id = node.dataset.field;
+            const input = document.getElementById('field-' + id);
+            const pick = node.querySelector('.cc-pick');
+            const trigger = node.querySelector('.cc-trigger');
+            const abbr = node.querySelector('.cc-abbr');
+            if (!trigger || !abbr) return;
+            const code = resolveCountryCodeValue((input && input.value) || firstValue(id));
+            const meta = countryCodeMeta(code);
+            const nulled = !code && isNullField(id);
+            abbr.textContent = nulled ? 'Unknown' : ((meta && meta.dial) || 'Code');
+            if (pick) pick.classList.toggle('empty', !code && !nulled);
+            trigger.classList.toggle('empty', !code && !nulled);
+            trigger.setAttribute('aria-label', meta ? meta.name + ' ' + meta.dial : 'Choose country code');
+            const nameEl = node.querySelector('.cc-name');
+            if (nameEl) {
+                nameEl.hidden = !meta;
+                nameEl.textContent = meta ? meta.name : '';
+            }
+        }
+
+        function fillCountryCodeSelects() {
+            document.querySelectorAll('.node').forEach((node) => {
+                const id = node.dataset.field;
+                if (fieldBase(id) !== 'countrycode') return;
+                node.classList.add('cc-node');
+                const input = document.getElementById('field-' + id);
+                const resolved = resolveCountryCodeValue((input && input.value) || firstValue(id));
+                if (input && resolved && input.value !== resolved) input.value = resolved;
+                syncCountryCodeTrigger(node);
+            });
+        }
+
         function timezoneZoneList() {
             return TIMEZONES.map((zone) => zone.id);
         }
@@ -1221,6 +1761,76 @@
             return [['Google', 'Search', gq(field ? field.label : '')]];
         }
 
+        const TOOLKIT_SEARCH_CAP = 8;
+
+        function toolkitCatalog() {
+            return window.OSINT_TOOLKIT || null;
+        }
+
+        function leadHostKey(url) {
+            try {
+                const parsed = new URL(url);
+                return parsed.hostname.replace(/^www\./i, '').toLowerCase() + parsed.pathname.replace(/\/$/, '').toLowerCase();
+            } catch (error) {
+                return String(url || '').toLowerCase();
+            }
+        }
+
+        function fillToolkitUrl(url, value) {
+            if (!url || !value) return url;
+            const raw = String(value);
+            const enc = encodeURIComponent(raw);
+            return String(url)
+                .replace(/%3C[^%]+%3E/gi, enc)
+                .replace(/<[^>]+>/g, raw)
+                .replace(/\{[^}]+\}/g, enc);
+        }
+
+        function toolkitToolsForField(fieldId) {
+            const catalog = toolkitCatalog();
+            if (!catalog || !catalog.byField) return [];
+            return catalog.byField[fieldBase(fieldId)] || [];
+        }
+
+        function mergeToolkitLeads(fieldId, links) {
+            const extras = toolkitToolsForField(fieldId);
+            if (!extras.length) {
+                return { links: links, extraStart: links.length, extraCount: 0, extraTotal: 0 };
+            }
+            const seen = {};
+            links.forEach((item) => { seen[leadHostKey(item[2] || item[1])] = true; });
+            const value = fieldInputValue(fieldId);
+            const added = [];
+            extras.forEach((tool) => {
+                if (added.length >= TOOLKIT_SEARCH_CAP) return;
+                const href = fillToolkitUrl(tool.url, value);
+                const key = leadHostKey(href);
+                if (seen[key]) return;
+                seen[key] = true;
+                added.push([tool.name, tool.host || '', href]);
+            });
+            return {
+                links: links.concat(added),
+                extraStart: links.length,
+                extraCount: added.length,
+                extraTotal: extras.length
+            };
+        }
+
+        function searchLeadButton(item) {
+            return '<button class="search-option" type="button" data-open-lead="' + escapeHtml(item[2] || item[1]) + '" data-lead-mode="' + escapeHtml(item[3] || '') + '">' +
+                escapeHtml(item[0]) + '</button>';
+        }
+
+        function toolkitBrowseButton(fieldId, extraTotal) {
+            const catalog = toolkitCatalog();
+            if (!catalog) return '';
+            const label = extraTotal > TOOLKIT_SEARCH_CAP
+                ? 'Browse OSINT toolkit · ' + extraTotal + ' for this field'
+                : 'Browse OSINT toolkit';
+            return '<button class="search-option" type="button" data-open-toolkit="' + escapeHtml(fieldId || '') + '">' + label + '</button>';
+        }
+
         function setSearchIcon(node, filled) {
             const btn = node && node.querySelector('.search-btn');
             if (!btn) return;
@@ -1336,10 +1946,17 @@
             });
             if (isPlatformField(id)) {
                 const trigger = node && node.querySelector('.platform-trigger');
-                const hasPlatform = !!(node && node.dataset.platform);
+                const hasPlatform = !!fieldPlatformId(id);
                 if (input) input.hidden = !hasPlatform;
-                if (!hasPlatform && trigger) trigger.focus();
-                else if (input) input.focus();
+                if (!hasPlatform && trigger) {
+                    trigger.hidden = false;
+                    trigger.focus();
+                    if (node) openPlatformMenu(node);
+                } else if (input) input.focus();
+            } else if (fieldBase(id) === 'timezone' && node) {
+                openTimezoneMenu(node);
+            } else if (fieldBase(id) === 'countrycode' && node) {
+                openCountryCodeMenu(node);
             } else if (input && input.type !== 'hidden') {
                 input.hidden = false;
                 input.focus();
@@ -1364,8 +1981,12 @@
                 const field = fieldById(node.dataset.field);
                 node.classList.toggle('branch', !!(field && field.parent));
                 node.classList.toggle('tz-node', fieldBase(node.dataset.field) === 'timezone');
+                node.classList.toggle('cc-node', fieldBase(node.dataset.field) === 'countrycode');
                 node.classList.toggle('platform-node', isPlatformField(node.dataset.field));
                 node.classList.toggle('email-node', isEmailField(node.dataset.field));
+                node.classList.toggle('secret-node', isSecretField(node.dataset.field));
+                ensureSecretControls(node);
+                ensureMapsThumb(node);
                 let btn = node.querySelector('.node-more');
                 if (!btn) {
                     btn = document.createElement('button');
@@ -1470,6 +2091,7 @@
             const hiddenBlock = document.getElementById('addHiddenBlock');
             const presetList = document.getElementById('addPresetList');
             const filterEl = document.getElementById('addPresetFilter');
+            const countEl = document.getElementById('addFilterCount');
             if (!hiddenList || !presetList) return;
             const hidden = FIELDS.filter((field) => hiddenFields.has(field.id));
             if (hiddenBlock) hiddenBlock.hidden = !hidden.length;
@@ -1480,8 +2102,18 @@
             const unused = EXTRA_PRESETS.filter((preset) => {
                 if (fieldById(preset.id)) return false;
                 if (!q) return true;
-                return (preset.label + ' ' + (preset.placeholder || '') + ' ' + preset.id).toLowerCase().indexOf(q) !== -1;
+                const hay = [preset.label, preset.placeholder || '', preset.id, preset.group || ''].join(' ').toLowerCase();
+                return q.split(/\s+/).every((part) => hay.indexOf(part) !== -1);
             });
+            if (countEl) {
+                if (q) {
+                    countEl.hidden = false;
+                    countEl.textContent = unused.length + ' match' + (unused.length === 1 ? '' : 'es');
+                } else {
+                    countEl.hidden = true;
+                    countEl.textContent = '';
+                }
+            }
             if (!unused.length) {
                 presetList.innerHTML = '<p class="add-empty">' + (q ? 'No matching fields.' : 'Every extra field is already on the orbit.') + '</p>';
                 return;
@@ -1495,12 +2127,13 @@
             presetList.innerHTML = GROUPS.map((group) => {
                 const items = grouped[group.id];
                 if (!items || !items.length) return '';
-                return '<div class="add-group-label">' + escapeHtml(group.label) + '</div>' +
+                return '<div class="add-group">' +
+                    '<div class="add-group-label">' + escapeHtml(group.label) + '</div>' +
                     '<div class="add-chips">' +
                     items.map((preset) => (
-                        '<button type="button" data-add-field="' + preset.id + '">' + escapeHtml(preset.label) + '</button>'
+                        '<button type="button" data-add-field="' + preset.id + '" title="' + escapeHtml(preset.placeholder || preset.label) + '">' + escapeHtml(preset.label) + '</button>'
                     )).join('') +
-                    '</div>';
+                    '</div></div>';
             }).join('');
         }
 
@@ -1547,7 +2180,9 @@
             closeExportMenu();
             closeFieldMenu();
             closeShare();
+            closeInstall();
             closeHelp();
+            closeToolkit();
             const sheet = document.getElementById('addSheet');
             const label = document.getElementById('addCustomLabel');
             const hint = document.getElementById('addCustomHint');
@@ -1557,7 +2192,8 @@
             if (filter) filter.value = '';
             renderAddPanel();
             showSheet(sheet);
-            if (filter) filter.focus();
+            if (label) label.focus();
+            else if (filter) filter.focus();
         }
 
         function toggleAddField() {
@@ -1565,6 +2201,258 @@
             if (!sheet) return;
             if (sheet.hidden) openAddField();
             else closeAddField();
+        }
+
+        let toolkitFocusField = '';
+        const toolkitOpenCats = new Set();
+        const TOOLKIT_CHEVRON = '<svg class="toolkit-cat-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+        const TOOLKIT_SECTIONS = [
+            {
+                id: 'identity',
+                label: 'Identity',
+                titles: [
+                    'Username Search', 'Email Search', 'People Search', 'Phone Number Search',
+                    'Dating Search', 'Social Network Search', 'Messaging Search', 'Forum Search', 'Community Search'
+                ]
+            },
+            {
+                id: 'web',
+                label: 'Web & infrastructure',
+                titles: [
+                    'Domain Search', 'Cloud Infrastructure Search', 'IP Address Search',
+                    'Web Archives', 'Search Engines', 'Dark Web Search'
+                ]
+            },
+            {
+                id: 'media',
+                label: 'Media & files',
+                titles: [
+                    'Image Search', 'Video Search', 'Document Search', 'Media Verification',
+                    'File Analysis', 'Malware Analysis'
+                ]
+            },
+            {
+                id: 'records',
+                label: 'Places & records',
+                titles: [
+                    'Maps Search', 'Location Search', 'Public Records Search', 'Compliance Search',
+                    'Business Records Search', 'Vehicle Search', 'Transport Search', 'Classifieds Search'
+                ]
+            },
+            {
+                id: 'crypto',
+                label: 'Crypto & threat',
+                titles: ['Crypto Search', 'Threat Intelligence']
+            },
+            {
+                id: 'utilities',
+                label: 'Utilities',
+                titles: [
+                    'Translation Tools', 'Mobile Search Tools', 'Fact-Check Tools', 'Encoding Tools',
+                    'Decoding Tools', 'Privacy Tools', 'Safety Tools', 'Evidence Collection',
+                    'Research Training', 'AI Research Tools', 'Research Toolkit'
+                ]
+            }
+        ];
+        const TOOLKIT_TITLE_CLEAN = {
+            'Username Search': 'Usernames',
+            'Email Search': 'Email',
+            'Domain Search': 'Domains',
+            'Cloud Infrastructure Search': 'Cloud & infra',
+            'IP Address Search': 'IP addresses',
+            'Image Search': 'Images',
+            'Video Search': 'Video',
+            'Document Search': 'Documents',
+            'Social Network Search': 'Social networks',
+            'Messaging Search': 'Messaging',
+            'People Search': 'People',
+            'Dating Search': 'Dating',
+            'Phone Number Search': 'Phone numbers',
+            'Public Records Search': 'Public records',
+            'Compliance Search': 'Compliance',
+            'Business Records Search': 'Business records',
+            'Vehicle Search': 'Vehicles',
+            'Transport Search': 'Transport',
+            'Maps Search': 'Maps',
+            'Location Search': 'Location',
+            'Search Engines': 'Search engines',
+            'Forum Search': 'Forums',
+            'Community Search': 'Communities',
+            'Web Archives': 'Web archives',
+            'Translation Tools': 'Translation',
+            'Mobile Search Tools': 'Mobile',
+            'Dark Web Search': 'Dark web',
+            'Fact-Check Tools': 'Fact-check',
+            'Media Verification': 'Media verification',
+            'Crypto Search': 'Crypto',
+            'Classifieds Search': 'Classifieds',
+            'Encoding Tools': 'Encoding',
+            'Decoding Tools': 'Decoding',
+            'Research Toolkit': 'Research toolkit',
+            'AI Research Tools': 'AI research',
+            'Malware Analysis': 'Malware analysis',
+            'File Analysis': 'File analysis',
+            'Threat Intelligence': 'Threat intel',
+            'Privacy Tools': 'Privacy',
+            'Safety Tools': 'Safety',
+            'Evidence Collection': 'Evidence',
+            'Research Training': 'Training'
+        };
+
+        function closeToolkit() {
+            hideSheet(document.getElementById('toolkitSheet'));
+            toolkitFocusField = '';
+        }
+
+        function toolkitCatKey(cat) {
+            return String((cat && (cat.id || cat.title)) || '');
+        }
+
+        function toolkitCleanTitle(title) {
+            if (TOOLKIT_TITLE_CLEAN[title]) return TOOLKIT_TITLE_CLEAN[title];
+            return String(title || '')
+                .replace(/\s+Search$/i, '')
+                .replace(/\s+Tools$/i, '')
+                .trim() || title;
+        }
+
+        function toolkitToolButton(tool, value) {
+            const href = fillToolkitUrl(tool.url, value);
+            return '<button type="button" class="toolkit-tool" data-open-lead="' + escapeHtml(href) + '">' +
+                '<span>' + escapeHtml(tool.name) + '</span>' +
+                (tool.host ? '<em>' + escapeHtml(tool.host) + '</em>' : '') +
+                '</button>';
+        }
+
+        function toolkitCatHtml(cat, tools, value, open) {
+            const key = toolkitCatKey(cat);
+            const title = toolkitCleanTitle(cat.title);
+            return '<div class="toolkit-cat" data-toolkit-cat="' + escapeHtml(key) + '">' +
+                '<button type="button" class="toolkit-cat-toggle" data-toolkit-toggle="' + escapeHtml(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+                TOOLKIT_CHEVRON +
+                '<span class="toolkit-cat-title">' + escapeHtml(title) + '</span>' +
+                '<span class="toolkit-cat-count">' + tools.length + '</span>' +
+                '</button>' +
+                '<div class="toolkit-tools"' + (open ? '' : ' hidden') + '>' +
+                tools.map((tool) => toolkitToolButton(tool, value)).join('') +
+                '</div></div>';
+        }
+
+        function renderToolkit() {
+            const catalog = toolkitCatalog();
+            const list = document.getElementById('toolkitList');
+            const meta = document.getElementById('toolkitMeta');
+            const focusBar = document.getElementById('toolkitFocus');
+            const focusLabel = document.getElementById('toolkitFocusLabel');
+            if (!list) return;
+            if (!catalog || !catalog.categories) {
+                list.innerHTML = '<p class="toolkit-empty">Toolkit catalog is not loaded.</p>';
+                if (meta) meta.textContent = '';
+                if (focusBar) focusBar.dataset.on = '0';
+                return;
+            }
+            const filterEl = document.getElementById('toolkitFilter');
+            const q = String(filterEl && filterEl.value || '').trim().toLowerCase();
+            const focus = toolkitFocusField;
+            const value = focus ? fieldInputValue(focus) : '';
+            const field = focus ? fieldById(focus) : null;
+            if (focusBar) {
+                focusBar.dataset.on = focus && field ? '1' : '0';
+                if (focusLabel) focusLabel.textContent = field ? field.label : '';
+            }
+
+            const byTitle = new Map();
+            catalog.categories.forEach((cat) => byTitle.set(cat.title, cat));
+            const used = new Set();
+            let shown = 0;
+            let shownCats = 0;
+
+            function filterTools(cat) {
+                let tools = cat.tools || [];
+                const titleHit = q && (
+                    toolkitCleanTitle(cat.title).toLowerCase().indexOf(q) !== -1 ||
+                    String(cat.title || '').toLowerCase().indexOf(q) !== -1
+                );
+                if (q && !titleHit) {
+                    tools = tools.filter((tool) =>
+                        (tool.name + ' ' + (tool.host || '') + ' ' + (tool.url || '')).toLowerCase().indexOf(q) !== -1
+                    );
+                }
+                return tools;
+            }
+
+            function shouldOpen(cat, tools) {
+                const key = toolkitCatKey(cat);
+                if (toolkitOpenCats.has(key)) return true;
+                if (q) return tools.length > 0 && tools.length <= 80;
+                const fieldHit = focus && (cat.fields || []).indexOf(focus) !== -1;
+                return !!(fieldHit && tools.length && tools.length <= 48);
+            }
+
+            function renderCat(cat) {
+                if (!cat || used.has(cat.title)) return '';
+                const tools = filterTools(cat);
+                if (!tools.length) return '';
+                used.add(cat.title);
+                shown += tools.length;
+                shownCats += 1;
+                return toolkitCatHtml(cat, tools, value, shouldOpen(cat, tools));
+            }
+
+            let html = '';
+            TOOLKIT_SECTIONS.forEach((section) => {
+                const body = section.titles.map((title) => renderCat(byTitle.get(title))).join('');
+                if (!body) return;
+                html += '<section class="toolkit-section" data-toolkit-section="' + escapeHtml(section.id) + '">' +
+                    '<div class="toolkit-section-label">' + escapeHtml(section.label) + '</div>' +
+                    body +
+                    '</section>';
+            });
+            const orphans = catalog.categories.map((cat) => renderCat(cat)).join('');
+            if (orphans) {
+                html += '<section class="toolkit-section" data-toolkit-section="other">' +
+                    '<div class="toolkit-section-label">More</div>' +
+                    orphans +
+                    '</section>';
+            }
+
+            list.innerHTML = html || '<p class="toolkit-empty">No tools match.</p>';
+            if (meta) {
+                const total = catalog.categories.reduce((n, cat) => n + ((cat.tools && cat.tools.length) || 0), 0);
+                meta.textContent = shownCats + ' categories · ' + shown + (q ? ' matching' : '') + ' tools · ' + total + ' total';
+            }
+        }
+
+        function openToolkit(fieldId) {
+            closePlatformMenu();
+            closeSearchMenu();
+            closeExportMenu();
+            closeFieldMenu();
+            closeShare();
+            closeInstall();
+            closeHelp();
+            closeAddField();
+            if (typeof closePhoneMore === 'function') closePhoneMore();
+            toolkitFocusField = fieldBase(fieldId || '');
+            toolkitOpenCats.clear();
+            const filter = document.getElementById('toolkitFilter');
+            const field = fieldById(toolkitFocusField);
+            if (filter) {
+                filter.value = '';
+                filter.placeholder = field
+                    ? ('Search tools for ' + field.label)
+                    : 'Search categories or tools';
+            }
+            renderToolkit();
+            showSheet(document.getElementById('toolkitSheet'));
+            if (filter) filter.focus();
+        }
+
+        function toggleToolkit() {
+            const sheet = document.getElementById('toolkitSheet');
+            if (!sheet) return;
+            if (sheet.hidden) openToolkit();
+            else closeToolkit();
         }
 
         let fieldMenuGuard = false;
@@ -1630,7 +2518,7 @@
             armFieldMenuGuard();
         }
 
-        function runFieldAction(act, fieldId) {
+        function runFieldAction(act, fieldId, extra) {
             const input = document.getElementById('field-' + fieldId);
             if (act === 'copy') {
                 copyFieldValue(fieldId);
@@ -1657,7 +2545,7 @@
                     input.focus();
                     syncNodeFilled(input);
                     saveInputAsIs(input);
-                    if (fieldBase(fieldId) === 'image' || fieldBase(fieldId) === 'audio' || fieldBase(fieldId) === 'ip') setFieldThumb(fieldId);
+                    if (isThumbField(fieldId)) setFieldThumb(fieldId);
                 }).catch(function () {});
                 return;
             }
@@ -1692,11 +2580,31 @@
             if (act === 'recenter') recenterOrbit();
             if (act === 'playtest') playtestFillVisibleFields();
             if (act === 'help') openHelp();
+            if (act === 'toolkit') openToolkit();
             if (act === 'undo') undoCase();
             if (act === 'redo') redoCase();
             if (act === 'export') toggleExportMenu();
             if (act === 'share') openShare();
+            if (act === 'install') openInstall();
             if (act === 'reset') resetCase();
+            if (act === 'new-profile') createProfile('');
+            if (act === 'place-profile') {
+                placeLinkedProfile(mapMenuAnchor);
+                mapMenuAnchor = null;
+            }
+            if (act === 'link-profile' && extra) linkProfiles(profileLibrary && profileLibrary.activeId, extra);
+            if (act === 'unlink-profile' && extra) unlinkProfiles(profileLibrary && profileLibrary.activeId, extra);
+            if (act === 'delete-profile' && extra) {
+                if (profileLibrary && profileLibrary.order && profileLibrary.order.length > 1) {
+                    openProfilePrompt('delete', extra);
+                }
+                return;
+            }
+            if (act === 'open-profile' && extra) {
+                const peer = document.querySelector('.peer-hub[data-peer="' + extra + '"]');
+                openLinkedProfile(extra, peer);
+            }
+            if (act === 'upload-photo') pickProfilePhoto(extra);
         }
 
         let renameState = null;
@@ -1768,10 +2676,14 @@
             closePlatformMenu();
             closeTimezoneMenu();
             closeExportMenu();
+            mapMenuAnchor = mapEventToHubWorld(event);
             const canUndo = history.past.length >= 2;
             const canRedo = !!history.future.length;
             menu.innerHTML =
+                '<button type="button" data-field-act="place-profile">New profile</button>' +
+                '<div class="field-sep"></div>' +
                 '<button type="button" data-field-act="help">Help</button>' +
+                '<button type="button" data-field-act="toolkit">OSINT toolkit</button>' +
                 '<button type="button" data-field-act="recenter">Recenter</button>' +
                 '<button type="button" data-field-act="playtest">Playtest</button>' +
                 '<button type="button" data-field-act="undo" ' + (canUndo ? '' : 'disabled') + '>Undo</button>' +
@@ -1779,11 +2691,38 @@
                 '<div class="field-sep"></div>' +
                 '<button type="button" data-field-act="export">Export</button>' +
                 '<button type="button" data-field-act="share">Share</button>' +
+                '<button type="button" data-field-act="install">Install app</button>' +
                 '<div class="field-sep"></div>' +
                 '<button type="button" class="field-danger" data-field-act="reset">Reset</button>';
             menu.dataset.field = '';
+            menu.dataset.peer = '';
             menu.hidden = false;
             placeFieldMenu(event);
+        }
+
+        function profileMenuButtons(fromId) {
+            const source = fromId || (profileLibrary && profileLibrary.activeId) || '';
+            const linked = linkedProfileIds(source);
+            const available = otherProfiles(source).filter((id) => linked.indexOf(id) === -1);
+            let html = '<button type="button" data-field-act="place-profile">New profile</button>';
+            if (available.length) {
+                html += '<div class="field-sep"></div>';
+                available.forEach((id) => {
+                    const name = displayProfileName(profileLibrary.items[id]);
+                    html += '<button type="button" data-field-act="link-profile" data-link-id="' + escapeHtml(id) + '">Link ' + escapeHtml(name) + '</button>';
+                });
+            } else if (otherProfiles(source).length) {
+                html += '<div class="field-sep"></div><button type="button" disabled>All profiles linked</button>';
+            }
+            if (linked.length) {
+                html += '<div class="field-sep"></div>';
+                linked.forEach((id) => {
+                    const name = displayProfileName(profileLibrary.items[id]);
+                    html += '<button type="button" data-field-act="open-profile" data-link-id="' + escapeHtml(id) + '">Open ' + escapeHtml(name) + '</button>';
+                    html += '<button type="button" class="field-danger" data-field-act="unlink-profile" data-link-id="' + escapeHtml(id) + '">Unlink ' + escapeHtml(name) + '</button>';
+                });
+            }
+            return html;
         }
 
         function openHubMenu(event) {
@@ -1794,12 +2733,40 @@
             closePlatformMenu();
             closeTimezoneMenu();
             closeExportMenu();
+            mapMenuAnchor = null;
             menu.innerHTML =
+                profileMenuButtons() +
+                '<div class="field-sep"></div>' +
+                '<button type="button" data-field-act="upload-photo">Upload image</button>' +
+                '<button type="button" data-field-act="toolkit">OSINT toolkit</button>' +
+                '<div class="field-sep"></div>' +
                 (hiddenFields.size
                     ? '<button type="button" data-field-act="restore">Show hidden fields</button>'
                     : '<button type="button" disabled>No hidden fields</button>') +
                 '<button type="button" data-field-act="recenter">Recenter map</button>';
             menu.dataset.field = '';
+            menu.dataset.peer = '';
+            menu.hidden = false;
+            placeFieldMenu(event);
+        }
+
+        function openPeerMenu(event, peerId) {
+            const menu = document.getElementById('fieldMenu');
+            if (!menu || !peerId) return;
+            closeSearchMenu();
+            closePlatformMenu();
+            closeTimezoneMenu();
+            closeExportMenu();
+            const name = displayProfileName(profileLibrary && profileLibrary.items[peerId]);
+            const canDelete = !!(profileLibrary && profileLibrary.order && profileLibrary.order.length > 1);
+            menu.innerHTML =
+                '<button type="button" data-field-act="open-profile" data-link-id="' + escapeHtml(peerId) + '">Open ' + escapeHtml(name) + '</button>' +
+                '<button type="button" data-field-act="upload-photo" data-link-id="' + escapeHtml(peerId) + '">Upload image</button>' +
+                '<div class="field-sep"></div>' +
+                '<button type="button" class="field-danger" data-field-act="unlink-profile" data-link-id="' + escapeHtml(peerId) + '">Unlink</button>' +
+                '<button type="button" class="field-danger" data-field-act="delete-profile" data-link-id="' + escapeHtml(peerId) + '"' + (canDelete ? '' : ' disabled') + '>Delete</button>';
+            menu.dataset.field = '';
+            menu.dataset.peer = peerId;
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -1832,7 +2799,9 @@
             closeFieldMenu();
             const value = fieldInputValue(fieldId);
             const filled = !!value;
-            const links = searchLinks(fieldId);
+            const pack = mergeToolkitLeads(fieldId, searchLinks(fieldId));
+            const core = pack.links.slice(0, pack.extraStart);
+            const extra = pack.links.slice(pack.extraStart);
             menu.innerHTML =
                 '<div class="search-menu-title">' + (filled ? 'Search deeper' : 'Find this') + ' · ' + escapeHtml(field.label) + '</div>' +
                 (filled
@@ -1842,10 +2811,9 @@
                     : '<div class="search-menu-note">Sources for a ' + escapeHtml(field.label.toLowerCase()) + '.</div>') +
                 (field.caution ? '<div class="search-menu-note">' + escapeHtml(field.caution) + '</div>' : '') +
                 '<div class="search-list">' +
-                links.map((item) => (
-                    '<button class="search-option" type="button" data-open-lead="' + escapeHtml(item[2] || item[1]) + '" data-lead-mode="' + escapeHtml(item[3] || '') + '">' +
-                    escapeHtml(item[0]) + '</button>'
-                )).join('') +
+                core.map(searchLeadButton).join('') +
+                (extra.length ? '<div class="search-menu-title">More OSINT tools</div>' + extra.map(searchLeadButton).join('') : '') +
+                toolkitBrowseButton(fieldId, pack.extraTotal) +
                 '</div>';
             menu.hidden = false;
             document.querySelectorAll('.node.search-open').forEach((item) => item.classList.remove('search-open'));
@@ -1895,11 +2863,14 @@
         const backdrop = document.getElementById('backdrop');
         const drawerQuery = window.matchMedia('(max-width: 820px)');
         const SIDEBAR_KEY = 'osint-sidebar-w';
+        const SIDEBAR_DEFAULT = 400;
+        const SIDEBAR_MIN = 280;
+        const SIDEBAR_MAX = 640;
 
         function applySidebarWidth(px) {
-            const max = Math.max(248, Math.min(620, (window.innerWidth || 1200) - 220));
+            const max = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, (window.innerWidth || 1200) - 220));
             const raw = Math.round(Number(px));
-            const width = Math.max(248, Math.min(max, Number.isFinite(raw) ? raw : 320));
+            const width = Math.max(SIDEBAR_MIN, Math.min(max, Number.isFinite(raw) ? raw : SIDEBAR_DEFAULT));
             document.documentElement.style.setProperty('--sidebar', width + 'px');
             if (profilePanel) profilePanel.style.width = '';
             return width;
@@ -1908,8 +2879,11 @@
         function initSidebarWidth() {
             try {
                 const saved = Number(localStorage.getItem(SIDEBAR_KEY));
-                if (saved) applySidebarWidth(saved);
-            } catch (error) {}
+                if (saved && saved !== 268 && saved !== 320) applySidebarWidth(saved);
+                else applySidebarWidth(SIDEBAR_DEFAULT);
+            } catch (error) {
+                applySidebarWidth(SIDEBAR_DEFAULT);
+            }
         }
 
         function bindSidebarResize() {
@@ -1925,7 +2899,7 @@
                 document.body.classList.remove('resizing-sidebar');
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
-                const current = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar')) || 268;
+                const current = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar')) || SIDEBAR_DEFAULT;
                 try { localStorage.setItem(SIDEBAR_KEY, String(Math.round(current))); } catch (error) {}
                 if (typeof positionNodes === 'function') positionNodes();
             }
@@ -2005,6 +2979,11 @@
         let libraryLock = false;
         let librarySyncTimer = 0;
         let profilePromptState = null;
+        let peerHomes = {};
+        let mapMenuAnchor = null;
+        let profileFlyLock = false;
+        let profileFlyTimer = 0;
+        const PROFILE_LINK_BADGE = '<span class="profile-link-badge" title="Linked profile" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6" cy="8" r="3.4"/><circle cx="10.2" cy="8" r="3.4"/></svg></span>';
 
         function profileDataKey(id) {
             return PROFILE_DATA_PREFIX + id;
@@ -2063,7 +3042,8 @@
                 added: [],
                 labels: {},
                 hidden: [],
-                layout: null
+                layout: null,
+                peerHomes: {}
             };
         }
 
@@ -2110,8 +3090,180 @@
             if (!profileLibrary) return;
             writeStoredJson(PROFILE_INDEX_KEY, {
                 activeId: profileLibrary.activeId,
-                order: profileLibrary.order.slice()
+                order: profileLibrary.order.slice(),
+                links: (profileLibrary.links || []).map((item) => [item[0], item[1]])
             });
+        }
+
+        function profileLinkKey(a, b) {
+            return a < b ? a + '\n' + b : b + '\n' + a;
+        }
+
+        function normalizePeerHomes(raw) {
+            const out = {};
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+            Object.keys(raw).forEach((id) => {
+                const point = raw[id];
+                const x = point && Number(point.x);
+                const y = point && Number(point.y);
+                if (!id || !Number.isFinite(x) || !Number.isFinite(y)) return;
+                out[id] = { x: x, y: y };
+            });
+            return out;
+        }
+
+        function hubScreenPoint() {
+            const size = canvasSize();
+            return {
+                x: orbit.hubLiveX != null ? orbit.hubLiveX : (size.width / 2 + orbit.dragX + orbit.parallaxX),
+                y: orbit.hubLiveY != null ? orbit.hubLiveY : (size.height / 2 + orbit.dragY + orbit.parallaxY)
+            };
+        }
+
+        function mapEventToHubWorld(event) {
+            const canvas = mapCanvas || document.getElementById('mapCanvas');
+            if (!canvas || !event) return null;
+            const rect = canvas.getBoundingClientRect();
+            const hubPt = hubScreenPoint();
+            const zoom = Math.max(orbit.zoom || 1, 0.01);
+            return {
+                x: (event.clientX - rect.left - hubPt.x) / zoom,
+                y: (event.clientY - rect.top - hubPt.y) / zoom
+            };
+        }
+
+        function peerHomeFor(peerId) {
+            const stored = peerHomes && peerHomes[peerId];
+            if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) return stored;
+            const mine = profileLibrary && profileLibrary.activeId;
+            const other = profileLibrary && profileLibrary.items[peerId];
+            const fromOther = other && other.peerHomes && other.peerHomes[mine];
+            if (fromOther && Number.isFinite(fromOther.x) && Number.isFinite(fromOther.y)) {
+                return { x: -fromOther.x, y: -fromOther.y };
+            }
+            return null;
+        }
+
+        function defaultPeerOffset() {
+            const dist = typeof hubPeerClearance === 'function' ? hubPeerClearance() + 48 : ((hub && hub.offsetWidth || 220) / 2 + 160);
+            const taken = linkedProfileIds().map(peerHomeFor).filter(Boolean);
+            for (let i = 0; i < 16; i++) {
+                const angle = -Math.PI / 2 + (i / 8) * Math.PI * 2;
+                const cand = unclipPeerWorld(Math.cos(angle) * dist, Math.sin(angle) * dist);
+                if (!taken.some((point) => Math.hypot(point.x - cand.x, point.y - cand.y) < 120)) return cand;
+            }
+            return unclipPeerWorld(dist, 0);
+        }
+
+        function persistPeerHomes() {
+            if (!profileLibrary || !profileLibrary.activeId) return;
+            const entry = profileLibrary.items[profileLibrary.activeId];
+            if (!entry) return;
+            entry.peerHomes = Object.assign({}, peerHomes);
+            saveProfileEntry(entry);
+        }
+
+        function placeLinkedProfile(home) {
+            if (!profileLibrary || !profileLibrary.activeId) return;
+            flushLibrarySync();
+            const sourceId = profileLibrary.activeId;
+            const id = newProfileId();
+            const raw = home && Number.isFinite(home.x) && Number.isFinite(home.y)
+                ? { x: home.x, y: home.y }
+                : defaultPeerOffset();
+            let pos = unclipPeerWorld(raw.x, raw.y);
+            const entry = emptyLibraryEntry(id, '', false);
+            entry.peerHomes[sourceId] = { x: -pos.x, y: -pos.y };
+            profileLibrary.items[id] = entry;
+            profileLibrary.order.push(id);
+            saveProfileEntry(entry);
+            peerHomes[id] = pos;
+            persistPeerHomes();
+            linkProfiles(sourceId, id);
+        }
+
+        function normalizeProfileLinks(raw) {
+            const seen = {};
+            const links = [];
+            (Array.isArray(raw) ? raw : []).forEach((item) => {
+                const a = Array.isArray(item) ? item[0] : item && item.a;
+                const b = Array.isArray(item) ? item[1] : item && item.b;
+                if (!a || !b || a === b) return;
+                if (profileLibrary && (!profileLibrary.items[a] || !profileLibrary.items[b])) return;
+                const key = profileLinkKey(a, b);
+                if (seen[key]) return;
+                seen[key] = true;
+                links.push(a < b ? [a, b] : [b, a]);
+            });
+            return links;
+        }
+
+        function linkedProfileIds(id) {
+            const src = id || (profileLibrary && profileLibrary.activeId);
+            if (!src || !profileLibrary) return [];
+            return (profileLibrary.links || []).reduce((list, pair) => {
+                if (pair[0] === src) list.push(pair[1]);
+                else if (pair[1] === src) list.push(pair[0]);
+                return list;
+            }, []).filter((other) => profileLibrary.items[other]);
+        }
+
+        function profilesLinked(a, b) {
+            if (!a || !b || a === b) return false;
+            const key = profileLinkKey(a, b);
+            return (profileLibrary.links || []).some((pair) => profileLinkKey(pair[0], pair[1]) === key);
+        }
+
+        function linkProfiles(a, b) {
+            if (!profileLibrary || !a || !b || a === b) return;
+            if (!profileLibrary.items[a] || !profileLibrary.items[b]) return;
+            if (profilesLinked(a, b)) return;
+            profileLibrary.links = profileLibrary.links || [];
+            profileLibrary.links.push(a < b ? [a, b] : [b, a]);
+            saveProfileIndex();
+            renderPeerHubs();
+            renderProfileRail();
+        }
+
+        function unlinkProfiles(a, b) {
+            if (!profileLibrary || !a || !b) return;
+            const key = profileLinkKey(a, b);
+            profileLibrary.links = (profileLibrary.links || []).filter((pair) => {
+                if (!pair || pair.length < 2) return false;
+                return profileLinkKey(pair[0], pair[1]) !== key;
+            });
+            if (profileLibrary.activeId === a) delete peerHomes[b];
+            else if (profileLibrary.activeId === b) delete peerHomes[a];
+            stripPeerHome(a, b);
+            stripPeerHome(b, a);
+            persistPeerHomes();
+            saveProfileIndex();
+            const layer = document.getElementById('peerHubs');
+            if (layer) delete layer.dataset.stamp;
+            peerBodies = peerBodies.filter((body) => body && body.id !== a && body.id !== b);
+            renderPeerHubs();
+            renderProfileRail();
+            if (typeof positionPeerHubs === 'function') positionPeerHubs();
+        }
+
+        function stripPeerHome(ownerId, peerId) {
+            const entry = profileLibrary && profileLibrary.items[ownerId];
+            if (!entry || !entry.peerHomes) return;
+            delete entry.peerHomes[peerId];
+            saveProfileEntry(entry);
+        }
+
+        function pruneProfileLinks(id) {
+            if (!profileLibrary || !id) return;
+            profileLibrary.links = (profileLibrary.links || []).filter((pair) => pair[0] !== id && pair[1] !== id);
+            delete peerHomes[id];
+            Object.keys(profileLibrary.items || {}).forEach((ownerId) => stripPeerHome(ownerId, id));
+        }
+
+        function otherProfiles(exceptId) {
+            if (!profileLibrary) return [];
+            const skip = exceptId || profileLibrary.activeId;
+            return profileLibrary.order.filter((id) => id && id !== skip && profileLibrary.items[id]);
         }
 
         function currentLayoutSnapshot() {
@@ -2146,7 +3298,8 @@
                 added: addedFieldSpecs(),
                 labels: storedFieldLabels(),
                 hidden: Array.from(hiddenFields),
-                layout: currentLayoutSnapshot()
+                layout: currentLayoutSnapshot(),
+                peerHomes: Object.assign({}, peerHomes)
             };
         }
 
@@ -2201,27 +3354,29 @@
             if (typeof closeMediaViewer === 'function') closeMediaViewer();
         }
 
-        function applyOrbitLayout(layout) {
+        function applyOrbitLayout(layout, keepCamera) {
             nodeHomes.clear();
             orbitItems = [];
             cachedLayout = layout && layout.items ? layout : null;
             if (cachedLayout) {
-                orbit.dragX = Number.isFinite(cachedLayout.dragX) ? cachedLayout.dragX : 0;
-                orbit.dragY = Number.isFinite(cachedLayout.dragY) ? cachedLayout.dragY : 0;
-                orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
-                orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
-                if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
-                    orbit.zoom = cachedLayout.zoom;
-                    orbit.targetZoom = cachedLayout.zoom;
-                } else if (typeof recenterOrbit === 'function') {
-                    recenterOrbit();
+                if (!keepCamera) {
+                    orbit.dragX = Number.isFinite(cachedLayout.dragX) ? cachedLayout.dragX : 0;
+                    orbit.dragY = Number.isFinite(cachedLayout.dragY) ? cachedLayout.dragY : 0;
+                    orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
+                    orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
+                    if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
+                        orbit.zoom = cachedLayout.zoom;
+                        orbit.targetZoom = cachedLayout.zoom;
+                    } else if (typeof recenterOrbit === 'function') {
+                        recenterOrbit();
+                    }
                 }
                 (cachedLayout.homes || []).forEach((entry) => {
                     if (entry && entry[0] && entry[1]) nodeHomes.set(entry[0], entry[1]);
                 });
                 orbit.restoreHomes = nodeHomes.size > 0;
             } else {
-                if (typeof recenterOrbit === 'function') recenterOrbit();
+                if (!keepCamera && typeof recenterOrbit === 'function') recenterOrbit();
                 orbit.restoreHomes = false;
             }
             try {
@@ -2230,8 +3385,40 @@
             } catch (error) {}
         }
 
-        function applyWorkspace(entry) {
+        function bloomOrbitFromHub() {
+            const hubPt = typeof hubScreenPoint === 'function'
+                ? hubScreenPoint()
+                : { x: (canvasSize().width / 2), y: (canvasSize().height / 2) };
+            const zoom = orbit.zoom || 1;
+            orbitItems.forEach((item) => {
+                const targetRx = item.tRx == null ? item.rx : item.tRx;
+                const targetRy = item.tRy == null ? item.ry : item.tRy;
+                item.tRx = targetRx;
+                item.tRy = targetRy;
+                item.rx = targetRx * 0.08;
+                item.ry = targetRy * 0.08;
+                const angle = (item.tAngle == null ? item.angle : item.tAngle) + (orbit.spin || 0);
+                item.x = hubPt.x + Math.cos(angle) * item.rx * zoom;
+                item.y = hubPt.y + Math.sin(angle) * item.ry * zoom;
+                item.vx = 0;
+                item.vy = 0;
+            });
+            if (typeof computePeerTargets === 'function') computePeerTargets(hubPt.x, hubPt.y, zoom);
+            peerBodies.forEach((body) => {
+                const tx = body.tx == null ? hubPt.x : body.tx;
+                const ty = body.ty == null ? hubPt.y : body.ty;
+                body.x = hubPt.x + (tx - hubPt.x) * 0.12;
+                body.y = hubPt.y + (ty - hubPt.y) * 0.12;
+                body.vx = 0;
+                body.vy = 0;
+            });
+            if (typeof applyOrbit === 'function') applyOrbit(16);
+        }
+
+        function applyWorkspace(entry, opts) {
             if (!entry) return;
+            const keepCamera = !!(opts && opts.keepCamera);
+            const fromHub = !!(opts && opts.fromHub);
             libraryLock = true;
             try {
                 closeProfileMenu();
@@ -2246,6 +3433,7 @@
                 history.past = [];
                 history.future = [];
                 history.applying = true;
+                peerHomes = normalizePeerHomes(entry.peerHomes);
 
                 resetStockFields();
                 removeNonStockNodes();
@@ -2266,7 +3454,7 @@
                 restoreFilledOptionalPresets();
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(profile)); } catch (error) {}
 
-                applyOrbitLayout(entry.layout || null);
+                applyOrbitLayout(entry.layout || null, keepCamera);
                 createNodes();
                 applyStoredFieldLabels();
                 applyHiddenFields();
@@ -2276,6 +3464,7 @@
                 orbit.snapLayout = true;
                 if (typeof positionNodes === 'function') positionNodes();
                 orbit.snapLayout = false;
+                if (fromHub && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) bloomOrbitFromHub();
                 orbit.restoreHomes = false;
                 history.applying = false;
                 pushHistory();
@@ -2294,7 +3483,8 @@
                 const facts = live ? profile.facts : entry.facts;
                 const name = displayProfileName(live ? Object.assign({}, entry, { facts: facts, id: id }) : entry);
                 const face = compactFaceFrom(facts);
-                return id + (live ? '*' : '') + ':' + name + ':' + (face ? String(face.length) + face.slice(-20) : profileLetter(name));
+                const linked = linkedProfileIds(id).length;
+                return id + (live ? '*' : '') + ':' + name + ':' + (face ? String(face.length) + face.slice(-20) : profileLetter(name)) + ':L' + linked;
             }).join('|');
             if (list.dataset.stamp === stamp) return;
             list.dataset.stamp = stamp;
@@ -2305,10 +3495,12 @@
                 const name = displayProfileName(live ? Object.assign({}, entry, { facts: facts, id: id }) : entry);
                 const face = compactFaceFrom(facts);
                 const active = live ? ' active' : '';
+                const linked = linkedProfileIds(id).length > 0;
                 const mark = face
                     ? '<img alt="" src="' + escapeHtml(face) + '">'
                     : '<span>' + escapeHtml(profileLetter(name)) + '</span>';
-                return '<button type="button" class="profile-rail-item' + active + '" data-profile="' + escapeHtml(id) + '" title="' + escapeHtml(name) + '" aria-label="' + escapeHtml(name) + '" aria-current="' + (live ? 'true' : 'false') + '">' + mark + '</button>';
+                const label = linked ? name + ' · linked' : name;
+                return '<button type="button" class="profile-rail-item' + active + '" data-profile="' + escapeHtml(id) + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '" aria-current="' + (live ? 'true' : 'false') + '"><span class="profile-rail-face">' + mark + '</span>' + (linked ? PROFILE_LINK_BADGE : '') + '</button>';
             }).join('');
         }
 
@@ -2399,14 +3591,72 @@
             menu.style.top = Math.max(8, Math.min(top, window.innerHeight - h - 8)) + 'px';
         }
 
-        function switchProfile(id) {
+        function switchProfile(id, opts) {
             if (!profileLibrary || !id || id === profileLibrary.activeId) return;
             if (!profileLibrary.items[id]) return;
             flushLibrarySync();
             profileLibrary.activeId = id;
             saveProfileIndex();
-            applyWorkspace(profileLibrary.items[id]);
+            applyWorkspace(profileLibrary.items[id], opts);
             renderProfileRail();
+        }
+
+        function openLinkedProfile(id, fromEl) {
+            if (!profileLibrary || !id || id === profileLibrary.activeId) return;
+            if (!profileLibrary.items[id]) return;
+            const skip = !fromEl || !mapCanvas || (typeof isPhone === 'function' && isPhone())
+                || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (skip) {
+                switchProfile(id);
+                return;
+            }
+            if (profileFlyLock) return;
+            profileFlyLock = true;
+            const canvasRect = mapCanvas.getBoundingClientRect();
+            const peerRect = fromEl.getBoundingClientRect();
+            const hubRect = hub ? hub.getBoundingClientRect() : peerRect;
+            const fly = fromEl.cloneNode(true);
+            fly.classList.add('peer-hub-fly');
+            fly.removeAttribute('data-peer');
+            fly.setAttribute('aria-hidden', 'true');
+            fly.tabIndex = -1;
+            fly.style.left = (peerRect.left - canvasRect.left + peerRect.width / 2) + 'px';
+            fly.style.top = (peerRect.top - canvasRect.top + peerRect.height / 2) + 'px';
+            fly.style.width = peerRect.width + 'px';
+            fly.style.height = peerRect.height + 'px';
+            fly.style.transform = 'translate(-50%, -50%)';
+            mapCanvas.appendChild(fly);
+            if (mapStage) mapStage.classList.add('profile-fly');
+            void fly.offsetWidth;
+            fly.style.left = (hubRect.left - canvasRect.left + hubRect.width / 2) + 'px';
+            fly.style.top = (hubRect.top - canvasRect.top + hubRect.height / 2) + 'px';
+            fly.style.width = hubRect.width + 'px';
+            fly.style.height = hubRect.height + 'px';
+            let landed = false;
+            const finish = function () {
+                if (landed) return;
+                landed = true;
+                switchProfile(id, { keepCamera: true, fromHub: true });
+                if (mapStage) {
+                    mapStage.classList.remove('profile-fly');
+                    mapStage.classList.add('profile-enter');
+                }
+                requestAnimationFrame(function () {
+                    if (fly.parentNode) fly.parentNode.removeChild(fly);
+                    profileFlyLock = false;
+                });
+                clearTimeout(profileFlyTimer);
+                profileFlyTimer = setTimeout(function () {
+                    if (mapStage) mapStage.classList.remove('profile-enter');
+                }, 720);
+            };
+            fly.addEventListener('transitionend', function done(event) {
+                if (event.target !== fly) return;
+                if (event.propertyName && event.propertyName !== 'left' && event.propertyName !== 'width') return;
+                fly.removeEventListener('transitionend', done);
+                finish();
+            });
+            setTimeout(finish, 640);
         }
 
         function createProfile(title) {
@@ -2450,6 +3700,7 @@
             const base = displayProfileName(source);
             copy.title = /copy$/i.test(base) ? base : (base + ' copy');
             copy.named = true;
+            copy.peerHomes = {};
             profileLibrary.items[copy.id] = copy;
             const at = profileLibrary.order.indexOf(id);
             profileLibrary.order.splice(at < 0 ? profileLibrary.order.length : at + 1, 0, copy.id);
@@ -2468,6 +3719,10 @@
             profileLibrary.order.splice(at, 1);
             delete profileLibrary.items[id];
             deleteProfileEntry(id);
+            pruneProfileLinks(id);
+            const layer = document.getElementById('peerHubs');
+            if (layer) delete layer.dataset.stamp;
+            peerBodies = peerBodies.filter((body) => body && body.id !== id);
             if (wasActive) {
                 const nextId = profileLibrary.order[Math.max(0, at - 1)] || profileLibrary.order[0];
                 profileLibrary.activeId = nextId;
@@ -2475,6 +3730,8 @@
                 applyWorkspace(profileLibrary.items[nextId]);
             } else {
                 saveProfileIndex();
+                renderPeerHubs();
+                if (typeof positionPeerHubs === 'function') positionPeerHubs();
             }
             renderProfileRail();
         }
@@ -2513,7 +3770,8 @@
                 labels: (raw.labels && typeof raw.labels === 'object' && !Array.isArray(raw.labels)) ? raw.labels
                     : ((source.labels && typeof source.labels === 'object' && !Array.isArray(source.labels)) ? source.labels : {}),
                 hidden: Array.isArray(raw.hidden) ? raw.hidden : (Array.isArray(source.hidden) ? source.hidden : []),
-                layout: raw.layout || source.layout || null
+                layout: raw.layout || source.layout || null,
+                peerHomes: normalizePeerHomes(raw.peerHomes || source.peerHomes)
             };
         }
 
@@ -2573,7 +3831,7 @@
 
         function initProfileLibrary() {
             const index = readStoredJson(PROFILE_INDEX_KEY, null);
-            profileLibrary = { activeId: '', order: [], items: {} };
+            profileLibrary = { activeId: '', order: [], items: {}, links: [] };
             if (index && Array.isArray(index.order) && index.order.length) {
                 index.order.forEach((id) => {
                     if (!id) return;
@@ -2583,6 +3841,7 @@
                     profileLibrary.order.push(id);
                 });
                 profileLibrary.activeId = profileLibrary.items[index.activeId] ? index.activeId : profileLibrary.order[0];
+                profileLibrary.links = normalizeProfileLinks(index.links);
             }
             if (!profileLibrary.order.length) {
                 const id = newProfileId();
@@ -2745,9 +4004,17 @@
                     updateHubProgress();
                     return;
                 }
-                profile.facts[id].pop();
+                const current = profile.facts[id][profile.facts[id].length - 1];
+                const keepPlatform = isPlatformField(id) && current && current.platform && platformById(current.platform);
+                if (keepPlatform) {
+                    current.value = '';
+                    if (extra && extra.platform && platformById(extra.platform)) current.platform = extra.platform;
+                } else {
+                    profile.facts[id].pop();
+                }
                 saveProfile();
-                renderProfile();
+                refreshProfileChrome();
+                syncLinkedField(id, '');
                 updateHubProgress();
                 recordHistory(false);
                 return;
@@ -2761,15 +4028,22 @@
                 current.value = clean;
             }
             if (extra) Object.keys(extra).forEach((key) => { current[key] = extra[key]; });
+            if (isPlatformField(id) && !current.platform) {
+                const platform = fieldPlatformId(id);
+                if (platform) current.platform = platform;
+            }
             saveProfile();
-            renderProfile();
+            refreshProfileChrome();
+            syncLinkedField(id, clean);
             recordHistory(false);
         }
 
         function saveInputAsIs(input) {
             if (!input || !input.id.startsWith('field-')) return;
             const fieldId = input.id.replace('field-', '');
-            const value = fieldBase(fieldId) === 'timezone' ? resolveTimezoneValue(input.value) : input.value;
+            const value = fieldBase(fieldId) === 'timezone'
+                ? resolveTimezoneValue(input.value)
+                : (fieldBase(fieldId) === 'countrycode' ? (resolveCountryCodeValue(input.value) || input.value) : input.value);
             writeLatestFact(fieldId, value, extrasFromInput(fieldId, value));
         }
 
@@ -2858,6 +4132,8 @@
                 if (base === 'password') return id === 'password' ? persona.password : persona.passwordAlt + String(persona.n);
                 return '@' + persona.handle + (id === 'username' ? '' : String(playtestInt(2, 9)));
             }
+            if (base === 'phoneos') return playtestPick(['iOS 18', 'iOS 17', 'Android 15', 'Android 14']);
+            if (base === 'os') return playtestPick(['Windows 11', 'macOS Sequoia', 'Ubuntu 24.04', 'Windows 10']);
             if (base === 'name') return persona.fullName;
             if (base === 'email' || base === 'email2') return base === 'email2' || id !== 'email' ? persona.emailAlt : persona.email;
             if (base === 'phone' || base === 'phone2' || base === 'fax' || /phone|fax|tel/.test(key)) {
@@ -2865,6 +4141,14 @@
             }
             if (base === 'address') return place.street + ', ' + place.city + ', ' + place.region + ' ' + place.postal;
             if (base === 'timezone') return place.zone;
+            if (base === 'countrycode') return playtestPick(['US', 'GB', 'CA', 'AU', 'DE', 'FR', 'IN', 'JP']);
+            if (base === 'age') return String(playtestInt(19, 68));
+            if (base === 'dob') {
+                const y = playtestInt(1958, 2005);
+                const m = playtestInt(1, 12);
+                const d = playtestInt(1, 28);
+                return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+            }
             if (base === 'image' || base === 'screenshot') {
                 extra.preview = persona.image;
                 extra.media = persona.image;
@@ -3185,15 +4469,20 @@
             const thumb = node && node.querySelector('.media-thumb');
             const input = document.getElementById('field-' + fieldId);
             if (!node || !thumb) return;
-            if (fieldBase(fieldId) === 'ip') {
-                const ipValue = (input && input.value.trim()) || firstValue(fieldId);
-                if (looksLikeIp(ipValue)) {
+            if (fieldBase(fieldId) === 'ip' || fieldBase(fieldId) === 'address') {
+                const ready = fieldBase(fieldId) === 'ip'
+                    ? looksLikeIp((input && input.value.trim()) || firstValue(fieldId))
+                    : !!mapsQueryForField(fieldId);
+                if (ready) {
                     thumb.hidden = false;
                     thumb.innerHTML = PIN_ICON;
+                    thumb.setAttribute('aria-label', fieldBase(fieldId) === 'address' ? 'Open in Google Maps' : 'Open IP location');
+                    thumb.title = fieldBase(fieldId) === 'address' ? 'Google Maps' : 'Map';
                     node.classList.add('has-preview');
                 } else {
                     thumb.hidden = true;
                     thumb.innerHTML = '';
+                    thumb.removeAttribute('title');
                     node.classList.remove('has-preview');
                 }
                 return;
@@ -3261,18 +4550,90 @@
             hub.classList.remove('has-face');
         }
 
+        let mediaGallery = { items: [], index: 0, fieldId: '' };
+
         function closeMediaViewer() {
             const viewer = document.getElementById('mediaViewer');
             const audio = document.getElementById('mediaAudio');
+            const prev = document.getElementById('mediaPrev');
+            const next = document.getElementById('mediaNext');
+            const counter = document.getElementById('mediaCounter');
             if (audio) {
                 audio.pause();
                 audio.removeAttribute('src');
                 audio.load();
             }
+            if (prev) prev.hidden = true;
+            if (next) next.hidden = true;
+            if (counter) {
+                counter.hidden = true;
+                counter.textContent = '';
+            }
+            mediaGallery.items = [];
+            mediaGallery.index = 0;
+            mediaGallery.fieldId = '';
             if (viewer) viewer.hidden = true;
         }
 
+        function syncMediaGalleryChrome() {
+            const prev = document.getElementById('mediaPrev');
+            const next = document.getElementById('mediaNext');
+            const counter = document.getElementById('mediaCounter');
+            const multi = mediaGallery.items.length > 1;
+            if (prev) prev.hidden = !multi;
+            if (next) next.hidden = !multi;
+            if (counter) {
+                if (multi) {
+                    counter.hidden = false;
+                    counter.textContent = (mediaGallery.index + 1) + ' / ' + mediaGallery.items.length;
+                } else {
+                    counter.hidden = true;
+                    counter.textContent = '';
+                }
+            }
+        }
+
+        function showMediaGalleryItem() {
+            const item = mediaGallery.items[mediaGallery.index];
+            const image = document.getElementById('mediaImage');
+            const card = document.getElementById('mediaAudioCard');
+            if (!item || !image) return;
+            if (card) card.hidden = true;
+            image.hidden = false;
+            image.src = item.src;
+            syncMediaGalleryChrome();
+        }
+
+        function stepMediaGallery(delta) {
+            if (mediaGallery.items.length < 2) return;
+            const len = mediaGallery.items.length;
+            mediaGallery.index = (mediaGallery.index + delta + len) % len;
+            showMediaGalleryItem();
+        }
+
+        function openImageGallery(startIndex) {
+            const items = imageGalleryItems();
+            if (!items.length) return;
+            const viewer = document.getElementById('mediaViewer');
+            if (!viewer) return;
+            closePlatformMenu();
+            mediaGallery.items = items;
+            mediaGallery.fieldId = 'image';
+            mediaGallery.index = Math.max(0, Math.min(items.length - 1, startIndex == null ? items.length - 1 : startIndex));
+            const audio = document.getElementById('mediaAudio');
+            if (audio) {
+                audio.pause();
+                audio.removeAttribute('src');
+            }
+            showMediaGalleryItem();
+            viewer.hidden = false;
+        }
+
         function openMediaViewer(fieldId) {
+            if (fieldId === 'image') {
+                openImageGallery();
+                return;
+            }
             const media = mediaSource(fieldId);
             if (!media || !media.src) return;
             const viewer = document.getElementById('mediaViewer');
@@ -3282,6 +4643,10 @@
             const name = document.getElementById('mediaAudioName');
             if (!viewer) return;
             closePlatformMenu();
+            mediaGallery.items = [];
+            mediaGallery.index = 0;
+            mediaGallery.fieldId = fieldId;
+            syncMediaGalleryChrome();
             if (fieldId === 'audio' || media.kind === 'audio') {
                 image.hidden = true;
                 card.hidden = false;
@@ -3296,8 +4661,51 @@
             viewer.hidden = false;
         }
 
+        function imageFactSrc(fact, preferPreview) {
+            if (!fact) return '';
+            if (preferPreview && fact.preview) return String(fact.preview).replace(/"/g, '');
+            if (fact.media) return String(fact.media).replace(/"/g, '');
+            if (looksLikeImageSrc(fact.value)) return String(fact.value).replace(/"/g, '');
+            if (fact.preview) return String(fact.preview).replace(/"/g, '');
+            if (looksLikeUrl(fact.value)) return String(fact.value).replace(/"/g, '');
+            return '';
+        }
+
+        function imageGalleryItems() {
+            const facts = ((profile.facts && profile.facts.image) || []).filter((item) => item && String(item.value || '').trim());
+            return facts.map((fact, index) => {
+                const src = imageFactSrc(fact, false);
+                const thumb = imageFactSrc(fact, true) || src;
+                if (!src && !thumb) return null;
+                return {
+                    index: index,
+                    src: src || thumb,
+                    thumb: thumb || src,
+                    name: fact.value || 'Image'
+                };
+            }).filter(Boolean);
+        }
+
+        const FACE_ADD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+
+        function renderFaceGallery() {
+            const gallery = document.getElementById('faceGallery');
+            if (!gallery) return;
+            const items = imageGalleryItems();
+            const addSlots = items.length ? 1 : 2;
+            const thumbs = items.map((item, i) =>
+                '<button type="button" class="face-thumb" data-face-index="' + i + '" aria-label="Open photo ' + (i + 1) + '">' +
+                '<img alt="" src="' + escapeHtml(item.thumb) + '">' +
+                '</button>'
+            ).join('');
+            const adds = Array.from({ length: addSlots }, () =>
+                '<button type="button" class="face-add" data-face-add aria-label="Add photo">' + FACE_ADD_ICON + '</button>'
+            ).join('');
+            gallery.innerHTML = thumbs + adds;
+        }
+
         function populatedCount() {
-            return FIELDS.filter((field) => (profile.facts[field.id] || []).length).length;
+            return FIELDS.filter((field) => !!latestFact(field.id)).length;
         }
 
         function visibleOrbitFields() {
@@ -3310,7 +4718,7 @@
         function fieldHasInput(field) {
             const input = document.getElementById('field-' + field.id);
             if (input) return !!String(input.value || '').trim();
-            return !!(profile.facts[field.id] || []).length;
+            return !!latestFact(field.id);
         }
 
         function filledInputCount() {
@@ -3350,10 +4758,122 @@
                 : known + '% complete');
         }
 
-        function renderProfile() {
+        function sheetFieldValue(field) {
+            const fact = latestFact(field.id);
+            const raw = (fact && fact.value) || '';
+            if (fieldBase(field.id) === 'phone') return formatPhoneNumber(raw);
+            if (fieldBase(field.id) === 'timezone') return resolveTimezoneValue(raw) || raw;
+            if (fieldBase(field.id) === 'countrycode') {
+                const meta = countryCodeMeta(raw);
+                return meta ? meta.dial + ' · ' + meta.name : raw;
+            }
+            return raw;
+        }
+
+        function orbitFieldDisplay(fieldId, value) {
+            if (fieldBase(fieldId) === 'phone') return formatPhoneNumber(value);
+            if (fieldBase(fieldId) === 'timezone') return resolveTimezoneValue(value) || value;
+            if (fieldBase(fieldId) === 'countrycode') return resolveCountryCodeValue(value) || value;
+            return value || '';
+        }
+
+        function profileSheetEditing() {
+            const el = document.activeElement;
+            if (!el || !el.closest) return false;
+            return el.id === 'subjectNameInput' || !!el.closest('#factsList [data-sheet-field]');
+        }
+
+        function dossierFieldRowHtml(field) {
+            const base = fieldBase(field.id);
+            const value = sheetFieldValue(field);
+            const isNotes = base === 'notes';
+            const secret = isSecretField(field.id);
+            const open = secret && secretIsOpen(field.id);
+            const platformField = isPlatformField(field.id);
+            const platformId = platformField ? fieldPlatformId(field.id) : '';
+            const platform = platformId ? platformById(platformId) : null;
+            let control;
+            if (isNotes) {
+                control = '<textarea class="sheet-area" data-sheet-field="' + field.id + '" rows="2" placeholder="' + escapeHtml(field.placeholder || '') + '">' + escapeHtml(value) + '</textarea>';
+            } else if (platformField) {
+                control =
+                    '<button type="button" class="sheet-platform" data-sheet-platform="' + field.id + '"' + (platform ? ' hidden' : '') + '>Choose platform</button>' +
+                    '<div class="sheet-platform-value"' + (platform ? '' : ' hidden') + '>' +
+                        (platform
+                            ? '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" title="' + escapeHtml(platform.label) + '" aria-label="Change platform">' + platformMark(platform) + '</button>'
+                            : '') +
+                        '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !open ? 'password' : 'text') + '" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">' +
+                    '</div>';
+            } else {
+                control = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !open ? 'password' : 'text') + '" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder || '') + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
+            }
+            const reveal = secret
+                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, open)) + '" title="' + (open ? 'Hide' : 'Show') + '">' + (open ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                : '';
+            const maps = isMapsField(field.id) ? mapsButtonHtml(field.id) : '';
+            return '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
+                '<span class="fact-label">' + escapeHtml(field.label) + '</span>' +
+                control +
+                maps +
+                reveal +
+                '</div>';
+        }
+
+        function dossierHtml() {
+            const groups = groupsForProfile().map((group) => {
+                const fields = group.fields.map(fieldById).filter((field) => field && !hiddenFields.has(field.id) && !skipSheetField(field));
+                return { group: group, fields: fields };
+            }).filter((entry) => entry.fields.length);
+            const body = groups.map(({ group, fields }) => {
+                const heading = group.id === 'identity'
+                    ? ''
+                    : '<div class="group-label">' + escapeHtml(group.label) + '</div>';
+                return '<div class="group">' + heading + fields.map(dossierFieldRowHtml).join('') + '</div>';
+            }).join('');
+            return body +
+                '<button type="button" class="dossier-add" data-dossier-add>+ Add information</button>';
+        }
+
+        function syncSheetInputs(except) {
+            document.querySelectorAll('#factsList [data-sheet-field]').forEach((input) => {
+                if (input === except || document.activeElement === input) return;
+                const field = fieldById(input.dataset.sheetField);
+                if (!field) return;
+                const next = sheetFieldValue(field);
+                if (input.value !== next) input.value = next;
+            });
+        }
+
+        function syncLinkedField(fieldId, value) {
+            const shown = orbitFieldDisplay(fieldId, value);
+            const orbitInput = document.getElementById('field-' + fieldId);
+            if (orbitInput && document.activeElement !== orbitInput) {
+                orbitInput.value = shown;
+                if (typeof syncNodeFilled === 'function') syncNodeFilled(orbitInput);
+            }
+            if (isPlatformField(fieldId)) {
+                const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+                if (typeof setUsernameStep === 'function') {
+                    setUsernameStep(node, fieldPlatformId(fieldId), !!String(shown || '').trim());
+                }
+                syncSheetPlatform(fieldId);
+            }
+            syncSheetInputs(document.activeElement);
+            if (isThumbField(fieldId)) {
+                if (typeof setFieldThumb === 'function') setFieldThumb(fieldId);
+            }
+            if (typeof syncMapsButtons === 'function') syncMapsButtons(fieldId);
+            if (fieldBase(fieldId) === 'timezone' && typeof updateTimezoneClocks === 'function') updateTimezoneClocks();
+            updateHubProgress();
+        }
+
+        function refreshProfileChrome() {
             const name = subjectDisplayName();
-            document.getElementById('subjectName').textContent = name;
-            document.getElementById('hubTitle').textContent = 'OrbINT';
+            const nameEl = document.getElementById('subjectName');
+            const nameInput = document.getElementById('subjectNameInput');
+            if (nameEl && document.activeElement !== nameInput) nameEl.textContent = name;
+            const hubTitle = document.getElementById('hubTitle');
+            if (hubTitle) hubTitle.textContent = name === 'Anonymous' ? 'OrbINT' : name;
 
             const filled = populatedCount();
             const completeness = document.getElementById('completenessFill');
@@ -3365,75 +4885,61 @@
             if (coverageLabel) coverageLabel.textContent = filled + ' of ' + caseTotal + ' filed';
 
             const face = document.getElementById('targetFace');
-            face.classList.add('visible');
-            face.innerHTML = '<img alt="" src="' + portraitSrc() + '">';
+            if (face) {
+                face.classList.add('visible');
+                let img = face.querySelector('img');
+                const src = portraitSrc();
+                if (!img) {
+                    img = document.createElement('img');
+                    img.alt = '';
+                    face.insertBefore(img, face.firstChild);
+                }
+                if (img.getAttribute('src') !== src) img.src = src;
+                if (!face.querySelector('.target-face-hint')) {
+                    const hint = document.createElement('span');
+                    hint.className = 'target-face-hint';
+                    hint.textContent = 'Upload';
+                    face.appendChild(hint);
+                }
+                const hasPhoto = !!filedPortraitSrc();
+                face.setAttribute('aria-label', hasPhoto ? 'View profile photos' : 'Upload profile photo');
+                const hintEl = face.querySelector('.target-face-hint');
+                if (hintEl) hintEl.textContent = hasPhoto ? 'View' : 'Upload';
+            }
+            if (typeof renderFaceGallery === 'function') renderFaceGallery();
             updateHubFace();
 
-            const socials = collectProfileIcons();
             const socialsEl = document.getElementById('profileSocials');
-            if (socialsEl) {
-                socialsEl.innerHTML = socials.map((item) => {
-                    const label = item.title;
-                    const mark = item.mark;
-                    return '<a class="profile-social" href="' + escapeHtml(item.href) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '" data-focus="' + escapeHtml(item.fieldId) + '">' + mark + '</a>';
-                }).join('');
-            }
+            if (socialsEl) socialsEl.innerHTML = '';
 
-            const bits = [];
-            if (firstValue('company')) bits.push(firstValue('company'));
-            if (firstValue('address')) bits.push(firstValue('address'));
-            else if (firstValue('city')) bits.push(firstValue('city'));
-            else if (firstValue('geo')) bits.push(firstValue('geo'));
+            const addressLines = subjectAddressLines();
             const idStack = document.getElementById('idStack');
-            if (bits.length) {
-                idStack.hidden = false;
-                idStack.textContent = bits.join('  ·  ');
-            } else if (name !== 'Anonymous' || socials.length) {
-                idStack.hidden = true;
-            } else {
-                idStack.hidden = false;
-                idStack.textContent = isPhone()
-                    ? 'No facts yet'
-                    : 'Unidentified · File facts to build this profile';
+            if (idStack) {
+                if (addressLines.length) {
+                    idStack.hidden = false;
+                    idStack.innerHTML =
+                        '<span class="id-address">' + addressLines.map(escapeHtml).join('<br>') + '</span>' +
+                        '<button type="button" class="id-maps" data-open-maps="address" aria-label="Open in Google Maps" title="Google Maps">' + PIN_ICON + '<span>Maps</span></button>';
+                } else {
+                    idStack.hidden = true;
+                    idStack.textContent = '';
+                }
             }
+        }
+
+        function renderProfile() {
+            refreshProfileChrome();
 
             const factsSection = document.getElementById('factsSection');
             const factsList = document.getElementById('factsList');
-            const filledGroups = groupsForProfile().map((group) => {
-                const rows = group.fields.flatMap((id) => {
-                    const field = fieldById(id);
-                    if (!field) return [];
-                    return ((profile.facts && profile.facts[id]) || []).filter((item) => item && String(item.value || '').trim()).filter((item) => !skipProfileRow(field, item)).map((item) => ({ field, item }));
-                });
-                return { group, rows };
-            }).filter((entry) => entry.rows.length);
-
-            factsSection.hidden = false;
-            if (isPhone()) {
-                factsList.className = 'phone-facts';
-                const phoneGroups = groupsForProfile().map((group) => {
-                    const rows = group.fields.map((id) => {
-                        const field = fieldById(id);
-                        if (!field || hiddenFields.has(id)) return '';
-                        const items = ((profile.facts && profile.facts[id]) || []).filter((item) => item && String(item.value || '').trim());
-                        if (items.length) return items.map((item) => phoneFactRowHtml(field, item)).join('');
-                        return phoneFactRowHtml(field, null);
-                    }).join('');
-                    return rows
-                        ? '<section class="phone-group"><h3 class="phone-group-title">' + escapeHtml(group.label) + '</h3><div class="phone-group-card">' + rows + '</div></section>'
-                        : '';
-                }).join('');
-                factsList.innerHTML = phoneGroups || '<p class="empty-note empty-brief"><strong>Start a case</strong>Tap + to add a field, or tap Name, email, or phone below to file what you already have.</p>';
-            } else if (filledGroups.length) {
-                factsList.className = '';
-                factsList.innerHTML = filledGroups.map(({ group, rows }) => (
-                    '<div class="group"><div class="group-label">' + group.label + '</div>' +
-                    rows.map(({ field, item }) => profileFactRowHtml(field, item)).join('') + '</div>'
-                )).join('');
-            } else if (name !== 'Anonymous' || socials.length || firstValue('image')) {
-                factsList.innerHTML = '';
-            } else {
-                factsList.innerHTML = '<p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder information. Replace it with real information using the diagram.</p>';
+            if (factsSection) factsSection.hidden = false;
+            if (factsList) {
+                factsList.className = 'dossier';
+                if (profileSheetEditing() && factsList.querySelector('[data-sheet-field]')) {
+                    syncSheetInputs(document.activeElement);
+                } else {
+                    factsList.innerHTML = dossierHtml();
+                }
             }
 
             const analysisSection = document.getElementById('analysisSection');
@@ -3441,12 +4947,554 @@
             if (profile.analysis) {
                 analysisSection.hidden = false;
                 analysisBox.textContent = profile.analysis;
-            } else {
+            } else if (analysisSection) {
                 analysisSection.hidden = true;
-                analysisBox.textContent = '';
+                if (analysisBox) analysisBox.textContent = '';
             }
             renderLeads(activeField);
             if (typeof renderProfileRail === 'function') renderProfileRail();
+            renderPeerHubs();
+        }
+
+        function beginNameEdit() {
+            const row = document.getElementById('subjectNameRow');
+            const input = document.getElementById('subjectNameInput');
+            if (!row || !input) return;
+            row.classList.add('editing');
+            input.value = firstValue('name');
+            input.hidden = false;
+            requestAnimationFrame(function () {
+                input.focus();
+                input.select();
+            });
+        }
+
+        function endNameEdit(save) {
+            const row = document.getElementById('subjectNameRow');
+            const input = document.getElementById('subjectNameInput');
+            const nameEl = document.getElementById('subjectName');
+            if (!row || !input || !row.classList.contains('editing')) return;
+            if (save) writeLatestFact('name', input.value, extrasFromInput('name', input.value));
+            row.classList.remove('editing');
+            if (nameEl) nameEl.textContent = subjectDisplayName();
+        }
+
+        let photoUploadFor = '';
+
+        function pickProfilePhoto(profileId) {
+            photoUploadFor = profileId || (profileLibrary && profileLibrary.activeId) || '';
+            const input = document.getElementById('profilePhotoFile');
+            if (input) input.click();
+        }
+
+        function applyPhotoToProfile(profileId, file) {
+            if (!file || String(file.type || '').indexOf('image/') !== 0) return;
+            const activeId = profileLibrary && profileLibrary.activeId;
+            if (!profileId || profileId === activeId) {
+                applyProfilePhotoFile(file);
+                return;
+            }
+            const entry = profileLibrary && profileLibrary.items[profileId];
+            if (!entry) return;
+            imageVersionsFromFile(file).then((versions) => {
+                const fact = {
+                    value: file.name + ' (' + Math.round(file.size / 1024) + ' KB)',
+                    addedAt: new Date().toISOString(),
+                    kind: 'image'
+                };
+                if (versions) {
+                    if (versions.preview) fact.preview = versions.preview;
+                    if (versions.media) fact.media = versions.media;
+                    if (versions.kind) fact.kind = versions.kind;
+                }
+                entry.facts = entry.facts || {};
+                entry.facts.image = [fact];
+                saveProfileEntry(entry);
+                if (typeof renderPeerHubs === 'function') renderPeerHubs();
+                if (typeof renderProfileRail === 'function') renderProfileRail();
+            });
+        }
+
+        function applyProfilePhotoFile(file) {
+            return applyProfilePhotoFiles([file]);
+        }
+
+        function applyProfilePhotoFiles(files) {
+            const list = Array.from(files || []).filter((file) => file && String(file.type || '').indexOf('image/') === 0);
+            if (!list.length) return Promise.resolve();
+            return Promise.all(list.map((file) =>
+                imageVersionsFromFile(file).then((versions) => ({ file: file, versions: versions }))
+            )).then((results) => {
+                profile.facts.image = profile.facts.image || [];
+                results.forEach((entry) => {
+                    const clean = entry.file.name + ' (' + Math.round(entry.file.size / 1024) + ' KB)';
+                    const same = profile.facts.image.some((item) => item && String(item.value || '').toLowerCase() === clean.toLowerCase());
+                    if (same) return;
+                    const fact = { value: clean, addedAt: new Date().toISOString(), kind: 'image' };
+                    if (entry.versions) {
+                        if (entry.versions.preview) fact.preview = entry.versions.preview;
+                        if (entry.versions.media) fact.media = entry.versions.media;
+                        if (entry.versions.kind) fact.kind = entry.versions.kind;
+                    }
+                    if (isNullField('image')) setFieldNull('image', false, true);
+                    profile.facts.image.push(fact);
+                });
+                saveProfile();
+                const input = document.getElementById('field-image');
+                if (input && document.activeElement !== input) {
+                    input.value = firstValue('image');
+                    if (typeof syncNodeFilled === 'function') syncNodeFilled(input);
+                }
+                if (typeof setFieldThumb === 'function') setFieldThumb('image');
+                renderProfile();
+                renderNodes();
+                recordHistory(true);
+            });
+        }
+
+        function peerFaceSrc(entry) {
+            return compactFaceFrom(entry && entry.facts) || DEFAULT_FACE;
+        }
+
+        function renderPeerHubs() {
+            const layer = document.getElementById('peerHubs');
+            const lines = document.getElementById('peerLinkLayer');
+            if (!layer) return;
+            if (typeof isPhone === 'function' && isPhone()) {
+                layer.innerHTML = '';
+                if (lines) lines.innerHTML = '';
+                peerBodies = [];
+                return;
+            }
+            const ids = linkedProfileIds();
+            const stamp = ids.map((id) => {
+                const entry = profileLibrary.items[id];
+                const name = displayProfileName(entry);
+                const face = compactFaceFrom(entry && entry.facts);
+                return id + ':' + name + ':' + (face ? String(face.length) + face.slice(-12) : 'L');
+            }).join('|');
+            if (layer.dataset.stamp === stamp && peerBodies.length === ids.length) {
+                peerBodies.forEach((body) => {
+                    const el = layer.querySelector('[data-peer="' + body.id + '"]');
+                    if (el) body.el = el;
+                });
+                return;
+            }
+            layer.dataset.stamp = stamp;
+            layer.innerHTML = ids.map((id) => {
+                const entry = profileLibrary.items[id];
+                const name = displayProfileName(entry);
+                const face = compactFaceFrom(entry && entry.facts);
+                const mark = face
+                    ? '<img class="peer-hub-face" alt="" src="' + escapeHtml(face) + '">'
+                    : '<span class="peer-hub-letter">' + escapeHtml(profileLetter(name)) + '</span>';
+                return '<div class="peer-hub" data-peer="' + escapeHtml(id) + '" title="' + escapeHtml(name) + '" role="button" tabindex="0" aria-label="' + escapeHtml(name) + '">' +
+                    mark +
+                    '<span class="peer-hub-name">' + escapeHtml(name) + '</span>' +
+                    '</div>';
+            }).join('');
+            if (lines) {
+                const size = canvasSize();
+                lines.setAttribute('viewBox', '0 0 ' + size.width + ' ' + size.height);
+                lines.innerHTML = ids.map((id) => '<line data-peer-line="' + escapeHtml(id) + '"></line>').join('');
+            }
+            syncPeerBodies();
+            positionPeerHubs();
+        }
+
+        function syncPeerBodies() {
+            const layer = document.getElementById('peerHubs');
+            const els = layer ? Array.from(layer.querySelectorAll('[data-peer]')) : [];
+            const prev = new Map(peerBodies.map((body) => [body.id, body]));
+            peerBodies = els.map((el) => {
+                const old = prev.get(el.dataset.peer);
+                if (old) {
+                    old.el = el;
+                    old.w = PEER_HUB_SIZE;
+                    old.h = PEER_HUB_SIZE;
+                    return old;
+                }
+                return {
+                    id: el.dataset.peer,
+                    el: el,
+                    x: null,
+                    y: null,
+                    vx: 0,
+                    vy: 0,
+                    tx: 0,
+                    ty: 0,
+                    w: PEER_HUB_SIZE,
+                    h: PEER_HUB_SIZE,
+                    sw: PEER_HUB_SIZE,
+                    sh: PEER_HUB_SIZE
+                };
+            });
+            if (orbit.dragMode === 'peer' && orbit.dragItem && orbit.dragItem.id) {
+                const live = peerBodies.find((body) => body.id === orbit.dragItem.id);
+                if (live) orbit.dragItem = live;
+            }
+        }
+
+        function peerBodyFromEl(el) {
+            if (!el || !el.dataset.peer) return null;
+            let body = peerBodies.find((entry) => entry.id === el.dataset.peer);
+            if (body) {
+                body.el = el;
+                return body;
+            }
+            body = {
+                id: el.dataset.peer,
+                el: el,
+                x: null,
+                y: null,
+                vx: 0,
+                vy: 0,
+                tx: 0,
+                ty: 0,
+                w: PEER_HUB_SIZE,
+                h: PEER_HUB_SIZE,
+                sw: PEER_HUB_SIZE,
+                sh: PEER_HUB_SIZE
+            };
+            peerBodies.push(body);
+            return body;
+        }
+
+        function hubPeerClearance() {
+            return (hub && hub.offsetWidth || 220) / 2 + PEER_HUB_SIZE / 2 + 20;
+        }
+
+        function peerPeerClearance() {
+            return PEER_HUB_SIZE + 18;
+        }
+
+        function pushOutOfCircle(x, y, cx, cy, minDist) {
+            let dx = x - cx;
+            let dy = y - cy;
+            let dist = Math.hypot(dx, dy);
+            if (dist < 0.0001) {
+                dx = 1;
+                dy = 0;
+                dist = 1;
+            }
+            if (dist >= minDist) return { x: x, y: y, hit: false };
+            const scale = minDist / dist;
+            return { x: cx + dx * scale, y: cy + dy * scale, hit: true };
+        }
+
+        function otherPeerWorlds(ignoreId) {
+            const pts = [];
+            (typeof linkedProfileIds === 'function' ? linkedProfileIds() : []).forEach((id) => {
+                if (!id || id === ignoreId) return;
+                const home = peerHomeFor(id);
+                if (home) pts.push({ id: id, x: home.x, y: home.y });
+            });
+            peerBodies.forEach((body) => {
+                if (!body || body.id === ignoreId || body.x == null) return;
+                if (pts.some((pt) => pt.id === body.id)) return;
+                const hubPt = typeof hubScreenPoint === 'function' ? hubScreenPoint() : { x: 0, y: 0 };
+                const zoom = Math.max(orbit.zoom || 1, 0.01);
+                pts.push({
+                    id: body.id,
+                    x: (body.x - hubPt.x) / zoom,
+                    y: (body.y - hubPt.y) / zoom
+                });
+            });
+            return pts;
+        }
+
+        function unclipPeerWorld(x, y, ignoreId) {
+            let px = Number.isFinite(x) ? x : 0;
+            let py = Number.isFinite(y) ? y : 0;
+            const hubMin = hubPeerClearance();
+            const peerMin = peerPeerClearance();
+            const others = otherPeerWorlds(ignoreId);
+            for (let iter = 0; iter < 18; iter++) {
+                let hits = 0;
+                const hubPush = pushOutOfCircle(px, py, 0, 0, hubMin);
+                if (hubPush.hit) {
+                    px = hubPush.x;
+                    py = hubPush.y;
+                    hits++;
+                }
+                others.forEach((other) => {
+                    const dx = px - other.x;
+                    const dy = py - other.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist < 0.0001) dist = 0.0001;
+                    if (dist >= peerMin) return;
+                    const scale = peerMin / dist;
+                    px = other.x + dx * scale;
+                    py = other.y + dy * scale;
+                    hits++;
+                });
+                if (!hits) break;
+            }
+            return { x: px, y: py };
+        }
+
+        let peerHomeFixTimer = 0;
+        function schedulePeerHomeFix() {
+            clearTimeout(peerHomeFixTimer);
+            peerHomeFixTimer = setTimeout(function () {
+                if (typeof persistPeerHomes === 'function') persistPeerHomes();
+            }, 280);
+        }
+
+        function computePeerTargets(hx, hy, zoom) {
+            const worldRing = hubPeerClearance() + 48;
+            let far = worldRing;
+            if (orbitItems.length) {
+                const reach = Math.max.apply(null, orbitItems.map((item) => {
+                    if (item.x == null || item.y == null) return 0;
+                    return (Math.hypot(item.x - hx, item.y - hy) + Math.max(item.sw || item.w || 0, item.sh || item.h || 0) / 2) / Math.max(zoom, 0.01);
+                }));
+                if (reach) far = Math.max(far, reach + 64);
+            }
+            const unplaced = [];
+            peerBodies.forEach((body) => {
+                body.sw = PEER_HUB_SIZE * zoom;
+                body.sh = PEER_HUB_SIZE * zoom;
+                const home = peerHomeFor(body.id);
+                if (home) {
+                    const clear = unclipPeerWorld(home.x, home.y, body.id);
+                    if (Math.hypot(clear.x - home.x, clear.y - home.y) > 1.5) {
+                        peerHomes[body.id] = { x: clear.x, y: clear.y };
+                        schedulePeerHomeFix();
+                    }
+                    body.tx = hx + clear.x * zoom;
+                    body.ty = hy + clear.y * zoom;
+                    return;
+                }
+                unplaced.push(body);
+            });
+            unplaced.forEach((body, i) => {
+                const angle = -Math.PI / 2 + (i / Math.max(unplaced.length, 1)) * Math.PI * 2;
+                const clear = unclipPeerWorld(Math.cos(angle) * far, Math.sin(angle) * far, body.id);
+                body.tx = hx + clear.x * zoom;
+                body.ty = hy + clear.y * zoom;
+            });
+        }
+
+        function resolveLinkedProfileCollisions(hx, hy, zoom, peerGrab) {
+            if (!peerBodies.length) return;
+            const z = Math.max(zoom || 1, 0.01);
+            const hubMin = hubPeerClearance();
+            const peerMin = peerPeerClearance();
+            const pts = peerBodies.map((body) => {
+                const sx = body.x == null ? body.tx : body.x;
+                const sy = body.y == null ? body.ty : body.y;
+                return {
+                    body: body,
+                    grabbed: !!(peerGrab && body.id === peerGrab.id),
+                    x: (sx - hx) / z,
+                    y: (sy - hy) / z
+                };
+            });
+            for (let iter = 0; iter < 16; iter++) {
+                let hits = 0;
+                pts.forEach((pt) => {
+                    const pushed = pushOutOfCircle(pt.x, pt.y, 0, 0, hubMin);
+                    if (!pushed.hit) return;
+                    pt.x = pushed.x;
+                    pt.y = pushed.y;
+                    hits++;
+                });
+                for (let i = 0; i < pts.length; i++) {
+                    for (let j = i + 1; j < pts.length; j++) {
+                        const a = pts[i];
+                        const b = pts[j];
+                        let dx = a.x - b.x;
+                        let dy = a.y - b.y;
+                        let dist = Math.hypot(dx, dy);
+                        if (dist < 0.0001) {
+                            dx = 1;
+                            dy = 0;
+                            dist = 1;
+                        }
+                        if (dist >= peerMin) continue;
+                        const overlap = peerMin - dist;
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+                        if (a.grabbed && !b.grabbed) {
+                            b.x -= nx * overlap;
+                            b.y -= ny * overlap;
+                        } else if (b.grabbed && !a.grabbed) {
+                            a.x += nx * overlap;
+                            a.y += ny * overlap;
+                        } else {
+                            a.x += nx * overlap * 0.5;
+                            a.y += ny * overlap * 0.5;
+                            b.x -= nx * overlap * 0.5;
+                            b.y -= ny * overlap * 0.5;
+                        }
+                        hits++;
+                    }
+                }
+                if (!hits) break;
+            }
+            pts.forEach((pt) => {
+                pt.body.x = hx + pt.x * z;
+                pt.body.y = hy + pt.y * z;
+                if (pt.grabbed) {
+                    orbit.grabX = pt.body.x;
+                    orbit.grabY = pt.body.y;
+                    return;
+                }
+                pt.body.vx = 0;
+                pt.body.vy = 0;
+            });
+        }
+
+        function paintPeerHubs(hx, hy, zoom) {
+            const lines = document.getElementById('peerLinkLayer');
+            const size = canvasSize();
+            if (lines) lines.setAttribute('viewBox', '0 0 ' + size.width + ' ' + size.height);
+            peerBodies.forEach((body) => {
+                if (!body.el) return;
+                const x = body.x == null ? body.tx : body.x;
+                const y = body.y == null ? body.ty : body.y;
+                body.el.style.left = x + 'px';
+                body.el.style.top = y + 'px';
+                body.el.style.transform = 'translate(-50%, -50%) scale(' + zoom + ')';
+                const line = lines && lines.querySelector('[data-peer-line="' + body.id + '"]');
+                if (!line) return;
+                const rest = Math.max(Math.hypot(body.tx - hx, body.ty - hy), 8);
+                const stretch = Math.hypot(x - hx, y - hy) / rest;
+                line.setAttribute('x1', hx);
+                line.setAttribute('y1', hy);
+                line.setAttribute('x2', x);
+                line.setAttribute('y2', y);
+                line.setAttribute('stroke-width', stretch > 1.12 ? '2.2' : '1.6');
+            });
+        }
+
+        function positionPeerHubs() {
+            const layer = document.getElementById('peerHubs');
+            const lines = document.getElementById('peerLinkLayer');
+            if (!layer || !hub) return;
+            if (!peerBodies.length) {
+                if (lines) lines.innerHTML = '';
+                return;
+            }
+            const zoom = orbit.zoom || 1;
+            const hubPt = hubScreenPoint();
+            computePeerTargets(hubPt.x, hubPt.y, zoom);
+            const snap = orbit.snapLayout || reduceMotion;
+            peerBodies.forEach((body) => {
+                if (snap || body.x == null || body.y == null) {
+                    body.x = body.tx;
+                    body.y = body.ty;
+                    body.vx = 0;
+                    body.vy = 0;
+                }
+            });
+            resolveLinkedProfileCollisions(hubPt.x, hubPt.y, zoom, null);
+            paintPeerHubs(hubPt.x, hubPt.y, zoom);
+        }
+
+        function commitPeerHome(body) {
+            if (!body || !body.id) return;
+            const hubPt = hubScreenPoint();
+            const zoom = Math.max(orbit.zoom || 1, 0.01);
+            resolveLinkedProfileCollisions(hubPt.x, hubPt.y, zoom, null);
+            const clear = unclipPeerWorld((body.x - hubPt.x) / zoom, (body.y - hubPt.y) / zoom, body.id);
+            body.x = hubPt.x + clear.x * zoom;
+            body.y = hubPt.y + clear.y * zoom;
+            peerHomes[body.id] = { x: clear.x, y: clear.y };
+            persistPeerHomes();
+            const mine = profileLibrary && profileLibrary.activeId;
+            const other = profileLibrary && profileLibrary.items[body.id];
+            if (mine && other) {
+                other.peerHomes = other.peerHomes || {};
+                other.peerHomes[mine] = { x: -clear.x, y: -clear.y };
+                saveProfileEntry(other);
+            }
+        }
+
+        function applyPeerPhysics(dt, hx, hy, zoom, step, rigidView, tug, nodeGrab, hubGrab, peerGrab, hvx, hvy) {
+            if (!peerBodies.length) return;
+            computePeerTargets(hx, hy, zoom);
+            const posMs = reduceMotion || orbit.snapLayout || rigidView ? 1 : (nodeGrab || peerGrab ? 520 : 420);
+            peerBodies.forEach((body) => {
+                const grabbed = peerGrab && body.id === peerGrab.id;
+                if (grabbed) {
+                    body.x = orbit.grabX;
+                    body.y = orbit.grabY;
+                    body.vx = 0;
+                    body.vy = 0;
+                    return;
+                }
+                if (body.x == null) body.x = body.tx;
+                if (body.y == null) body.y = body.ty;
+                if (!tug) {
+                    const ease = rigidView || posMs <= 1 ? 1 : posMs;
+                    const fromX = body.x;
+                    const fromY = body.y;
+                    body.x = ease === 1 ? body.tx : follow(fromX, body.tx, dt, ease);
+                    body.y = ease === 1 ? body.ty : follow(fromY, body.ty, dt, ease);
+                    body.vx = 0;
+                    body.vy = 0;
+                    if (ease === 1 || Math.hypot(body.x - body.tx, body.y - body.ty) < 0.25) {
+                        body.x = body.tx;
+                        body.y = body.ty;
+                    }
+                    return;
+                }
+                if (hubGrab) {
+                    body.x += hvx * 0.38;
+                    body.y += hvy * 0.38;
+                }
+                const kHome = hubGrab ? 0.055 : (nodeGrab || peerGrab ? 0.07 : 0.14);
+                const damp = hubGrab || nodeGrab || peerGrab ? 0.9 : 0.84;
+                body.vx = (body.vx || 0) + (body.tx - body.x) * kHome * step;
+                body.vy = (body.vy || 0) + (body.ty - body.y) * kHome * step;
+                if (peerGrab && peerGrab !== body && peerGrab.x != null) {
+                    const bx = body.x - peerGrab.x;
+                    const by = body.y - peerGrab.y;
+                    const gap = Math.hypot(bx, by);
+                    const minGap = ((body.sw || body.w) + (peerGrab.sw || peerGrab.w || 0)) / 2 + 16;
+                    if (gap > 0.001 && gap < minGap) {
+                        const push = (minGap - gap) * 0.18;
+                        body.vx += (bx / gap) * push;
+                        body.vy += (by / gap) * push;
+                    }
+                }
+                peerBodies.forEach((other) => {
+                    if (other === body || (peerGrab && other.id === peerGrab.id) || other.x == null) return;
+                    const bx = body.x - other.x;
+                    const by = body.y - other.y;
+                    const gap = Math.hypot(bx, by);
+                    const minGap = ((body.sw || body.w) + (other.sw || other.w || 0)) / 2 + 18;
+                    if (gap > 0.001 && gap < minGap) {
+                        const push = (minGap - gap) * 0.16;
+                        body.vx += (bx / gap) * push;
+                        body.vy += (by / gap) * push;
+                    }
+                });
+                const rest = Math.max(Math.hypot(body.tx - hx, body.ty - hy), 10);
+                const ldx = body.x - hx;
+                const ldy = body.y - hy;
+                const cur = Math.hypot(ldx, ldy);
+                if (cur > rest + 6) {
+                    const stretch = cur - rest;
+                    const kLink = hubGrab || nodeGrab || peerGrab ? 0.16 : 0.11;
+                    body.vx -= (ldx / cur) * stretch * kLink * step;
+                    body.vy -= (ldy / cur) * stretch * kLink * step;
+                }
+                body.vx *= Math.pow(damp, step);
+                body.vy *= Math.pow(damp, step);
+                body.x += body.vx * step;
+                body.y += body.vy * step;
+                if (!hubGrab && !nodeGrab && !peerGrab && Math.hypot(body.x - body.tx, body.y - body.ty) < 0.45 && Math.hypot(body.vx, body.vy) < 0.2) {
+                    body.x = body.tx;
+                    body.y = body.ty;
+                    body.vx = 0;
+                    body.vy = 0;
+                }
+            });
+            resolveLinkedProfileCollisions(hx, hy, zoom, peerGrab);
+            paintPeerHubs(hx, hy, zoom);
         }
 
         function renderLeads(fieldId) {
@@ -3497,7 +5545,7 @@
 
         function shortenCrypto(value) {
             const raw = String(value || '').trim();
-            if (raw.length > 16 && /^[0-9a-zA-Z]+$/.test(raw)) return raw.slice(0, 6) + '…' + raw.slice(-4);
+            if (raw.length > 20 && /^[0-9a-zA-Z]+$/.test(raw)) return raw.slice(0, 10) + '…' + raw.slice(-6);
             return raw;
         }
 
@@ -3560,12 +5608,125 @@
         }
 
         function skipProfileRow(field, item) {
-            if (isPhone()) return false;
             const base = fieldBase(field.id);
-            if (base === 'name' || base === 'image') return true;
-            if (isSocialLikeField(field)) return true;
-            if (isWebIconField(field) && siteHref(item && item.value)) return true;
-            return false;
+            return base === 'name' || base === 'image';
+        }
+
+        function skipSheetField(field) {
+            return skipProfileRow(field);
+        }
+
+        function subjectAddressLines() {
+            const street = firstValue('address');
+            const city = firstValue('city');
+            const region = firstValue('region');
+            const postal = firstValue('postal');
+            const country = firstValue('country');
+            const lines = [];
+            if (street) {
+                String(street).split(/\n+/).forEach((line) => {
+                    const text = line.trim();
+                    if (text) lines.push(text);
+                });
+            }
+            const cityLine = [city && region ? city + ', ' + region : (city || region), postal].filter(Boolean).join(' ').trim();
+            if (cityLine) {
+                const already = lines.some((line) => line.toLowerCase().indexOf(cityLine.toLowerCase()) !== -1);
+                if (!already) lines.push(cityLine);
+            }
+            if (country) {
+                const already = lines.some((line) => line.toLowerCase().indexOf(country.toLowerCase()) !== -1);
+                if (!already) lines.push(country);
+            }
+            return lines;
+        }
+
+        function mapsQueryForField(fieldId) {
+            const live = (typeof fieldInputValue === 'function' ? fieldInputValue(fieldId) : '') || firstValue(fieldId) || '';
+            if (fieldId === 'address') {
+                const composed = subjectAddressLines().join(', ');
+                return composed || String(live || '').trim();
+            }
+            return String(live || '').trim();
+        }
+
+        function openFieldMaps(fieldId) {
+            const href = mapsHref(mapsQueryForField(fieldId));
+            if (href) window.open(href, '_blank', 'noopener,noreferrer');
+        }
+
+        function mapsButtonHtml(fieldId) {
+            const ready = !!mapsQueryForField(fieldId);
+            return '<button type="button" class="fact-maps" data-open-maps="' + fieldId + '"' +
+                (ready ? '' : ' disabled') +
+                ' aria-label="Open in Google Maps" title="Google Maps">' + PIN_ICON + '<span>Maps</span></button>';
+        }
+
+        function ensureMapsThumb(node) {
+            if (!node) return;
+            const fieldId = node.dataset.field;
+            if (!isMapsField(fieldId)) return;
+            let thumb = node.querySelector('.media-thumb');
+            if (!thumb) {
+                thumb = document.createElement('button');
+                thumb.className = 'media-thumb';
+                thumb.type = 'button';
+                thumb.dataset.openMedia = fieldId;
+                thumb.setAttribute('aria-label', 'Open in Google Maps');
+                thumb.title = 'Google Maps';
+                thumb.hidden = true;
+                const copy = node.querySelector('.node-copy');
+                node.insertBefore(thumb, copy || node.firstChild);
+            }
+            if (typeof setFieldThumb === 'function') setFieldThumb(fieldId);
+        }
+
+        function syncMapsButtons(fieldId) {
+            const ready = !!mapsQueryForField(fieldId || 'address');
+            document.querySelectorAll(fieldId
+                ? '[data-open-maps="' + fieldId + '"]'
+                : '[data-open-maps]').forEach((btn) => {
+                btn.disabled = !mapsQueryForField(btn.dataset.openMaps);
+            });
+            if (!fieldId || fieldId === 'address' || fieldBase(fieldId) === 'city' || fieldBase(fieldId) === 'region' || fieldBase(fieldId) === 'postal' || fieldBase(fieldId) === 'country') {
+                const addressBtn = document.querySelector('[data-open-maps="address"]');
+                if (addressBtn) addressBtn.disabled = !mapsQueryForField('address');
+                if (typeof setFieldThumb === 'function') {
+                    const node = document.querySelector('.node[data-field="address"]');
+                    if (node && node.querySelector('.media-thumb')) setFieldThumb('address');
+                }
+            }
+            if (ready && fieldId && isThumbField(fieldId) && typeof setFieldThumb === 'function') setFieldThumb(fieldId);
+        }
+
+        function profileIconCaption(field, item, href) {
+            const raw = String((item && item.value) || '').trim();
+            if (isSocialLikeField(field)) {
+                let handle = usernameHandle(raw);
+                if (/^https?:\/\//i.test(raw) || (href && /[./]/.test(raw))) {
+                    try {
+                        const parts = new URL(href || raw).pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+                        if (parts.length) handle = usernameHandle(parts[parts.length - 1]);
+                    } catch (error) {}
+                }
+                handle = usernameHandle(handle.split(/[/?#]/)[0]);
+                return handle ? '@' + handle : raw;
+            }
+            if (href) {
+                try {
+                    const url = new URL(href);
+                    const host = url.hostname.replace(/^www\./, '');
+                    const path = url.pathname.replace(/\/+$/, '');
+                    if (path && path !== '/') {
+                        const full = host + path;
+                        return full.length > 40 ? host + path.slice(0, 18) + '…' : full;
+                    }
+                    return host;
+                } catch (error) {
+                    return href.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+                }
+            }
+            return raw;
         }
 
         function collectProfileIcons() {
@@ -3599,7 +5760,14 @@
                     const key = href.toLowerCase();
                     if (seen[key]) return;
                     seen[key] = true;
-                    icons.push({ href, mark, title, fieldId: field.id, value: item.value });
+                    icons.push({
+                        href: href,
+                        mark: mark,
+                        title: title,
+                        caption: profileIconCaption(field, item, href),
+                        fieldId: field.id,
+                        value: item.value
+                    });
                 });
             });
             return icons;
@@ -3621,36 +5789,50 @@
                     zone: zone
                 };
             }
+            if (base === 'countrycode') {
+                const code = resolveCountryCodeValue(value);
+                const meta = countryCodeMeta(code);
+                return {
+                    text: meta ? meta.dial + ' · ' + meta.name : value,
+                    href: '',
+                    title: meta ? meta.name + ' (' + meta.id + ')' : value,
+                    wrap: false,
+                    mono: true
+                };
+            }
             if (base === 'phone' || base === 'phone2' || base === 'fax') {
-                return { text: value, href: phoneHref(value), title: value, wrap: false };
+                return { text: value, href: phoneHref(value), title: value, wrap: false, mono: true };
             }
             if (base === 'email' || base === 'email2') {
-                return { text: value, href: value.indexOf('@') !== -1 ? 'mailto:' + value : '', title: value, wrap: false };
+                return { text: value, href: value.indexOf('@') !== -1 ? 'mailto:' + value : '', title: value, wrap: true };
             }
             if (PROFILE_PLACE_FIELDS[base]) {
-                return { text: value, href: mapsHref(value), title: value, wrap: false };
+                return { text: value, href: mapsHref(value), title: value, wrap: true };
             }
             if (base === 'crypto') {
-                return { text: shortenCrypto(value), href: cryptoHref(value), title: value, wrap: false };
+                return { text: shortenCrypto(value), href: cryptoHref(value), title: value, wrap: true, mono: true };
             }
-            if (base === 'ip') {
-                return { text: value, href: 'https://ipinfo.io/' + encodeURIComponent(value), title: value, wrap: false };
+            if (base === 'ip' || base === 'mac' || base === 'vin' || base === 'plate' || base === 'imei' || base === 'uuid') {
+                const href = base === 'ip' ? 'https://ipinfo.io/' + encodeURIComponent(value) : '';
+                return { text: value, href: href, title: value, wrap: true, mono: true };
+            }
+            if (base === 'record') {
+                return { text: value, href: '', title: value, wrap: true, mono: true };
             }
             if (base === 'audio' || base === 'video' || base === 'screenshot') {
                 return { text: field.label, href: siteHref(value), title: value, wrap: false };
             }
-            if (base === 'password') {
-                const key = field.id + '|' + ((item && item.platform) || '') + '|' + value;
-                const open = revealedPasswords.has(key);
+            if (isSecretField(field.id)) {
+                const open = secretIsOpen(field.id);
                 const dots = Array(Math.min(14, Math.max(6, value.length)) + 1).join('•');
                 return {
                     text: open ? value : dots,
                     href: '',
-                    title: open ? value : 'Hidden password',
+                    title: open ? value : 'Hidden',
                     wrap: false,
                     secret: true,
                     revealed: open,
-                    key: key
+                    key: field.id
                 };
             }
             if (base === 'notes' || base === 'bio' || base === 'quote' || base === 'appearance') {
@@ -3663,25 +5845,113 @@
         const EYE_OPEN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
         const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A11 11 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.3 4.4"/><path d="M6.1 6.1C3.8 7.8 2 12 2 12s3.5 7 10 7a10.8 10.8 0 0 0 4.4-.9"/></svg>';
 
+        function setSecretRevealButton(btn, open, fieldId) {
+            if (!btn) return;
+            btn.innerHTML = open ? EYE_OFF_ICON : EYE_OPEN_ICON;
+            btn.setAttribute('aria-label', secretAriaLabel(fieldId, open));
+            btn.title = open ? 'Hide' : 'Show';
+            btn.classList.toggle('open', !!open);
+        }
+
+        function secretRevealBtnHtml(fieldId) {
+            return '<button class="secret-reveal" type="button" data-secret-reveal="' + fieldId + '" aria-label="' + escapeHtml(secretAriaLabel(fieldId, false)) + '" title="Show">' + EYE_OPEN_ICON + '</button>';
+        }
+
+        function ensureSecretControls(node) {
+            if (!node) return;
+            const fieldId = node.dataset.field;
+            const secret = isSecretField(fieldId);
+            node.classList.toggle('secret-node', secret);
+            let btn = node.querySelector('.secret-reveal');
+            if (!secret) {
+                if (btn) btn.remove();
+                const input = document.getElementById('field-' + fieldId);
+                if (input && input.type === 'password') input.type = 'text';
+                return;
+            }
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.className = 'secret-reveal';
+                btn.type = 'button';
+                btn.dataset.secretReveal = fieldId;
+                const search = node.querySelector('.search-btn');
+                if (search && search.parentNode) search.parentNode.insertBefore(btn, search);
+                else {
+                    const copy = node.querySelector('.node-copy');
+                    if (copy) copy.appendChild(btn);
+                }
+            }
+            syncSecretNode(node);
+        }
+
+        function syncSecretNode(node) {
+            if (!node) return;
+            const fieldId = node.dataset.field;
+            if (!isSecretField(fieldId)) return;
+            const btn = node.querySelector('.secret-reveal');
+            const input = document.getElementById('field-' + fieldId);
+            const open = secretIsOpen(fieldId);
+            if (input) {
+                const next = open ? 'text' : 'password';
+                if (input.type !== next && input.type !== 'hidden') input.type = next;
+            }
+            setSecretRevealButton(btn, open, fieldId);
+            if (btn) btn.hidden = !!(input && input.hidden);
+        }
+
+        function applySecretReveal(fieldId) {
+            if (!fieldId) return;
+            const open = secretIsOpen(fieldId);
+            const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+            if (node) syncSecretNode(node);
+            const sheet = document.querySelector('#factsList [data-sheet-field="' + fieldId + '"]');
+            if (sheet && sheet.tagName === 'INPUT') {
+                const next = open ? 'text' : 'password';
+                if (sheet.type !== next) {
+                    const start = sheet.selectionStart;
+                    const end = sheet.selectionEnd;
+                    sheet.type = next;
+                    try {
+                        if (document.activeElement === sheet) sheet.setSelectionRange(start, end);
+                    } catch (error) {}
+                }
+            }
+            document.querySelectorAll('[data-secret-reveal="' + fieldId + '"]').forEach((btn) => {
+                setSecretRevealButton(btn, open, fieldId);
+            });
+            if (phoneFieldId === fieldId) syncPhoneField();
+        }
+
+        function toggleSecretReveal(fieldId) {
+            if (!fieldId) return;
+            if (revealedPasswords.has(fieldId)) revealedPasswords.delete(fieldId);
+            else revealedPasswords.add(fieldId);
+            applySecretReveal(fieldId);
+        }
+
         function profileFactRowHtml(field, item) {
             const shown = profileRowDisplay(field, item);
-            const label = field.label;
+            const platform = item && item.platform && platformById(item.platform);
+            const label = (isSocialLikeField(field) && platform) ? platform.label : field.label;
             const inner = shown.href
                 ? '<a href="' + escapeHtml(shown.href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(shown.text) + '</a>'
                 : escapeHtml(shown.text);
             const tzAttr = shown.zone ? ' data-profile-tz="' + escapeHtml(shown.zone) + '"' : '';
             const reveal = shown.secret
-                ? '<button type="button" class="fact-reveal" data-reveal="' + encodeURIComponent(shown.key) + '" aria-label="' + (shown.revealed ? 'Hide password' : 'Show password') + '" title="' + (shown.revealed ? 'Hide' : 'Show') + '">' + (shown.revealed ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, shown.revealed)) + '" title="' + (shown.revealed ? 'Hide' : 'Show') + '">' + (shown.revealed ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
                 : '';
             const find = isPhone()
                 ? '<button type="button" class="fact-find ready" data-search-field="' + field.id + '" aria-label="Search deeper" title="Search deeper">' + DEEP_ICON + '</button>'
                 : '';
-            return '<div class="fact-row' + (activeField === field.id ? ' active' : '') + (shown.wrap ? ' wrap' : '') + (shown.secret ? ' secret' : '') + '" data-focus="' + field.id + '">' +
-                '<span>' + escapeHtml(label) + '</span>' +
-                '<em title="' + escapeHtml(shown.title) + '"' + tzAttr + '>' + inner + '</em>' +
-                find +
-                reveal +
-                '<button type="button" data-remove="' + field.id + '" data-value="' + encodeURIComponent(item.value) + '" aria-label="Remove">×</button></div>';
+            const wrap = shown.wrap || String(shown.text || '').length > 28;
+            return '<div class="fact-row' + (activeField === field.id ? ' active' : '') + (wrap ? ' wrap' : '') + (shown.secret ? ' secret' : '') + (shown.mono ? ' mono' : '') + '" data-focus="' + field.id + '">' +
+                '<span class="fact-label">' + escapeHtml(label) + '</span>' +
+                '<em class="fact-value" title="' + escapeHtml(shown.title) + '"' + tzAttr + '>' + inner + '</em>' +
+                '<div class="fact-tools">' +
+                    find +
+                    reveal +
+                    '<button type="button" data-remove="' + field.id + '" data-value="' + encodeURIComponent(item.value) + '" aria-label="Remove">×</button>' +
+                '</div></div>';
         }
 
         function phoneFactRowHtml(field, item) {
@@ -3702,7 +5972,7 @@
                 : escapeHtml(shown.text);
             const tzAttr = shown.zone ? ' data-profile-tz="' + escapeHtml(shown.zone) + '"' : '';
             const reveal = shown.secret
-                ? '<button type="button" class="fact-reveal" data-reveal="' + encodeURIComponent(shown.key) + '" aria-label="' + (shown.revealed ? 'Hide password' : 'Show password') + '" title="' + (shown.revealed ? 'Hide' : 'Show') + '">' + (shown.revealed ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, shown.revealed)) + '" title="' + (shown.revealed ? 'Hide' : 'Show') + '">' + (shown.revealed ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
                 : '';
             return '<div class="phone-row' + (activeField === field.id ? ' active' : '') + (shown.secret ? ' secret' : '') + '" data-focus="' + field.id + '">' +
                 '<div class="phone-row-text">' +
@@ -3736,12 +6006,15 @@
             const editor = document.getElementById('phoneFieldInput');
             const platBtn = document.getElementById('phonePlatformBtn');
             const tzBtn = document.getElementById('phoneTzBtn');
+            const ccBtn = document.getElementById('phoneCcBtn');
             const upload = document.getElementById('phoneFieldUpload');
             const reveal = document.getElementById('phoneReveal');
+            const mapsBtn = document.getElementById('phoneMaps');
             const fact = latestFact(phoneFieldId);
-            const platformId = (fact && fact.platform) || (node && node.dataset.platform) || '';
+            const platformId = fieldPlatformId(phoneFieldId);
             const platformField = isPlatformField(phoneFieldId);
             const tz = fieldBase(phoneFieldId) === 'timezone';
+            const cc = fieldBase(phoneFieldId) === 'countrycode';
             const needsPlatform = platformField && !platformId;
             if (title && field) title.textContent = field.label;
             if (platBtn) {
@@ -3753,20 +6026,30 @@
                 const abbr = node && node.querySelector('.tz-abbr');
                 tzBtn.textContent = (abbr && abbr.textContent && abbr.textContent !== 'Zone') ? abbr.textContent : 'Choose timezone';
             }
+            if (ccBtn) {
+                ccBtn.hidden = !cc;
+                const meta = countryCodeMeta((input && input.value) || firstValue(phoneFieldId));
+                ccBtn.textContent = meta ? meta.dial + ' · ' + meta.name : 'Choose country';
+            }
             if (editor) {
-                editor.hidden = tz || needsPlatform;
+                editor.hidden = tz || cc || needsPlatform;
                 if (input && document.activeElement !== editor) editor.value = input.value || '';
                 editor.placeholder = field ? (field.placeholder || 'Value') : 'Value';
                 editor.inputMode = fieldBase(phoneFieldId) === 'phone' ? 'tel' : 'text';
-                const hideSecret = fieldBase(phoneFieldId) === 'password' && reveal && reveal.dataset.open !== '1';
+                const hideSecret = isSecretField(phoneFieldId) && !secretIsOpen(phoneFieldId);
                 editor.type = hideSecret ? 'password' : 'text';
             }
             if (reveal) {
-                const show = fieldBase(phoneFieldId) === 'password' && !needsPlatform;
+                const show = isSecretField(phoneFieldId) && !needsPlatform;
                 reveal.hidden = !show;
-                const open = reveal.dataset.open === '1';
-                reveal.innerHTML = open ? EYE_OFF_ICON : EYE_OPEN_ICON;
-                reveal.setAttribute('aria-label', open ? 'Hide password' : 'Show password');
+                const open = secretIsOpen(phoneFieldId);
+                setSecretRevealButton(reveal, open, phoneFieldId);
+            }
+            if (mapsBtn) {
+                const showMaps = isMapsField(phoneFieldId) && !needsPlatform;
+                mapsBtn.hidden = !showMaps;
+                mapsBtn.disabled = !mapsQueryForField(phoneFieldId);
+                mapsBtn.innerHTML = PIN_ICON + '<span>Maps</span>';
             }
             if (upload) upload.hidden = !(field && field.file);
             syncPhoneFindIcon();
@@ -3793,7 +6076,9 @@
             }
             const value = fieldInputValue(fieldId);
             const filled = !!value;
-            const links = searchLinks(fieldId);
+            const pack = mergeToolkitLeads(fieldId, searchLinks(fieldId));
+            const core = pack.links.slice(0, pack.extraStart);
+            const extra = pack.links.slice(pack.extraStart);
             box.innerHTML =
                 '<div class="phone-leads-title">' + (filled ? 'Search deeper' : 'How to find this') + '</div>' +
                 '<p class="phone-leads-note">' +
@@ -3802,17 +6087,20 @@
                     : 'Public sources where a ' + escapeHtml(field.label.toLowerCase()) + ' usually appears.') +
                 (field.caution ? ' ' + escapeHtml(field.caution) : '') +
                 '</p>' +
-                links.map((item) => (
+                core.map((item) => (
                     '<button type="button" data-open-lead="' + escapeHtml(item[2] || item[1]) + '" data-lead-mode="' + escapeHtml(item[3] || '') + '">' +
                     escapeHtml(item[0]) + '</button>'
-                )).join('');
+                )).join('') +
+                (extra.length ? '<div class="phone-leads-title">More OSINT tools</div>' + extra.map((item) => (
+                    '<button type="button" data-open-lead="' + escapeHtml(item[2] || item[1]) + '" data-lead-mode="' + escapeHtml(item[3] || '') + '">' +
+                    escapeHtml(item[0]) + '</button>'
+                )).join('') : '') +
+                toolkitBrowseButton(fieldId, pack.extraTotal);
         }
 
         function openPhoneField(id) {
             phoneFieldId = id;
             activeField = id;
-            const reveal = document.getElementById('phoneReveal');
-            if (reveal) reveal.dataset.open = '';
             const sheet = document.getElementById('phoneField');
             showSheet(sheet);
             closePhoneMore();
@@ -3903,25 +6191,53 @@
 
         function setUsernameStep(node, platformId, filled) {
             if (!node) return;
+            const fieldId = node.dataset.field;
             const trigger = node.querySelector('.platform-trigger');
-            const input = document.getElementById('field-' + node.dataset.field);
+            const input = document.getElementById('field-' + fieldId);
             if (!trigger || !input) return;
-            node.dataset.platform = platformId || '';
-            setPlatformIcon(node, platformId);
-            if (filled) {
-                trigger.hidden = true;
-                input.hidden = false;
-            } else if (platformId) {
-                const platform = platformById(platformId);
-                trigger.hidden = true;
-                input.hidden = false;
-                input.placeholder = '@username';
-                if (platform) input.setAttribute('aria-label', platform.label + ' username');
-            } else {
+            const platform = platformById(platformId) || platformById(fieldPlatformId(fieldId));
+            node.dataset.platform = platform ? platform.id : '';
+            setPlatformIcon(node, node.dataset.platform);
+            if (!platform) {
                 trigger.hidden = false;
                 trigger.textContent = 'Choose platform';
                 input.hidden = true;
+            } else {
+                const secret = isSecretField(fieldId);
+                trigger.hidden = true;
+                input.hidden = false;
+                if (!filled) input.placeholder = secret ? platformFieldPlaceholder(fieldId) : '@username';
+                input.setAttribute('aria-label', platform.label + (secret ? ' password' : ' username'));
             }
+            if (isSecretField(fieldId)) syncSecretNode(node);
+            syncSheetPlatform(fieldId);
+        }
+
+        function syncSheetPlatform(fieldId) {
+            if (!isPlatformField(fieldId)) return;
+            const row = document.querySelector('#factsList [data-focus="' + fieldId + '"]');
+            if (!row) return;
+            const pick = row.querySelector('.sheet-platform');
+            const wrap = row.querySelector('.sheet-platform-value');
+            const mark = row.querySelector('.sheet-platform-mark');
+            const input = row.querySelector('[data-sheet-field]');
+            const platform = platformById(fieldPlatformId(fieldId));
+            if (pick) {
+                pick.hidden = !!platform;
+                pick.textContent = 'Choose platform';
+            }
+            if (wrap) wrap.hidden = !platform;
+            if (mark) {
+                if (platform) {
+                    mark.innerHTML = platformMark(platform);
+                    mark.title = platform.label;
+                    mark.setAttribute('aria-label', 'Change ' + platform.label);
+                    mark.hidden = false;
+                } else {
+                    mark.hidden = true;
+                }
+            }
+            if (input) input.hidden = !platform;
         }
 
         function closePlatformMenu() {
@@ -4011,6 +6327,7 @@
             if (!menu || !fieldId) return;
             closeSearchMenu();
             closePlatformMenu();
+            closeCountryCodeMenu();
             closeFieldMenu();
             const input = document.getElementById('field-' + fieldId);
             const selected = resolveTimezoneValue((input && input.value) || firstValue(fieldId));
@@ -4071,6 +6388,7 @@
             if (!menu) return;
             closeSearchMenu();
             closeTimezoneMenu();
+            closeCountryCodeMenu();
             closeFieldMenu();
             menu.innerHTML = '<div class="platform-menu-title">Choose a platform</div>' +
                 '<input class="platform-search" type="search" placeholder="Search platforms" spellcheck="false">' +
@@ -4090,6 +6408,129 @@
                     menu.querySelectorAll('.platform-option').forEach((option) => {
                         option.classList.toggle('hidden', q && option.dataset.label.indexOf(q) === -1);
                     });
+                });
+                search.focus();
+            }
+        }
+
+        function closeCountryCodeMenu() {
+            const menu = document.getElementById('ccMenu');
+            if (menu) menu.hidden = true;
+            document.querySelectorAll('.node.cc-open').forEach((node) => node.classList.remove('cc-open', 'menu-open'));
+        }
+
+        function placeCountryCodeMenu() {
+            const menu = document.getElementById('ccMenu');
+            const node = document.querySelector('.node.cc-open');
+            const stage = document.getElementById('mapStage');
+            if (!menu || menu.hidden || !node || !stage) return;
+            const nodeRect = node.getBoundingClientRect();
+            const mapRect = stage.getBoundingClientRect();
+            const left = Math.min(nodeRect.left - mapRect.left, mapRect.width - 312);
+            const top = nodeRect.bottom - mapRect.top + 8;
+            menu.style.left = Math.max(8, left) + 'px';
+            menu.style.top = Math.min(top, mapRect.height - menu.offsetHeight - 8) + 'px';
+        }
+
+        function countryCodeMenuHtml(selected) {
+            const groups = [];
+            const seen = {};
+            COUNTRY_CODES.forEach((item) => {
+                if (!seen[item.group]) {
+                    seen[item.group] = [];
+                    groups.push(item.group);
+                }
+                seen[item.group].push(item);
+            });
+            return '<div class="tz-menu-title">Country code</div>' +
+                '<input class="tz-search" type="search" placeholder="Search US, +44, Japan…" spellcheck="false">' +
+                '<div class="tz-list" role="listbox">' +
+                groups.map((group) => (
+                    '<div class="tz-group">' +
+                    '<div class="tz-group-label">' + escapeHtml(group) + '</div>' +
+                    seen[group].map((item) => {
+                        const search = [item.dial, item.name, item.id, item.group].concat(item.aliases || []).join(' ').toLowerCase();
+                        return '<button class="tz-option' + (item.id === selected ? ' selected' : '') + '" type="button" role="option" data-pick-cc="' +
+                            escapeHtml(item.id) + '" data-search="' + escapeHtml(search) + '">' +
+                            '<span class="tz-option-main"><strong>' + escapeHtml(item.dial) + '</strong><em>' + escapeHtml(item.name) + '</em></span>' +
+                            '<span class="tz-option-meta"><b>' + escapeHtml(item.id) + '</b></span>' +
+                            '</button>';
+                    }).join('') +
+                    '</div>'
+                )).join('') +
+                '</div>';
+        }
+
+        function filterCountryCodeMenu(query) {
+            const menu = document.getElementById('ccMenu');
+            if (!menu) return;
+            const q = String(query || '').trim().toLowerCase();
+            menu.querySelectorAll('.tz-option').forEach((option) => {
+                option.classList.toggle('hidden', !!(q && option.dataset.search.indexOf(q) === -1));
+                option.classList.remove('active');
+            });
+            menu.querySelectorAll('.tz-group').forEach((group) => {
+                group.hidden = !group.querySelector('.tz-option:not(.hidden)');
+            });
+        }
+
+        function applyCountryCodePick(fieldId, codeId) {
+            const input = document.getElementById('field-' + fieldId);
+            if (!input) return;
+            input.value = codeId || '';
+            if (codeId && isNullField(fieldId)) setFieldNull(fieldId, false, true);
+            syncNodeFilled(input);
+            saveInputAsIs(input);
+            const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+            if (node) syncCountryCodeTrigger(node);
+            closeCountryCodeMenu();
+            if (isPhone()) syncPhoneField();
+        }
+
+        function openCountryCodeMenu(node) {
+            const menu = document.getElementById('ccMenu');
+            const fieldId = node && node.dataset.field;
+            if (!menu || !fieldId) return;
+            closeSearchMenu();
+            closePlatformMenu();
+            closeTimezoneMenu();
+            closeFieldMenu();
+            const input = document.getElementById('field-' + fieldId);
+            const selected = resolveCountryCodeValue((input && input.value) || firstValue(fieldId));
+            menu.innerHTML = countryCodeMenuHtml(selected);
+            menu.dataset.field = fieldId;
+            menu.hidden = false;
+            node.classList.add('cc-open', 'menu-open');
+            placeCountryCodeMenu();
+            const selectedBtn = menu.querySelector('.tz-option.selected');
+            if (selectedBtn) selectedBtn.scrollIntoView({ block: 'nearest' });
+            const search = menu.querySelector('.tz-search');
+            if (search) {
+                search.addEventListener('input', () => filterCountryCodeMenu(search.value));
+                search.addEventListener('keydown', (event) => {
+                    const options = Array.from(menu.querySelectorAll('.tz-option:not(.hidden)'));
+                    if (!options.length) return;
+                    const current = menu.querySelector('.tz-option.active') || menu.querySelector('.tz-option.selected');
+                    let index = options.indexOf(current);
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        if (index < 0) index = event.key === 'ArrowDown' ? -1 : 0;
+                        index = event.key === 'ArrowDown' ? (index + 1) % options.length : (index - 1 + options.length) % options.length;
+                        options.forEach((option) => option.classList.remove('active'));
+                        options[index].classList.add('active');
+                        options[index].scrollIntoView({ block: 'nearest' });
+                        return;
+                    }
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        const pick = menu.querySelector('.tz-option.active') || options[0];
+                        if (pick) applyCountryCodePick(fieldId, pick.dataset.pickCc);
+                        return;
+                    }
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeCountryCodeMenu();
+                    }
                 });
                 search.focus();
             }
@@ -4122,28 +6563,44 @@
                             '<button class="search-btn" type="button" data-search="' + field.id + '" aria-label="How to find this">' + FIND_ICON + '</button>' +
                             '<button class="node-clear" type="button" data-clear="' + field.id + '" aria-label="Remove">×</button>' +
                         '</div>';
+                } else if (base === 'countrycode') {
+                    node.className = 'node cc-node';
+                    node.innerHTML =
+                        '<div class="node-copy">' +
+                            '<label>' + escapeHtml(field.label) + '</label>' +
+                            '<span class="cc-pick empty"><span class="cc-abbr">Code</span><button class="cc-trigger" type="button" aria-label="Choose country code" aria-haspopup="listbox"></button></span>' +
+                            '<input id="field-' + field.id + '" type="hidden" value="">' +
+                            '<span class="cc-name" hidden></span>' +
+                            '<button class="search-btn" type="button" data-search="' + field.id + '" aria-label="How to find this">' + FIND_ICON + '</button>' +
+                            '<button class="node-clear" type="button" data-clear="' + field.id + '" aria-label="Remove">×</button>' +
+                        '</div>';
                 } else if (isPlatformField(field.id)) {
                     node.classList.add('platform-node');
+                    if (isSecretField(field.id)) node.classList.add('secret-node');
                     node.innerHTML =
                         '<span class="platform-icon" hidden></span>' +
                         '<div class="node-copy">' +
                             '<label>' + escapeHtml(field.label) + '</label>' +
                             '<button class="platform-trigger" type="button">Choose platform</button>' +
-                            '<input id="field-' + field.id + '" type="text" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" spellcheck="false" autocomplete="off" hidden>' +
+                            '<input id="field-' + field.id + '" type="' + (isSecretField(field.id) ? 'password' : 'text') + '" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" spellcheck="false" autocomplete="off" hidden>' +
+                            (isSecretField(field.id) ? secretRevealBtnHtml(field.id) : '') +
                             '<button class="search-btn" type="button" data-search="' + field.id + '" aria-label="How to find this">' + FIND_ICON + '</button>' +
                             '<button class="node-clear" type="button" data-clear="' + field.id + '" aria-label="Remove">×</button>' +
                         '</div>';
                 } else {
                     const email = isEmailField(field.id);
+                    const secret = isSecretField(field.id);
                     if (email) node.classList.add('email-node');
+                    if (secret) node.classList.add('secret-node');
                     node.innerHTML =
                         (email ? '<span class="platform-icon" hidden></span>' : '') +
-                        ((base === 'image' || base === 'audio' || base === 'ip')
-                            ? '<button class="media-thumb" type="button" data-open-media="' + field.id + '" hidden aria-label="Open ' + field.label + '"></button>'
+                        ((base === 'image' || base === 'audio' || base === 'ip' || base === 'address')
+                            ? '<button class="media-thumb" type="button" data-open-media="' + field.id + '" hidden aria-label="' + (base === 'address' ? 'Open in Google Maps' : 'Open ' + escapeHtml(field.label)) + '"></button>'
                             : '') +
                         '<div class="node-copy">' +
                             '<label for="field-' + field.id + '">' + escapeHtml(field.label) + '</label>' +
-                            '<input id="field-' + field.id + '" type="text" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder) + '" spellcheck="false" autocomplete="off">' +
+                            '<input id="field-' + field.id + '" type="' + (secret ? 'password' : 'text') + '" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder) + '" spellcheck="false" autocomplete="off">' +
+                            (secret ? secretRevealBtnHtml(field.id) : '') +
                             '<button class="search-btn" type="button" data-search="' + field.id + '" aria-label="How to find this">' + FIND_ICON + '</button>' +
                             (field.file ? '<button class="file-btn" type="button" data-file="' + field.id + '">+</button>' : '') +
                             '<button class="node-clear" type="button" data-clear="' + field.id + '" aria-label="Remove">×</button>' +
@@ -4154,6 +6611,7 @@
             });
             decorateNodes();
             fillTimezoneSelects();
+            fillCountryCodeSelects();
         }
 
         function syncNodeFilled(input) {
@@ -4184,15 +6642,15 @@
                 const fact = latestFact(field.id);
                 if (input && document.activeElement !== input) {
                     const next = fact ? (fieldBase(field.id) === 'phone' ? formatPhoneNumber(fact.value) : fact.value) : '';
-                    input.value = fieldBase(field.id) === 'timezone' ? resolveTimezoneValue(next) : next;
+                    if (fieldBase(field.id) === 'timezone') input.value = resolveTimezoneValue(next);
+                    else if (fieldBase(field.id) === 'countrycode') input.value = resolveCountryCodeValue(next);
+                    else input.value = next;
                 }
                 const filled = syncNodeFilled(input);
                 node.classList.toggle('active', activeField === field.id);
 
                 if (isPlatformField(field.id)) {
-                    const platformId = (fact && fact.platform) || node.dataset.platform || '';
-                    setUsernameStep(node, platformId, filled);
-                    return;
+                    setUsernameStep(node, fieldPlatformId(field.id), filled);
                 }
 
                 if (fieldBase(field.id) === 'timezone') {
@@ -4200,9 +6658,15 @@
                     updateTimezoneClocks();
                 }
 
-                if (fieldBase(field.id) === 'image' || fieldBase(field.id) === 'audio' || fieldBase(field.id) === 'ip') {
+                if (fieldBase(field.id) === 'countrycode') {
+                    syncCountryCodeTrigger(node);
+                }
+
+                if (isThumbField(field.id)) {
                     setFieldThumb(field.id);
                 }
+
+                if (isSecretField(field.id)) syncSecretNode(node);
             });
             positionNodes();
         }
@@ -4244,6 +6708,10 @@
             dragOriginY: 0,
             hubPx: null,
             hubPy: null,
+            hubLiveX: null,
+            hubLiveY: null,
+            hubLiveVX: 0,
+            hubLiveVY: 0,
             dragItem: null,
             grabX: 0,
             grabY: 0,
@@ -4261,6 +6729,8 @@
         const LAYOUT_KEY = 'osint-orbit-layout-v1';
         const nodeHomes = new Map();
         let orbitItems = [];
+        let peerBodies = [];
+        const PEER_HUB_SIZE = 92;
         let cachedLayout = null;
         let saveLayoutTimer = 0;
 
@@ -4361,8 +6831,8 @@
 
         function hubScreenBox(width, height) {
             const zoom = orbit.zoom || 1;
-            const w = (hub && hub.offsetWidth || 96) * zoom;
-            const h = (hub && hub.offsetHeight || 96) * zoom;
+            const w = (hub && hub.offsetWidth || 220) * zoom;
+            const h = (hub && hub.offsetHeight || 220) * zoom;
             const x = width / 2 + orbit.dragX + orbit.parallaxX;
             const y = height / 2 + orbit.dragY + orbit.parallaxY;
             return { x: x, y: y, tx: x, ty: y, sw: w, sh: h, w: w, h: h };
@@ -4415,7 +6885,7 @@
             const cx = width / 2;
             const cy = height / 2;
             const pad = 16;
-            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + 12 : 60;
+            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + 6 : 116;
 
             const visibleIds = new Set(nodes.map((node) => node.dataset.field));
 
@@ -4443,55 +6913,108 @@
             const maxNodeH = Math.max.apply(null, items.map((item) => item.h));
             const maxRx = Math.max(80, width / 2 - pad - maxNodeW / 2);
             const maxRy = Math.max(80, height / 2 - pad - maxNodeH / 2);
-            const hubMinX = hubClear + maxNodeW / 2 + 4;
-            const hubMinY = hubClear + maxNodeH / 2 + 4;
+            const hubMinX = hubClear + maxNodeW / 2 + 2;
+            const hubMinY = hubClear + maxNodeH / 2 + 2;
 
             function fieldOrder(id) {
                 const at = FIELDS.findIndex((field) => field.id === id);
                 return at < 0 ? 999 : at;
             }
 
-            const nameItem = roots.find((item) => item.node.dataset.field === 'name');
+            function idJitter(id) {
+                let h = 2166136261;
+                const text = String(id || '');
+                for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+                return (h >>> 0) / 4294967296;
+            }
+
             const others = roots.filter((item) => item.node.dataset.field !== 'name').sort((a, b) => {
-                return fieldOrder(a.node.dataset.field) - fieldOrder(b.node.dataset.field);
+                return fieldOrder(a.node.dataset.field) - fieldOrder(b.node.dataset.field)
+                    + (idJitter(a.node.dataset.field) - idJitter(b.node.dataset.field)) * 7;
             });
-            const ordered = nameItem ? [nameItem].concat(others) : others;
-            const count = Math.max(ordered.length, 1);
-            const step = (Math.PI * 2) / count;
-            const inner = [];
-            const outer = [];
-            ordered.forEach((item, index) => {
-                if (item.node.dataset.field === 'name' || index % 2 === 0) inner.push(item);
-                else outer.push(item);
-            });
+            const nameItem = roots.find((item) => item.node.dataset.field === 'name');
+            const ordered = others.slice();
+            if (nameItem) {
+                const at = Math.min(ordered.length, Math.max(0, Math.round(idJitter(nameItem.node.dataset.field) * ordered.length)));
+                ordered.splice(at, 0, nameItem);
+            }
+            const boxGap = 14;
+            let ovalRatio = Math.min(0.46, 0.32 + Math.min(roots.length, 28) * 0.004);
 
-            function placeRing(ring, rx, ry, offset) {
-                const ringStep = (Math.PI * 2) / Math.max(ring.length, 1);
-                ring.forEach((item, index) => {
-                    item.angle = -Math.PI / 2 + ringStep * index + offset;
-                    item.rx = rx;
-                    item.ry = ry;
-                });
+            function ovalRy(rx) {
+                return Math.min(rx * ovalRatio, maxRy * 0.78);
             }
 
-            const boxGap = 22;
-            function radiusForRing(n, maxR, minR) {
-                if (n <= 1) return Math.max(minR, 84);
-                const need = Math.max(maxNodeW, maxNodeH) + boxGap;
-                return Math.min(maxR, Math.max(minR, need / (2 * Math.sin(Math.PI / n))));
+            function poleAmount(angle) {
+                const s = Math.abs(Math.sin(angle));
+                return s * s;
             }
-            const ringSep = Math.max(maxNodeH + 20, 52);
-            const pull = 0.88;
-            const innerFit = radiusForRing(inner.length, Math.min(maxRx, maxRy), Math.max(hubMinX, hubMinY)) * pull;
-            const innerRx = Math.min(maxRx, Math.max(hubMinX, innerFit));
-            const innerRy = Math.min(maxRy, Math.max(hubMinY, innerFit * 0.9));
-            const outerFit = radiusForRing(outer.length, Math.min(maxRx, maxRy), innerFit + ringSep) * pull;
-            const outerRx = Math.min(maxRx, Math.max(innerRx + ringSep, outerFit));
-            const outerRy = Math.min(maxRy, Math.max(innerRy + ringSep, outerFit * 0.9));
 
-            placeRing(inner, innerRx, innerRy, 0);
-            placeRing(outer, outerRx, outerRy, outer.length ? Math.PI / outer.length : 0);
-            if (nameItem) nameItem.angle = -Math.PI / 2;
+            function isPinnedRoot(item) {
+                const home = nodeHomes.get(item.node.dataset.field);
+                return !!(home && home.pinned && Number.isFinite(home.angle));
+            }
+
+            function tangHalf(item, angle, rx, ry) {
+                const r = Math.max(Math.hypot(Math.cos(angle) * rx, Math.sin(angle) * ry), 8);
+                const tang = (item.w / 2) * Math.abs(Math.sin(angle)) + (item.h / 2) * Math.abs(Math.cos(angle));
+                const extra = (item.w * 0.2) * poleAmount(angle);
+                return Math.atan2(tang + boxGap / 2 + extra, r);
+            }
+
+            function packRoots(rx, ry) {
+                const n = ordered.length;
+                if (n < 1) return 1;
+                if (n === 1) {
+                    ordered[0].angle = ordered[0].angle || -Math.PI / 2;
+                    ordered[0].rx = rx;
+                    ordered[0].ry = ry;
+                    ordered[0].x = cx + Math.cos(ordered[0].angle) * rx;
+                    ordered[0].y = cy + Math.sin(ordered[0].angle) * ry;
+                    return 1;
+                }
+
+                let spans = ordered.map((item) => tangHalf(item, item.angle || 0, rx, ry));
+                for (let refine = 0; refine < 4; refine++) {
+                    const need = spans.reduce((sum, half) => sum + half * 2, 0);
+                    const slack = Math.max(0, Math.PI * 2 - need);
+                    const gap = slack / n;
+                    let cursor = -Math.PI / 2;
+                    ordered.forEach((item, i) => {
+                        const half = spans[i];
+                        cursor += half;
+                        if (!isPinnedRoot(item)) {
+                            const jitter = (idJitter(item.node.dataset.field) - 0.5) * Math.min(0.03, gap * 0.4);
+                            item.angle = cursor + jitter;
+                        }
+                        cursor += half + gap;
+                        if (!item.radialLift) {
+                            item.rx = rx;
+                            item.ry = ry;
+                        }
+                        item.x = cx + Math.cos(item.angle) * item.rx;
+                        item.y = cy + Math.sin(item.angle) * item.ry;
+                    });
+                    spans = ordered.map((item) => tangHalf(item, item.angle, item.rx || rx, item.ry || ry));
+                }
+
+                let tight = 0;
+                for (let i = 0; i < ordered.length; i++) {
+                    for (let j = i + 1; j < ordered.length; j++) {
+                        if (boxesOverlap(ordered[i], ordered[j], boxGap)) tight++;
+                    }
+                }
+                return tight ? -tight : 1;
+            }
+
+            ordered.forEach((item) => {
+                item.radialLift = false;
+            });
+
+            const crowd = Math.min(1, roots.length / 22);
+            let ringRx = Math.min(maxRx, Math.max(hubMinX + 24, maxRx * (0.72 + crowd * 0.2)));
+            let ringRy = Math.max(hubMinY, ovalRy(ringRx));
+            packRoots(ringRx, ringRy);
 
             function project(item) {
                 item.x = cx + Math.cos(item.angle) * item.rx;
@@ -4502,6 +7025,119 @@
                 const a = angle == null ? item.angle : angle;
                 return (item.w / 2) * Math.abs(Math.cos(a)) + (item.h / 2) * Math.abs(Math.sin(a));
             }
+
+            function stampOval(item) {
+                if (!item.radialLift) {
+                    item.rx = ringRx;
+                    item.ry = ringRy;
+                }
+                project(item);
+            }
+
+            function liftOutward(item, pix) {
+                item.radialLift = true;
+                item.rx = Math.min(maxRx, (item.rx || ringRx) + Math.max(18, pix));
+                item.ry = Math.min(maxRy, Math.max(hubMinY, ovalRy(item.rx)));
+                project(item);
+            }
+
+            function ellipseSpeed(item) {
+                return Math.hypot((item.rx || ringRx) * Math.sin(item.angle), (item.ry || ringRy) * Math.cos(item.angle)) || 90;
+            }
+
+            function separatePair(a, b, gap) {
+                if (!boxesOverlap(a, b, gap)) return false;
+                const pinA = !a.parentId && isPinnedRoot(a);
+                const pinB = !b.parentId && isPinnedRoot(b);
+                const needX = (a.w + b.w) / 2 + gap - Math.abs(a.x - b.x);
+                const needY = (a.h + b.h) / 2 + gap - Math.abs(a.y - b.y);
+                let sep = shortestAngle(a.angle, b.angle);
+                if (Math.abs(sep) < 0.01) {
+                    sep = (idJitter(a.node.dataset.field) >= 0.5 ? 1 : -1) * 0.05;
+                }
+                const dir = sep >= 0 ? 1 : -1;
+                const pix = Math.max(4, Math.min(needX, needY));
+                const speed = Math.max((ellipseSpeed(a) + ellipseSpeed(b)) / 2, 50);
+                // Soft layout pass: only a light shear so boxes may still clip a little.
+                const push = Math.min(0.16, (pix / speed) * 0.45);
+                if (pinA && pinB) {
+                    a.angle -= dir * Math.max(push, 0.04);
+                    b.angle += dir * Math.max(push, 0.04);
+                    project(a);
+                    project(b);
+                    return true;
+                }
+                if (!pinA && !pinB) {
+                    a.angle -= dir * push * 0.5;
+                    b.angle += dir * push * 0.5;
+                } else if (!pinA) {
+                    a.angle -= dir * push;
+                } else {
+                    b.angle += dir * push;
+                }
+                if (!a.parentId) stampOval(a);
+                else project(a);
+                if (!b.parentId) stampOval(b);
+                else project(b);
+                return true;
+            }
+
+            function overlapNeed(list) {
+                let needX = 0;
+                let needY = 0;
+                let hits = 0;
+                for (let i = 0; i < list.length; i++) {
+                    for (let j = i + 1; j < list.length; j++) {
+                        const a = list[i];
+                        const b = list[j];
+                        if (!boxesOverlap(a, b, boxGap)) continue;
+                        hits++;
+                        needX = Math.max(needX, (a.w + b.w) / 2 + boxGap - Math.abs(a.x - b.x));
+                        needY = Math.max(needY, (a.h + b.h) / 2 + boxGap - Math.abs(a.y - b.y));
+                    }
+                }
+                return { hits: hits, needX: needX, needY: needY };
+            }
+
+            function spreadRootsOnOval() {
+                for (let grow = 0; grow < 12; grow++) {
+                    packRoots(ringRx, ringRy);
+                    roots.forEach((item) => {
+                        if (!item.radialLift) {
+                            item.rx = ringRx;
+                            item.ry = ringRy;
+                        }
+                        project(item);
+                    });
+                    for (let iter = 0; iter < 18; iter++) {
+                        let hits = 0;
+                        for (let i = 0; i < roots.length; i++) {
+                            for (let j = i + 1; j < roots.length; j++) {
+                                if (separatePair(roots[i], roots[j], boxGap * 0.35)) hits++;
+                            }
+                        }
+                        if (!hits) return;
+                    }
+                    const stuck = overlapNeed(roots);
+                    // Allow light clipping in the initial layout; runtime soft-shear finishes it.
+                    if (!stuck.hits || (stuck.needX < 18 && stuck.needY < 12)) return;
+                    if (ringRx < maxRx - 0.5) {
+                        ringRx = Math.min(maxRx, ringRx * 1.04);
+                        ringRy = Math.min(maxRy * 0.78, Math.max(ringRy, ovalRy(ringRx)));
+                    } else if (ringRy < maxRy * 0.78) {
+                        ovalRatio = Math.min(0.5, ovalRatio + 0.02);
+                        ringRy = Math.min(maxRy * 0.78, ringRy * 1.03);
+                    } else {
+                        return;
+                    }
+                }
+            }
+
+            roots.forEach((item) => {
+                const home = nodeHomes.get(item.node.dataset.field);
+                if (home && home.pinned && Number.isFinite(home.angle)) item.angle = home.angle;
+            });
+            spreadRootsOnOval();
 
             function placeBranches() {
                 const byId = new Map(items.map((item) => [item.node.dataset.field, item]));
@@ -4519,26 +7155,20 @@
                     const midR = Math.max(parent.rx + extra, 90);
                     const angNeed = Math.atan2((Math.max.apply(null, list.map((child) => child.w)) + 16) / 2, midR) * 2;
                     const fan = list.length > 1 ? Math.min(1.15, angNeed * (list.length - 1)) : 0;
-                    const home = nodeHomes.get(pid);
-                    const live = orbitItems.find((item) => item.node && item.node.dataset.field === pid);
-                    const polar = (home && Number.isFinite(home.angle))
-                        ? {
-                            angle: home.angle,
-                            rx: Number.isFinite(home.rx) ? home.rx : parent.rx,
-                            ry: Number.isFinite(home.ry) ? home.ry : parent.ry
-                        }
-                        : live
-                            ? {
-                                angle: live.tAngle == null ? live.angle : live.tAngle,
-                                rx: live.tRx == null ? live.rx : live.tRx,
-                                ry: live.tRy == null ? live.ry : live.tRy
-                            }
-                            : { angle: parent.angle, rx: parent.rx, ry: parent.ry };
+                    const polar = { angle: parent.angle, rx: parent.rx, ry: parent.ry };
+                    const halves = list.map((entry) => Math.atan2((entry.w + 16) / 2, midR));
+                    const used = halves.reduce((sum, span) => sum + 2 * span, 0);
+                    const gap = list.length > 1 ? Math.max(0.04, (fan - used) / (list.length - 1)) : 0;
                     list.forEach((child, i) => {
-                        const t = list.length === 1 ? 0.5 : i / (list.length - 1);
-                        child.angle = polar.angle + (t - 0.5) * fan;
+                        if (list.length === 1) {
+                            child.angle = polar.angle;
+                        } else {
+                            let angle = polar.angle - (used + gap * (list.length - 1)) / 2 + halves[0];
+                            for (let k = 0; k < i; k++) angle += halves[k] + gap + halves[k + 1];
+                            child.angle = angle;
+                        }
                         child.rx = Math.min(maxRx, polar.rx + extra);
-                        child.ry = Math.min(maxRy, polar.ry + extra);
+                        child.ry = ovalRy(child.rx);
                         project(child);
                         placeKids(child.node.dataset.field);
                     });
@@ -4554,11 +7184,11 @@
                             if (child === other || !boxesOverlap(child, other, 24)) return;
                             hits++;
                             child.rx = Math.min(maxRx, child.rx + 12);
-                            child.ry = Math.min(maxRy, child.ry + 10);
+                            child.ry = ovalRy(child.rx);
                             if (parent) {
                                 const only = (kids[child.parentId] || []).length <= 1;
                                 if (only) {
-                                    child.angle = polar.angle;
+                                    child.angle = parent.angle;
                                 } else {
                                     const away = shortestAngle(other.angle, child.angle) >= 0 ? 0.05 : -0.05;
                                     child.angle += away;
@@ -4608,33 +7238,59 @@
                 const dy = item.y - cy;
                 const scaleX = dx === 0 ? 1 : ((dx > 0 ? maxX - cx : cx - minX) / Math.abs(dx));
                 const scaleY = dy === 0 ? 1 : ((dy > 0 ? maxY - cy : cy - minY) / Math.abs(dy));
-                item.rx *= Math.min(1, scaleX, scaleY);
-                item.ry *= Math.min(1, scaleX, scaleY);
+                const scale = Math.min(1, scaleX, scaleY);
+                item.rx *= scale;
+                item.ry = Math.min(item.ry * scale, ovalRy(item.rx));
                 project(item);
                 return true;
             }
 
             const chrome = chromeBoxes();
-            const outerSet = new Set(outer);
 
-            for (let iter = 0; iter < 40; iter++) {
+            function unstackPoles() {
+                spreadRootsOnOval();
+            }
+
+            function separateRoots(a, b) {
+                separatePair(a, b, boxGap);
+            }
+
+            for (let iter = 0; iter < 48; iter++) {
                 let hits = 0;
-                items.forEach((item) => {
+                roots.forEach((item) => {
                     if (clampToCanvas(item)) hits++;
                     chrome.forEach((box) => {
                         if (!boxesOverlap(item, box, 10)) return;
                         hits++;
-                        item.rx = Math.max(hubMinX, item.rx * 0.94);
-                        item.ry = Math.max(hubMinY, item.ry * 0.94);
+                        item.angle += (Math.sin(item.angle) > 0 ? -1 : 1) * 0.04 * (Math.cos(item.angle) >= 0 ? 1 : -1);
                         project(item);
                     });
                     const dist = Math.hypot(item.x - cx, item.y - cy);
-                    const need = hubClear + Math.max(item.w, item.h) / 2;
+                    const need = hubClear + radialExtent(item) + 2;
                     if (dist < need) {
                         hits++;
-                        const scale = need / Math.max(dist, 1);
-                        item.rx = Math.min(maxRx, item.rx * scale);
-                        item.ry = Math.min(maxRy, item.ry * scale);
+                        const side = Math.cos(item.angle) >= 0 ? 0 : Math.PI;
+                        item.angle += shortestAngle(item.angle, side) * 0.22;
+                        project(item);
+                    }
+                });
+
+                items.forEach((item) => {
+                    if (!item.parentId) return;
+                    if (clampToCanvas(item)) hits++;
+                    chrome.forEach((box) => {
+                        if (!boxesOverlap(item, box, 10)) return;
+                        hits++;
+                        item.rx = Math.min(maxRx, item.rx + 8);
+                        item.ry = ovalRy(item.rx);
+                        project(item);
+                    });
+                    const dist = Math.hypot(item.x - cx, item.y - cy);
+                    const need = hubClear + radialExtent(item) + 2;
+                    if (dist < need) {
+                        hits++;
+                        item.rx = Math.min(maxRx, item.rx * (need / Math.max(dist, 1)));
+                        item.ry = ovalRy(item.rx);
                         project(item);
                     }
                 });
@@ -4642,23 +7298,26 @@
                     for (let j = i + 1; j < items.length; j++) {
                         const a = items[i];
                         const b = items[j];
-                        if (!boxesOverlap(a, b, 10)) continue;
+                        const polarPad = (!a.parentId && !b.parentId)
+                            ? 10 + 8 * Math.max(poleAmount(a.angle), poleAmount(b.angle))
+                            : 10;
+                        if (!boxesOverlap(a, b, polarPad)) continue;
                         hits++;
-                        const aName = a.node.dataset.field === 'name';
-                        const bName = b.node.dataset.field === 'name';
-                        let move = aName ? b : bName ? a : (outerSet.has(a) === outerSet.has(b) ? (a.parentId ? a : b) : (outerSet.has(a) ? a : b));
+                        if (!a.parentId && !b.parentId) {
+                            separateRoots(a, b);
+                            continue;
+                        }
+                        const move = a.parentId ? a : b;
                         const other = move === a ? b : a;
                         const parent = move.parentId && items.find((item) => item.node.dataset.field === move.parentId);
                         move.rx = Math.min(maxRx, move.rx + 8);
-                        move.ry = Math.min(maxRy, move.ry + 6);
-                        if (!(parent && items.filter((entry) => entry.parentId === move.parentId).length <= 1)) {
+                        move.ry = ovalRy(move.rx);
+                        const siblings = items.filter((entry) => entry.parentId === move.parentId);
+                        if (!(parent && siblings.length <= 1)) {
                             move.angle += shortestAngle(other.angle, move.angle) >= 0 ? 0.04 : -0.04;
                         }
-                        if (aName) a.angle = -Math.PI / 2;
-                        if (bName) b.angle = -Math.PI / 2;
                         if (parent) {
-                            const only = items.filter((entry) => entry.parentId === move.parentId).length <= 1;
-                            if (only) {
+                            if (siblings.length <= 1) {
                                 move.angle = parent.angle;
                             } else {
                                 const drift = shortestAngle(parent.angle, move.angle);
@@ -4666,12 +7325,83 @@
                             }
                         }
                         project(move);
-                        if (aName) project(a);
-                        if (bName) project(b);
                     }
                 }
                 if (!hits) break;
             }
+
+            unstackPoles();
+            roots.forEach(stampOval);
+            for (let pass = 0; pass < 4; pass++) {
+                let hits = 0;
+                for (let i = 0; i < items.length; i++) {
+                    for (let j = i + 1; j < items.length; j++) {
+                        const a = items[i];
+                        const b = items[j];
+                        if (!boxesOverlap(a, b, boxGap * 0.25)) continue;
+                        hits++;
+                        if (!a.parentId && !b.parentId) {
+                            separatePair(a, b, boxGap * 0.25);
+                            continue;
+                        }
+                        const move = a.parentId ? a : b;
+                        const other = move === a ? b : a;
+                        const parent = move.parentId && items.find((item) => item.node.dataset.field === move.parentId);
+                        move.angle += shortestAngle(other.angle, move.angle) >= 0 ? 0.02 : -0.02;
+                        if (parent) {
+                            const drift = shortestAngle(parent.angle, move.angle);
+                            if (Math.abs(drift) > 0.9) move.angle = parent.angle + Math.sign(drift || 1) * 0.9;
+                        }
+                        project(move);
+                    }
+                }
+                if (!hits) break;
+            }
+            placeBranches();
+            for (let pass = 0; pass < 6; pass++) {
+                let hits = 0;
+                for (let i = 0; i < items.length; i++) {
+                    for (let j = i + 1; j < items.length; j++) {
+                        const a = items[i];
+                        const b = items[j];
+                        if (!boxesOverlap(a, b, boxGap * 0.2)) continue;
+                        hits++;
+                        if (!a.parentId && !b.parentId) {
+                            separatePair(a, b, boxGap * 0.2);
+                            continue;
+                        }
+                        const move = a.parentId ? a : b;
+                        const other = move === a ? b : a;
+                        move.angle += shortestAngle(other.angle, move.angle) >= 0 ? 0.02 : -0.02;
+                        project(move);
+                    }
+                }
+                if (!hits) break;
+            }
+
+            function untangleBoxes(list, gap, loops) {
+                for (let iter = 0; iter < loops; iter++) {
+                    let hits = 0;
+                    for (let i = 0; i < list.length; i++) {
+                        for (let j = i + 1; j < list.length; j++) {
+                            const a = list[i];
+                            const b = list[j];
+                            if (!boxesOverlap(a, b, gap)) continue;
+                            hits++;
+                            if (!a.parentId && !b.parentId) {
+                                separatePair(a, b, gap);
+                                continue;
+                            }
+                            const move = a.parentId ? a : b;
+                            const other = move === a ? b : a;
+                            move.angle += shortestAngle(other.angle, move.angle) >= 0 ? 0.025 : -0.025;
+                            project(move);
+                        }
+                    }
+                    if (!hits) break;
+                }
+            }
+            untangleBoxes(items, boxGap * 0.15, 8);
 
             if (linkLayer) {
                 linkLayer.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
@@ -4690,14 +7420,7 @@
                 let ry = item.ry;
                 let x = item.x;
                 let y = item.y;
-                const home = (!item.parentId && orbit.restoreHomes) ? nodeHomes.get(item.node.dataset.field) : null;
-                if (home && Number.isFinite(home.angle)) {
-                    angle = home.angle;
-                    rx = Number.isFinite(home.rx) ? home.rx : rx;
-                    ry = Number.isFinite(home.ry) ? home.ry : rx;
-                    x = cx + Math.cos(angle) * rx;
-                    y = cy + Math.sin(angle) * ry;
-                } else if (orbit.snapLayout) {
+                if (orbit.snapLayout) {
                     angle = item.angle;
                     rx = item.rx;
                     ry = item.ry;
@@ -4721,9 +7444,9 @@
                     angle: angle,
                     rx: rx,
                     ry: ry,
-                    tAngle: (home && Number.isFinite(home.angle)) ? home.angle : item.angle,
-                    tRx: (home && Number.isFinite(home.rx)) ? home.rx : item.rx,
-                    tRy: (home && Number.isFinite(home.ry)) ? home.ry : item.ry,
+                    tAngle: item.angle,
+                    tRx: item.rx,
+                    tRy: item.ry,
                     w: item.w,
                     h: item.h,
                     line: line,
@@ -4758,14 +7481,166 @@
 
         function setGridSpot() {}
 
+        function orbitBoxOverlap(a, b, gap) {
+            const aw = a.sw || a.w || 0;
+            const ah = a.sh || a.h || 0;
+            const bw = b.sw || b.w || 0;
+            const bh = b.sh || b.h || 0;
+            const ox = (aw + bw) / 2 + gap - Math.abs(a.tx - b.tx);
+            const oy = (ah + bh) / 2 + gap - Math.abs(a.ty - b.ty);
+            if (ox <= 0 || oy <= 0) return null;
+            return { ox: ox, oy: oy };
+        }
+
+        function projectOrbitTarget(item, hx, hy, zoom) {
+            const rx = item.dispRx == null ? item.rx : item.dispRx;
+            const ry = item.dispRy == null ? item.ry : item.dispRy;
+            const z = Math.max(zoom, 0.01);
+            const dx = (item.tx - hx) / z;
+            const dy = (item.ty - hy) / z;
+            const t = Math.atan2(dy / Math.max(ry, 1e-6), dx / Math.max(rx, 1e-6));
+            item.tx = hx + Math.cos(t) * rx * z;
+            item.ty = hy + Math.sin(t) * ry * z;
+        }
+
+        function keepOrbitBoxesClear(hx, hy, zoom, nodeGrab, dt) {
+            if (!orbitItems.length) return;
+            const gap = 4 * Math.max(zoom, 0.35);
+            const z = Math.max(zoom, 0.01);
+            const maxLift = 72;
+            const step = Math.min(Math.max(dt || 16, 8), 40);
+            // Slow ease: overlaps are allowed; boxes gradually slide apart.
+            const ease = reduceMotion || orbit.snapLayout ? 0.55 : (1 - Math.exp(-step / 1100));
+            const pushFrac = reduceMotion || orbit.snapLayout ? 0.45 : 0.07 + ease * 0.1;
+
+            orbitItems.forEach((item) => {
+                if (item.dispRx == null || !Number.isFinite(item.dispRx)) item.dispRx = item.rx;
+                if (item.dispRy == null || !Number.isFinite(item.dispRy)) item.dispRy = item.ry;
+                item.sw = item.w * zoom;
+                item.sh = item.h * zoom;
+                if (item === nodeGrab) {
+                    item.tx = item.x;
+                    item.ty = item.y;
+                    return;
+                }
+                const ang = item.angle + orbit.spin;
+                item.tx = hx + Math.cos(ang) * item.dispRx * zoom;
+                item.ty = hy + Math.sin(ang) * item.dispRy * zoom;
+            });
+
+            let deepest = 0;
+            for (let i = 0; i < orbitItems.length; i++) {
+                for (let j = i + 1; j < orbitItems.length; j++) {
+                    const a = orbitItems[i];
+                    const b = orbitItems[j];
+                    const hit = orbitBoxOverlap(a, b, gap);
+                    if (!hit) continue;
+                    deepest = Math.max(deepest, Math.min(hit.ox, hit.oy));
+
+                    const grabA = a === nodeGrab;
+                    const grabB = b === nodeGrab;
+                    let wA = grabA ? 0 : 0.5;
+                    let wB = grabB ? 0 : 0.5;
+                    if (a.parentId && !b.parentId && !grabB) {
+                        wA = 0.78;
+                        wB = 0.22;
+                    } else if (b.parentId && !a.parentId && !grabA) {
+                        wA = 0.22;
+                        wB = 0.78;
+                    }
+                    if (wA + wB === 0) continue;
+                    const sum = wA + wB;
+                    wA /= sum;
+                    wB /= sum;
+
+                    const depth = Math.min(hit.ox, hit.oy);
+                    const soft = pushFrac * Math.min(1, depth / 28);
+                    if (hit.ox <= hit.oy) {
+                        const dir = a.tx >= b.tx ? 1 : -1;
+                        const move = hit.ox * soft;
+                        if (!grabA) a.tx += dir * move * wA;
+                        if (!grabB) b.tx -= dir * move * wB;
+                    } else {
+                        const dir = a.ty >= b.ty ? 1 : -1;
+                        const move = hit.oy * soft;
+                        if (!grabA) a.ty += dir * move * wA;
+                        if (!grabB) b.ty -= dir * move * wB;
+                    }
+
+                    // Prefer angular shear for roots; only a tiny radial lift when deep.
+                    if (!grabA && !a.parentId) {
+                        const targetAng = Math.atan2(a.ty - hy, a.tx - hx) - orbit.spin;
+                        const delta = shortestAngle(a.angle, targetAng);
+                        a.angle += delta;
+                        if (a.tAngle != null) a.tAngle += delta * 0.4;
+                    }
+                    if (!grabB && !b.parentId) {
+                        const targetAng = Math.atan2(b.ty - hy, b.tx - hx) - orbit.spin;
+                        const delta = shortestAngle(b.angle, targetAng);
+                        b.angle += delta;
+                        if (b.tAngle != null) b.tAngle += delta * 0.4;
+                    }
+
+                    if (depth > 18) {
+                        const lift = grabA ? b : (grabB ? a : (a.dispRx <= b.dispRx ? a : b));
+                        if (lift !== nodeGrab) {
+                            const home = Math.max(lift.rx || 0, 1);
+                            const room = Math.max(0, home + maxLift - lift.dispRx);
+                            const extra = Math.min(room, depth * 0.02 * soft);
+                            if (extra > 0.05) {
+                                lift.dispRx += extra;
+                                lift.dispRy = Math.max(lift.dispRy, lift.dispRx * (lift.ry / Math.max(lift.rx, 1)));
+                                if (lift.tRx != null) lift.tRx = Math.min(lift.tRx + extra * 0.25, home + maxLift);
+                                if (lift.tRy != null) lift.tRy = Math.max(lift.tRy, lift.tRx * (lift.ry / Math.max(lift.rx, 1)));
+                            }
+                        }
+                    }
+
+                    if (!grabA) {
+                        if (a.parentId) {
+                            const r = Math.hypot(a.tx - hx, a.ty - hy) / z;
+                            a.dispRx = Math.min(a.rx + maxLift, Math.max(a.dispRx, r));
+                            a.dispRy = Math.max(a.dispRy, a.dispRx * (a.ry / Math.max(a.rx, 1)));
+                        }
+                        projectOrbitTarget(a, hx, hy, zoom);
+                    }
+                    if (!grabB) {
+                        if (b.parentId) {
+                            const r = Math.hypot(b.tx - hx, b.ty - hy) / z;
+                            b.dispRx = Math.min(b.rx + maxLift, Math.max(b.dispRx, r));
+                            b.dispRy = Math.max(b.dispRy, b.dispRx * (b.ry / Math.max(b.rx, 1)));
+                        }
+                        projectOrbitTarget(b, hx, hy, zoom);
+                    }
+                }
+            }
+
+            // Ease display radius back home only when mostly clear.
+            const homePull = deepest < 6 ? 0.12 : (deepest < 14 ? 0.04 : 0.01);
+            orbitItems.forEach((item) => {
+                if (item === nodeGrab) return;
+                const homeRx = item.rx;
+                const homeRy = item.ry;
+                item.dispRx = Math.min(item.dispRx, homeRx + maxLift);
+                item.dispRy = Math.min(item.dispRy, Math.max(homeRy, item.dispRx * (homeRy / Math.max(homeRx, 1))));
+                item.dispRx += (homeRx - item.dispRx) * homePull;
+                item.dispRy += (homeRy - item.dispRy) * homePull;
+                const ang = item.angle + orbit.spin;
+                item.tx = hx + Math.cos(ang) * item.dispRx * zoom;
+                item.ty = hy + Math.sin(ang) * item.dispRy * zoom;
+            });
+        }
+
         function applyOrbit(dt) {
             applyMapGrid();
             const size = canvasSize();
             const width = size.width;
             const height = size.height;
-            if (!width || !height || !orbitItems.length) return;
+            if (!width || !height) return;
 
-            if ((!orbit.zoomBusy && orbit.zoomWorldX == null) || orbit.dragging) keepHubOnScreen(width, height);
+            const viewPan = (orbit.dragging && orbit.dragMode === 'pan')
+                || (!orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12);
+            if (!viewPan && ((!orbit.zoomBusy && orbit.zoomWorldX == null) || orbit.dragging)) keepHubOnScreen(width, height);
 
             const zoom = orbit.zoom;
             const zoomJump = Math.abs((orbit.prevZoom == null ? zoom : orbit.prevZoom) - zoom) > 0.00001;
@@ -4781,21 +7656,98 @@
             orbit.hubPx = cx;
             orbit.hubPy = cy;
 
+            const nodeGrab = orbit.dragging && orbit.dragMode === 'node' ? orbit.dragItem : null;
+            const peerGrab = orbit.dragging && orbit.dragMode === 'peer' ? orbit.dragItem : null;
+            const hubGrab = orbit.dragging && orbit.dragMode === 'hub';
+            const panning = orbit.dragging && orbit.dragMode === 'pan';
+            const coasting = !orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12;
+            const rigidView = panning || coasting || orbit.zoomBusy || zoomJump;
+            const byId = new Map(orbitItems.map((item) => [item.node.dataset.field, item]));
+            const step = Math.min(Math.max(dt || 16, 8), 32) / 16.67;
+
+            if (orbit.hubLiveX == null || !Number.isFinite(orbit.hubLiveX)) {
+                orbit.hubLiveX = cx;
+                orbit.hubLiveY = cy;
+                orbit.hubLiveVX = 0;
+                orbit.hubLiveVY = 0;
+            }
+            if (hubGrab || rigidView || reduceMotion || orbit.snapLayout) {
+                orbit.hubLiveX = cx;
+                orbit.hubLiveY = cy;
+                orbit.hubLiveVX = 0;
+                orbit.hubLiveVY = 0;
+            } else {
+                let ax = (cx - orbit.hubLiveX) * 0.2;
+                let ay = (cy - orbit.hubLiveY) * 0.2;
+                if (nodeGrab && nodeGrab.x != null) {
+                    const restLen = Math.max(Math.hypot(
+                        Math.cos((nodeGrab.tAngle == null ? nodeGrab.angle : nodeGrab.tAngle) + orbit.spin) * (nodeGrab.tRx == null ? nodeGrab.rx : nodeGrab.tRx) * zoom,
+                        Math.sin((nodeGrab.tAngle == null ? nodeGrab.angle : nodeGrab.tAngle) + orbit.spin) * (nodeGrab.tRy == null ? nodeGrab.ry : nodeGrab.tRy) * zoom
+                    ), 28);
+                    const dx = nodeGrab.x - orbit.hubLiveX;
+                    const dy = nodeGrab.y - orbit.hubLiveY;
+                    const cur = Math.hypot(dx, dy) || 1;
+                    const stretch = cur - restLen;
+                    if (stretch > 6) {
+                        const pull = (stretch - 6) * 0.05;
+                        ax += (dx / cur) * pull;
+                        ay += (dy / cur) * pull;
+                    }
+                    ax += (orbit.grabVX || 0) * 0.012;
+                    ay += (orbit.grabVY || 0) * 0.012;
+                }
+                if (peerGrab && peerGrab.x != null) {
+                    const restLen = Math.max(Math.hypot((peerGrab.tx || 0) - cx, (peerGrab.ty || 0) - cy), 48);
+                    const dx = peerGrab.x - orbit.hubLiveX;
+                    const dy = peerGrab.y - orbit.hubLiveY;
+                    const cur = Math.hypot(dx, dy) || 1;
+                    const stretch = cur - restLen;
+                    if (stretch > 8) {
+                        const pull = (stretch - 8) * 0.045;
+                        ax += (dx / cur) * pull;
+                        ay += (dy / cur) * pull;
+                    }
+                    ax += (orbit.grabVX || 0) * 0.014;
+                    ay += (orbit.grabVY || 0) * 0.014;
+                }
+                orbit.hubLiveVX = (orbit.hubLiveVX || 0) + ax * step;
+                orbit.hubLiveVY = (orbit.hubLiveVY || 0) + ay * step;
+                orbit.hubLiveVX *= Math.pow(0.8, step);
+                orbit.hubLiveVY *= Math.pow(0.8, step);
+                orbit.hubLiveX += orbit.hubLiveVX * step;
+                orbit.hubLiveY += orbit.hubLiveVY * step;
+                const ndx = orbit.hubLiveX - cx;
+                const ndy = orbit.hubLiveY - cy;
+                const nlen = Math.hypot(ndx, ndy);
+                const maxNudge = 64;
+                if (nlen > maxNudge) {
+                    orbit.hubLiveX = cx + ndx / nlen * maxNudge;
+                    orbit.hubLiveY = cy + ndy / nlen * maxNudge;
+                    orbit.hubLiveVX *= 0.4;
+                    orbit.hubLiveVY *= 0.4;
+                }
+                if (!nodeGrab && !peerGrab && nlen < 0.35 && Math.hypot(orbit.hubLiveVX, orbit.hubLiveVY) < 0.2) {
+                    orbit.hubLiveX = cx;
+                    orbit.hubLiveY = cy;
+                    orbit.hubLiveVX = 0;
+                    orbit.hubLiveVY = 0;
+                }
+            }
+            const hx = orbit.hubLiveX;
+            const hy = orbit.hubLiveY;
+
             if (hub) {
-                hub.style.left = cx + 'px';
-                hub.style.top = cy + 'px';
+                hub.style.left = hx + 'px';
+                hub.style.top = hy + 'px';
                 hub.style.transform = 'translate(-50%, -50%) translateZ(0) scale(' + zoom + ')';
             }
 
-            const nodeGrab = orbit.dragging && orbit.dragMode === 'node' ? orbit.dragItem : null;
-            const byId = new Map(orbitItems.map((item) => [item.node.dataset.field, item]));
-
             if (nodeGrab) {
                 const parent = nodeGrab.parentId ? byId.get(nodeGrab.parentId) : null;
-                const px = parent ? parent.x : cx;
-                const py = parent ? parent.y : cy;
-                const ptx = parent ? parent.tx : cx;
-                const pty = parent ? parent.ty : cy;
+                const px = parent ? parent.x : hx;
+                const py = parent ? parent.y : hy;
+                const ptx = parent ? parent.tx : hx;
+                const pty = parent ? parent.ty : hy;
                 const rest = Math.max(Math.hypot(nodeGrab.tx - ptx, nodeGrab.ty - pty), 10);
                 const dx = orbit.grabX - px;
                 const dy = orbit.grabY - py;
@@ -4811,8 +7763,8 @@
                 }
                 nodeGrab.vx = 0;
                 nodeGrab.vy = 0;
-                const liveDx = nodeGrab.x - cx;
-                const liveDy = nodeGrab.y - cy;
+                const liveDx = nodeGrab.x - hx;
+                const liveDy = nodeGrab.y - hy;
                 nodeGrab.angle = Math.atan2(liveDy, liveDx) - orbit.spin;
                 const liveR = Math.hypot(liveDx, liveDy) / Math.max(zoom, 0.01);
                 nodeGrab.rx = liveR;
@@ -4854,21 +7806,17 @@
                 if (!item.parentId) deriveKids(item.node.dataset.field);
             });
 
-            orbitItems.forEach((item) => {
-                const angle = item.angle + orbit.spin;
-                item.tx = cx + Math.cos(angle) * item.rx * zoom;
-                item.ty = cy + Math.sin(angle) * item.ry * zoom;
-                item.sw = item.w * zoom;
-                item.sh = item.h * zoom;
-            });
+            keepOrbitBoxesClear(hx, hy, zoom, nodeGrab, dt);
 
-            const posMs = reduceMotion || orbit.snapLayout || orbit.zoomBusy || zoomJump ? 1 : (nodeGrab ? 520 : 420);
-            const step = Math.min(Math.max(dt || 16, 8), 32) / 16.67;
-            const hubDrag = orbit.dragging && orbit.dragMode === 'hub';
-            const leftover = orbitItems.some((item) => {
-                return Math.hypot(item.vx || 0, item.vy || 0) > 0.22 || Math.hypot((item.x || item.tx) - item.tx, (item.y || item.ty) - item.ty) > 1.1;
-            });
-            const tug = !reduceMotion && !orbit.snapLayout && !orbit.zoomBusy && !zoomJump && (hubDrag || leftover);
+            const posMs = reduceMotion || orbit.snapLayout || rigidView ? 1 : (nodeGrab || peerGrab ? 560 : 680);
+            const activeDrag = !!(hubGrab || nodeGrab || peerGrab);
+            const leftover = activeDrag || orbitItems.some((item) => {
+                return Math.hypot(item.vx || 0, item.vy || 0) > 0.55;
+            }) || peerBodies.some((body) => {
+                return Math.hypot(body.vx || 0, body.vy || 0) > 0.55;
+            }) || Math.hypot(orbit.hubLiveVX || 0, orbit.hubLiveVY || 0) > 0.35
+                || Math.hypot((orbit.hubLiveX || cx) - cx, (orbit.hubLiveY || cy) - cy) > 1.2;
+            const tug = !reduceMotion && !orbit.snapLayout && !rigidView && leftover;
 
             const ordered = [];
             const seen = new Set();
@@ -4886,14 +7834,14 @@
                 const targetX = parent ? parent.x + (item.tx - parent.tx) : item.tx;
                 const targetY = parent ? parent.y + (item.ty - parent.ty) : item.ty;
                 if (!tug) {
-                    const ease = item.parentId ? Math.min(posMs, 140) : posMs;
+                    const ease = rigidView || posMs <= 1 ? 1 : (item.parentId ? Math.min(posMs, 140) : posMs);
                     const fromX = item.x == null ? targetX : item.x;
                     const fromY = item.y == null ? targetY : item.y;
-                    item.x = follow(fromX, targetX, dt, ease);
-                    item.y = follow(fromY, targetY, dt, ease);
+                    item.x = ease === 1 ? targetX : follow(fromX, targetX, dt, ease);
+                    item.y = ease === 1 ? targetY : follow(fromY, targetY, dt, ease);
                     item.vx = 0;
                     item.vy = 0;
-                    if (Math.hypot(item.x - targetX, item.y - targetY) < 0.25) {
+                    if (ease === 1 || Math.hypot(item.x - targetX, item.y - targetY) < 0.25) {
                         item.x = targetX;
                         item.y = targetY;
                     }
@@ -4901,33 +7849,48 @@
                 }
                 if (item.x == null) item.x = targetX;
                 if (item.y == null) item.y = targetY;
-                if (hubDrag) {
+                if (hubGrab) {
                     item.x += hvx * 0.38;
                     item.y += hvy * 0.38;
                 }
-                const kHome = hubDrag ? 0.055 : 0.14;
-                const damp = hubDrag ? 0.9 : 0.84;
+                const kHome = hubGrab ? 0.055 : (nodeGrab || peerGrab ? 0.07 : 0.14);
+                const damp = hubGrab || nodeGrab || peerGrab ? 0.9 : 0.84;
                 item.vx = (item.vx || 0) + (targetX - item.x) * kHome * step;
                 item.vy = (item.vy || 0) + (targetY - item.y) * kHome * step;
-                const px = parent ? parent.x : cx;
-                const py = parent ? parent.y : cy;
-                const ptx = parent ? parent.tx : cx;
-                const pty = parent ? parent.ty : cy;
+                if (nodeGrab && item !== nodeGrab && nodeGrab.x != null) {
+                    const bx = item.x - nodeGrab.x;
+                    const by = item.y - nodeGrab.y;
+                    const gap = Math.hypot(bx, by);
+                    const minGap = ((item.sw || item.w) + (nodeGrab.sw || nodeGrab.w || 0)) / 2 + 14;
+                    if (gap > 0.001 && gap < minGap) {
+                        const push = (minGap - gap) * 0.18;
+                        item.vx += (bx / gap) * push;
+                        item.vy += (by / gap) * push;
+                    }
+                }
+                const px = parent ? parent.x : hx;
+                const py = parent ? parent.y : hy;
+                const ptx = parent ? parent.tx : hx;
+                const pty = parent ? parent.ty : hy;
                 const rest = Math.max(Math.hypot(item.tx - ptx, item.ty - pty), 10);
                 const ldx = item.x - px;
                 const ldy = item.y - py;
                 const cur = Math.hypot(ldx, ldy);
                 if (cur > rest + 6) {
                     const stretch = cur - rest;
-                    const kLink = hubDrag ? 0.16 : 0.11;
+                    const kLink = hubGrab || nodeGrab || peerGrab ? 0.16 : 0.11;
                     item.vx -= (ldx / cur) * stretch * kLink * step;
                     item.vy -= (ldy / cur) * stretch * kLink * step;
+                    if (parent && parent !== nodeGrab) {
+                        parent.vx = (parent.vx || 0) + (ldx / cur) * stretch * kLink * 0.55 * step;
+                        parent.vy = (parent.vy || 0) + (ldy / cur) * stretch * kLink * 0.55 * step;
+                    }
                 }
                 item.vx *= Math.pow(damp, step);
                 item.vy *= Math.pow(damp, step);
                 item.x += item.vx * step;
                 item.y += item.vy * step;
-                if (!hubDrag && Math.hypot(item.x - targetX, item.y - targetY) < 0.45 && Math.hypot(item.vx, item.vy) < 0.2) {
+                if (!hubGrab && !nodeGrab && !peerGrab && Math.hypot(item.x - targetX, item.y - targetY) < 0.45 && Math.hypot(item.vx, item.vy) < 0.2) {
                     item.x = targetX;
                     item.y = targetY;
                     item.vx = 0;
@@ -4942,9 +7905,9 @@
             });
             orbitItems.forEach((item) => {
                 const parent = item.parentId && byId.get(item.parentId);
-                const x1 = parent ? parent.x : cx;
-                const y1 = parent ? parent.y : cy;
-                const rest = Math.max(Math.hypot(item.tx - (parent ? parent.tx : cx), item.ty - (parent ? parent.ty : cy)), 8);
+                const x1 = parent ? parent.x : hx;
+                const y1 = parent ? parent.y : hy;
+                const rest = Math.max(Math.hypot(item.tx - (parent ? parent.tx : hx), item.ty - (parent ? parent.ty : hy)), 8);
                 const stretch = Math.hypot(item.x - x1, item.y - y1) / rest;
                 item.line.setAttribute('x1', x1);
                 item.line.setAttribute('y1', y1);
@@ -4963,6 +7926,7 @@
             placeTimezoneMenu();
             const searchNode = document.querySelector('.node.search-open');
             if (searchNode) placeSearchMenu(searchNode);
+            applyPeerPhysics(dt, hx, hy, zoom, step, rigidView, tug, nodeGrab, hubGrab, peerGrab, hvx, hvy);
         }
 
         function positionNodes() {
@@ -5404,7 +8368,9 @@
             closeExportMenu();
             closeFieldMenu();
             closeHelp();
+            closeInstall();
             closeAddField();
+            closeToolkit();
             const sheet = document.getElementById('shareSheet');
             const urlEl = document.getElementById('shareUrl');
             const copyBtn = document.getElementById('shareCopy');
@@ -5420,6 +8386,126 @@
             drawShareQr(url);
             showSheet(sheet);
             document.getElementById('dock').classList.add('picking-share');
+        }
+
+        let deferredInstallPrompt = null;
+
+        function isAppInstalled() {
+            if (window.matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)').matches) return true;
+            if (window.navigator.standalone) return true;
+            return false;
+        }
+
+        function installDevice() {
+            const ua = navigator.userAgent || '';
+            const iOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const android = /Android/.test(ua);
+            const mac = /Mac OS X|Macintosh/.test(ua) && !iOS;
+            const win = /Windows/.test(ua);
+            const chrome = /Chrome|CriOS|Edg|EdgiOS|OPR|Brave/i.test(ua) && !/iPhone|iPad|iPod/.test(ua);
+            const safari = /Safari/.test(ua) && !/Chrome|CriOS|Android|Edg|OPR|Firefox/i.test(ua);
+            return { iOS: iOS, android: android, mac: mac, win: win, chrome: chrome, safari: safari };
+        }
+
+        function installStepsHtml() {
+            const d = installDevice();
+            let steps = [];
+            if (d.iOS) {
+                steps = [
+                    'Tap the Share button in Safari.',
+                    'Scroll and tap Add to Home Screen.',
+                    'Tap Add. OrbINT appears on your home screen.'
+                ];
+            } else if (d.android) {
+                steps = [
+                    'Tap Install in this window, or open the browser menu.',
+                    'Choose Install app or Add to Home screen.',
+                    'Confirm. OrbINT opens from your app drawer.'
+                ];
+            } else if (d.mac && d.safari) {
+                steps = [
+                    'Open the File menu in Safari, or the Share button.',
+                    'Choose Add to Dock.',
+                    'OrbINT stays in the Dock and Launchpad like any Mac app.'
+                ];
+            } else if (d.win || d.mac || d.chrome) {
+                steps = [
+                    'Click Install in this window, or the install icon in the address bar.',
+                    'Confirm the prompt.',
+                    'OrbINT opens in its own window from the Start menu, Dock, or desktop.'
+                ];
+            } else {
+                steps = [
+                    'Open this site in Chrome, Edge, or Safari.',
+                    'Use Install in this window, or Add to Home Screen / Add to Dock from the browser menu.',
+                    'OrbINT then launches like an app on this device.'
+                ];
+            }
+            return steps.map(function (text, i) {
+                return '<li><b>' + (i + 1) + '</b><span>' + text + '</span></li>';
+            }).join('');
+        }
+
+        function fillInstallSheet() {
+            const installed = isAppInstalled();
+            const canPrompt = !!deferredInstallPrompt;
+            const kicker = document.getElementById('installKicker');
+            const title = document.getElementById('installTitle');
+            const lead = document.getElementById('installLead');
+            const steps = document.getElementById('installSteps');
+            const go = document.getElementById('installGo');
+            const dismiss = document.getElementById('installDismiss');
+            if (kicker) kicker.textContent = installed ? 'This device' : 'Home screen';
+            if (title) title.textContent = installed ? 'Already installed' : 'Install OrbINT';
+            if (lead) {
+                lead.textContent = installed
+                    ? 'OrbINT is already running as an app on this device. You can keep using it from the home screen, Dock, or Start menu.'
+                    : 'Add this case file to this device like an app. It works on iPhone, iPad, Android, Windows, and Mac.';
+            }
+            if (steps) {
+                steps.hidden = installed;
+                steps.innerHTML = installed ? '' : installStepsHtml();
+            }
+            if (dismiss) dismiss.textContent = installed ? 'Close' : 'Not now';
+            if (go) {
+                go.hidden = installed;
+                go.textContent = canPrompt ? 'Install' : 'Got it';
+            }
+        }
+
+        function closeInstall() {
+            hideSheet(document.getElementById('installSheet'));
+        }
+
+        function openInstall() {
+            closePlatformMenu();
+            closeSearchMenu();
+            closeExportMenu();
+            closeFieldMenu();
+            closeShare();
+            closeHelp();
+            closeAddField();
+            closeToolkit();
+            fillInstallSheet();
+            showSheet(document.getElementById('installSheet'));
+        }
+
+        async function confirmInstall() {
+            const go = document.getElementById('installGo');
+            if (!deferredInstallPrompt) {
+                if (!go || go.textContent !== 'Install') closeInstall();
+                return;
+            }
+            const prompt = deferredInstallPrompt;
+            deferredInstallPrompt = null;
+            try {
+                prompt.prompt();
+                const result = await prompt.userChoice;
+                if (result && result.outcome === 'accepted') closeInstall();
+                else fillInstallSheet();
+            } catch (error) {
+                fillInstallSheet();
+            }
         }
 
         function toggleShare() {
@@ -5473,7 +8559,9 @@
             closeExportMenu();
             closeFieldMenu();
             closeShare();
+            closeInstall();
             closeAddField();
+            closeToolkit();
             closeProfileMenu();
             closeProfilePrompt();
             showSheet(document.getElementById('helpGuide'));
@@ -5487,7 +8575,9 @@
             closePlatformMenu();
             closeFieldMenu();
             closeShare();
+            closeInstall();
             closeAddField();
+            closeToolkit();
             menu.hidden = !open;
             document.getElementById('dock').classList.toggle('picking-export', open);
         }
@@ -5552,6 +8642,10 @@
             orbit.gridPanY = 0;
             orbit.gridShiftX = 0;
             orbit.gridShiftY = 0;
+            orbit.hubLiveX = null;
+            orbit.hubLiveY = null;
+            orbit.hubLiveVX = 0;
+            orbit.hubLiveVY = 0;
             orbit.zoom = 1;
             orbit.targetZoom = 1;
             orbit.zoomFocusX = null;
@@ -5626,6 +8720,13 @@
         });
 
         mapCanvas.addEventListener('click', (event) => {
+            const secretBtn = event.target.closest('[data-secret-reveal]');
+            if (secretBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleSecretReveal(secretBtn.dataset.secretReveal);
+                return;
+            }
             const more = event.target.closest('[data-more]');
             if (more) {
                 event.preventDefault();
@@ -5657,6 +8758,16 @@
                 else openTimezoneMenu(node);
                 return;
             }
+            const ccTrigger = event.target.closest('.cc-pick, .cc-trigger, .cc-abbr, .cc-name');
+            if (ccTrigger) {
+                event.preventDefault();
+                event.stopPropagation();
+                const node = ccTrigger.closest('.node');
+                const menu = document.getElementById('ccMenu');
+                if (menu && !menu.hidden && node && node.classList.contains('cc-open')) closeCountryCodeMenu();
+                else openCountryCodeMenu(node);
+                return;
+            }
             const trigger = event.target.closest('.platform-trigger');
             if (trigger) {
                 event.preventDefault();
@@ -5671,11 +8782,7 @@
             if (icon) {
                 const node = icon.closest('.node');
                 const fieldId = node && node.dataset.field;
-                const input = fieldId && document.getElementById('field-' + fieldId);
-                if (node && isPlatformField(fieldId) && !latestFact(fieldId) && !(input && input.value.trim())) {
-                    setUsernameStep(node, '', false);
-                    openPlatformMenu(node);
-                }
+                if (node && isPlatformField(fieldId)) openPlatformMenu(node);
                 return;
             }
             const mediaBtn = event.target.closest('[data-open-media]');
@@ -5686,6 +8793,10 @@
                 if (fieldBase(mediaId) === 'ip') {
                     const input = document.getElementById('field-' + mediaId);
                     openIpLocation((input && input.value) || firstValue(mediaId));
+                    return;
+                }
+                if (fieldBase(mediaId) === 'address') {
+                    openFieldMaps(mediaId);
                     return;
                 }
                 openMediaViewer(mediaId);
@@ -5720,9 +8831,10 @@
             if (fieldBase(fieldId) === 'phone') applyPhoneMask(input);
             syncNodeFilled(input);
             saveInputAsIs(input);
-            if (fieldBase(fieldId) === 'image' || fieldBase(fieldId) === 'audio' || fieldBase(fieldId) === 'ip') {
+            if (isThumbField(fieldId)) {
                 setFieldThumb(fieldId);
             }
+            if (typeof syncMapsButtons === 'function') syncMapsButtons(fieldId);
             if (fieldBase(fieldId) === 'timezone') updateTimezoneClocks();
         });
 
@@ -5759,6 +8871,29 @@
 
         document.getElementById('factsList').addEventListener('click', (event) => {
             if (event.target.closest('a')) return;
+            const add = event.target.closest('[data-dossier-add]');
+            if (add) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleAddField();
+                return;
+            }
+            const sheetPlat = event.target.closest('[data-sheet-platform]');
+            if (sheetPlat) {
+                event.preventDefault();
+                event.stopPropagation();
+                const node = document.querySelector('.node[data-field="' + sheetPlat.dataset.sheetPlatform + '"]');
+                if (node) openPlatformMenu(node);
+                return;
+            }
+            if (event.target.closest('[data-sheet-field]')) return;
+            const mapsBtn = event.target.closest('[data-open-maps]');
+            if (mapsBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!mapsBtn.disabled) openFieldMaps(mapsBtn.dataset.openMaps);
+                return;
+            }
             const find = event.target.closest('[data-search-field]');
             if (find) {
                 event.preventDefault();
@@ -5766,14 +8901,12 @@
                 openSearchMenu(find.dataset.searchField);
                 return;
             }
-            const reveal = event.target.closest('[data-reveal]');
+            const reveal = event.target.closest('[data-secret-reveal], [data-reveal]');
             if (reveal) {
                 event.preventDefault();
                 event.stopPropagation();
-                const key = decodeURIComponent(reveal.dataset.reveal || '');
-                if (revealedPasswords.has(key)) revealedPasswords.delete(key);
-                else revealedPasswords.add(key);
-                renderProfile();
+                const fieldId = reveal.dataset.secretReveal || decodeURIComponent(reveal.dataset.reveal || '').split('|')[0];
+                toggleSecretReveal(fieldId);
                 return;
             }
             const button = event.target.closest('[data-remove]');
@@ -5783,16 +8916,118 @@
             }
             const row = event.target.closest('[data-focus]');
             if (!row) return;
-            if (isPhone()) {
-                openPhoneField(row.dataset.focus);
-                return;
-            }
             activeField = row.dataset.focus;
             document.querySelectorAll('.node').forEach((item) => {
                 item.classList.toggle('active', item.dataset.field === activeField);
             });
+            const sheet = row.querySelector('[data-sheet-field]');
+            if (sheet) {
+                if (isPlatformField(row.dataset.focus) && !fieldPlatformId(row.dataset.focus)) {
+                    const pick = row.querySelector('.sheet-platform');
+                    const node = document.querySelector('.node[data-field="' + row.dataset.focus + '"]');
+                    if (pick) pick.focus();
+                    if (node) openPlatformMenu(node);
+                    return;
+                }
+                sheet.focus();
+                return;
+            }
+            if (isPhone()) {
+                openPhoneField(row.dataset.focus);
+                return;
+            }
             renderProfile();
         });
+
+        document.getElementById('factsList').addEventListener('input', (event) => {
+            const input = event.target.closest('[data-sheet-field]');
+            if (!input) return;
+            const fieldId = input.dataset.sheetField;
+            if (fieldBase(fieldId) === 'phone') applyPhoneMask(input);
+            const value = fieldBase(fieldId) === 'timezone'
+                ? resolveTimezoneValue(input.value)
+                : (fieldBase(fieldId) === 'countrycode' ? (resolveCountryCodeValue(input.value) || input.value) : input.value);
+            writeLatestFact(fieldId, value, extrasFromInput(fieldId, value));
+            if (typeof syncMapsButtons === 'function') syncMapsButtons(fieldId);
+        });
+
+        let nameEditOriginal = '';
+        const subjectName = document.getElementById('subjectName');
+        const subjectEdit = document.getElementById('subjectEdit');
+        const subjectNameInput = document.getElementById('subjectNameInput');
+        const targetFace = document.getElementById('targetFace');
+        const profilePhotoFile = document.getElementById('profilePhotoFile');
+
+        function onNameEditClick(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (document.getElementById('subjectNameRow') && document.getElementById('subjectNameRow').classList.contains('editing')) return;
+            nameEditOriginal = firstValue('name');
+            beginNameEdit();
+        }
+        if (subjectName) subjectName.addEventListener('click', onNameEditClick);
+        if (subjectEdit) subjectEdit.addEventListener('click', onNameEditClick);
+        const idStackEl = document.getElementById('idStack');
+        if (idStackEl) {
+            idStackEl.addEventListener('click', (event) => {
+                const mapsBtn = event.target.closest('[data-open-maps]');
+                if (!mapsBtn) return;
+                event.preventDefault();
+                event.stopPropagation();
+                openFieldMaps(mapsBtn.dataset.openMaps);
+            });
+        }
+        if (subjectNameInput) {
+            subjectNameInput.addEventListener('input', () => {
+                writeLatestFact('name', subjectNameInput.value, extrasFromInput('name', subjectNameInput.value));
+            });
+            subjectNameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    endNameEdit(true);
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    subjectNameInput.value = nameEditOriginal;
+                    writeLatestFact('name', nameEditOriginal, extrasFromInput('name', nameEditOriginal));
+                    endNameEdit(false);
+                }
+            });
+            subjectNameInput.addEventListener('blur', () => endNameEdit(true));
+        }
+        if (targetFace && profilePhotoFile) {
+            targetFace.addEventListener('click', (event) => {
+                event.preventDefault();
+                if (imageGalleryItems().length) openImageGallery();
+                else pickProfilePhoto('');
+            });
+            profilePhotoFile.addEventListener('change', () => {
+                const files = profilePhotoFile.files;
+                const target = photoUploadFor;
+                photoUploadFor = '';
+                profilePhotoFile.value = '';
+                if (!files || !files.length) return;
+                if (!target || target === (profileLibrary && profileLibrary.activeId)) {
+                    applyProfilePhotoFiles(files);
+                } else {
+                    applyPhotoToProfile(target, files[0]);
+                }
+            });
+        }
+        const faceGallery = document.getElementById('faceGallery');
+        if (faceGallery) {
+            faceGallery.addEventListener('click', (event) => {
+                const add = event.target.closest('[data-face-add]');
+                if (add) {
+                    event.preventDefault();
+                    pickProfilePhoto('');
+                    return;
+                }
+                const thumb = event.target.closest('[data-face-index]');
+                if (!thumb) return;
+                event.preventDefault();
+                openImageGallery(Number(thumb.dataset.faceIndex) || 0);
+            });
+        }
 
         document.getElementById('dockReset').addEventListener('click', resetCase);
         const resetSheet = document.getElementById('resetConfirm');
@@ -5816,6 +9051,11 @@
             if (guide && !guide.hidden) closeHelp();
             else openHelp();
         });
+        const dockToolkit = document.getElementById('dockToolkit');
+        if (dockToolkit) dockToolkit.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleToolkit();
+        });
         document.getElementById('dockUndo').addEventListener('click', undoCase);
         document.getElementById('dockRedo').addEventListener('click', redoCase);
         document.getElementById('dockExport').addEventListener('click', (event) => {
@@ -5825,6 +9065,12 @@
         document.getElementById('dockShare').addEventListener('click', (event) => {
             event.stopPropagation();
             toggleShare();
+        });
+        document.getElementById('dockInstall').addEventListener('click', (event) => {
+            event.stopPropagation();
+            const sheet = document.getElementById('installSheet');
+            if (sheet && !sheet.hidden) closeInstall();
+            else openInstall();
         });
         document.getElementById('phoneHelp').addEventListener('click', openHelp);
         document.getElementById('phoneAdd').addEventListener('click', () => {
@@ -5849,7 +9095,11 @@
         document.getElementById('phoneRedo').addEventListener('click', () => { closePhoneMore(); redoCase(); });
         const phonePlaytest = document.getElementById('phonePlaytest');
         if (phonePlaytest) phonePlaytest.addEventListener('click', () => { closePhoneMore(); playtestFillVisibleFields(); });
+        const phoneToolkit = document.getElementById('phoneToolkit');
+        if (phoneToolkit) phoneToolkit.addEventListener('click', () => { closePhoneMore(); openToolkit(); });
         document.getElementById('phoneExport').addEventListener('click', () => { closePhoneMore(); toggleExportMenu(); });
+        const phoneInstall = document.getElementById('phoneInstall');
+        if (phoneInstall) phoneInstall.addEventListener('click', () => { closePhoneMore(); openInstall(); });
         document.getElementById('phoneReset').addEventListener('click', () => { closePhoneMore(); resetCase(); });
         document.getElementById('phoneFieldDone').addEventListener('click', () => {
             writePhoneField();
@@ -5878,12 +9128,23 @@
             const trigger = node && node.querySelector('.tz-trigger');
             if (trigger) trigger.click();
         });
+        const phoneCcBtn = document.getElementById('phoneCcBtn');
+        if (phoneCcBtn) phoneCcBtn.addEventListener('click', () => {
+            const node = document.querySelector('.node[data-field="' + phoneFieldId + '"]');
+            if (node) openCountryCodeMenu(node);
+        });
         const phoneFieldSearch = document.getElementById('phoneFieldSearch');
         if (phoneFieldSearch) phoneFieldSearch.addEventListener('click', () => {
             writePhoneField();
             if (phoneFieldId) openSearchMenu(phoneFieldId);
         });
         document.getElementById('phoneLeads').addEventListener('click', (event) => {
+            const browse = event.target.closest('[data-open-toolkit]');
+            if (browse) {
+                event.stopPropagation();
+                openToolkit(browse.dataset.openToolkit || phoneFieldId);
+                return;
+            }
             const option = event.target.closest('[data-open-lead]');
             if (!option) return;
             event.stopPropagation();
@@ -5903,9 +9164,11 @@
             renderProfile();
         });
         document.getElementById('phoneReveal').addEventListener('click', () => {
-            const reveal = document.getElementById('phoneReveal');
-            reveal.dataset.open = reveal.dataset.open === '1' ? '' : '1';
-            syncPhoneField();
+            toggleSecretReveal(phoneFieldId);
+        });
+        const phoneMaps = document.getElementById('phoneMaps');
+        if (phoneMaps) phoneMaps.addEventListener('click', () => {
+            openFieldMaps(phoneFieldId);
         });
         document.getElementById('shareClose').addEventListener('click', closeShare);
         document.getElementById('shareSheet').addEventListener('click', (event) => {
@@ -5913,11 +9176,61 @@
         });
         document.getElementById('shareCopy').addEventListener('click', copyShareLink);
         document.getElementById('shareNative').addEventListener('click', nativeShareSite);
+        const installSheet = document.getElementById('installSheet');
+        const installClose = document.getElementById('installClose');
+        const installDismiss = document.getElementById('installDismiss');
+        const installGo = document.getElementById('installGo');
+        if (installClose) installClose.addEventListener('click', closeInstall);
+        if (installDismiss) installDismiss.addEventListener('click', closeInstall);
+        if (installGo) installGo.addEventListener('click', confirmInstall);
+        if (installSheet) installSheet.addEventListener('click', (event) => {
+            if (event.target.id === 'installSheet') closeInstall();
+        });
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredInstallPrompt = event;
+            const sheet = document.getElementById('installSheet');
+            if (sheet && !sheet.hidden) fillInstallSheet();
+        });
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            const sheet = document.getElementById('installSheet');
+            if (sheet && !sheet.hidden) fillInstallSheet();
+        });
+        if (navigator.serviceWorker) {
+            navigator.serviceWorker.register('sw.js').catch(function () {});
+        }
         document.getElementById('hubAdd').addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
             toggleAddField();
         });
+        const peerHubs = document.getElementById('peerHubs');
+        if (peerHubs) {
+            peerHubs.addEventListener('pointerdown', (event) => {
+                if (event.button === 1) return;
+                if (event.button !== 0) return;
+                const peerEl = event.target.closest('[data-peer]');
+                if (!peerEl) return;
+                const body = peerBodyFromEl(peerEl);
+                if (!body) return;
+                event.preventDefault();
+                event.stopPropagation();
+                beginOrbitDrag(event, 'peer', body);
+            }, true);
+            peerHubs.addEventListener('error', (event) => {
+                const img = event.target.closest('.peer-hub-face');
+                const btn = event.target.closest('.peer-hub');
+                if (!img || !btn) return;
+                img.remove();
+                if (!btn.querySelector('.peer-hub-letter')) {
+                    const letter = document.createElement('span');
+                    letter.className = 'peer-hub-letter';
+                    letter.textContent = profileLetter(btn.getAttribute('title') || 'U');
+                    btn.insertBefore(letter, btn.firstChild);
+                }
+            }, true);
+        }
         document.getElementById('addClose').addEventListener('click', closeAddField);
         document.getElementById('addSheet').addEventListener('click', (event) => {
             if (event.target.id === 'addSheet') closeAddField();
@@ -5939,6 +9252,45 @@
                 document.getElementById('addCustomLabel').value,
                 document.getElementById('addCustomHint').value
             );
+        });
+        const toolkitClose = document.getElementById('toolkitClose');
+        const toolkitSheet = document.getElementById('toolkitSheet');
+        const toolkitFilter = document.getElementById('toolkitFilter');
+        const toolkitList = document.getElementById('toolkitList');
+        const toolkitFocusClear = document.getElementById('toolkitFocusClear');
+        if (toolkitClose) toolkitClose.addEventListener('click', closeToolkit);
+        if (toolkitSheet) toolkitSheet.addEventListener('click', (event) => {
+            if (event.target.id === 'toolkitSheet') closeToolkit();
+        });
+        if (toolkitFilter) toolkitFilter.addEventListener('input', renderToolkit);
+        if (toolkitFocusClear) toolkitFocusClear.addEventListener('click', () => {
+            toolkitFocusField = '';
+            toolkitOpenCats.clear();
+            if (toolkitFilter) {
+                toolkitFilter.placeholder = 'Search categories or tools';
+            }
+            renderToolkit();
+            if (toolkitFilter) toolkitFilter.focus();
+        });
+        if (toolkitList) toolkitList.addEventListener('click', (event) => {
+            const toggle = event.target.closest('[data-toolkit-toggle]');
+            if (toggle) {
+                event.stopPropagation();
+                const tools = toggle.nextElementSibling;
+                const key = toggle.getAttribute('data-toolkit-toggle') || '';
+                const open = toggle.getAttribute('aria-expanded') !== 'true';
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (tools) tools.hidden = !open;
+                if (key) {
+                    if (open) toolkitOpenCats.add(key);
+                    else toolkitOpenCats.delete(key);
+                }
+                return;
+            }
+            const option = event.target.closest('[data-open-lead]');
+            if (!option) return;
+            event.stopPropagation();
+            openLead(option.dataset.openLead, fieldInputValue(toolkitFocusField), option.dataset.leadMode);
         });
         document.getElementById('exportMenu').addEventListener('click', (event) => {
             const option = event.target.closest('[data-export]');
@@ -5967,10 +9319,12 @@
                 const img = event.target.closest('img');
                 const btn = event.target.closest('.profile-rail-item');
                 if (!img || !btn) return;
-                btn.innerHTML = '<span>' + escapeHtml(profileLetter(btn.getAttribute('title') || 'U')) + '</span>';
+                const letter = escapeHtml(profileLetter(btn.getAttribute('title') || 'U'));
+                const linked = linkedProfileIds(btn.dataset.profile).length > 0;
+                btn.innerHTML = '<span class="profile-rail-face"><span>' + letter + '</span></span>' + (linked ? PROFILE_LINK_BADGE : '');
             }, true);
         }
-        document.getElementById('profileNew').addEventListener('click', () => openProfilePrompt('create'));
+        document.getElementById('profileNew').addEventListener('click', () => createProfile(''));
         document.getElementById('profileUpload').addEventListener('click', pickProfileUpload);
         document.getElementById('profileRename').addEventListener('click', () => openProfilePrompt('rename'));
         document.getElementById('profileFile').addEventListener('change', (event) => {
@@ -6016,6 +9370,14 @@
                 redoCase();
                 return;
             }
+            if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !promptOpen) {
+                const viewer = document.getElementById('mediaViewer');
+                if (viewer && !viewer.hidden && mediaGallery.items.length > 1) {
+                    event.preventDefault();
+                    stepMediaGallery(event.key === 'ArrowRight' ? 1 : -1);
+                    return;
+                }
+            }
             if (event.key === 'Escape') {
                 if (promptOpen) {
                     closeProfilePrompt();
@@ -6051,9 +9413,19 @@
                     closeShare();
                     return;
                 }
+                const install = document.getElementById('installSheet');
+                if (install && !install.hidden) {
+                    closeInstall();
+                    return;
+                }
                 const add = document.getElementById('addSheet');
                 if (add && !add.hidden) {
                     closeAddField();
+                    return;
+                }
+                const toolkit = document.getElementById('toolkitSheet');
+                if (toolkit && !toolkit.hidden) {
+                    closeToolkit();
                     return;
                 }
                 const viewer = document.getElementById('mediaViewer');
@@ -6077,7 +9449,7 @@
                 closePhoneField();
                 closePhoneMore();
                 const saved = Number(localStorage.getItem(SIDEBAR_KEY));
-                applySidebarWidth(saved || 320);
+                applySidebarWidth(saved && saved !== 268 && saved !== 320 ? saved : SIDEBAR_DEFAULT);
                 positionNodes();
             }
             renderProfile();
@@ -6088,11 +9460,20 @@
 
         window.addEventListener('resize', () => { if (!isPhone()) positionNodes(); });
         requestAnimationFrame(() => {
+            const animate = !reduceMotion && !(typeof isPhone === 'function' && isPhone());
             orbit.snapLayout = true;
             positionNodes();
-            if (mapCanvas) mapCanvas.classList.add('orbit-ready');
-            saveOrbitLayout();
             orbit.snapLayout = false;
+            if (animate) bloomOrbitFromHub();
+            if (mapCanvas) mapCanvas.classList.add('orbit-ready');
+            if (mapStage) mapStage.classList.add('orbit-ready');
+            if (animate && mapStage) {
+                mapStage.classList.add('boot-enter');
+                setTimeout(function () {
+                    if (mapStage) mapStage.classList.remove('boot-enter');
+                }, 800);
+            }
+            saveOrbitLayout();
         });
         if (window.ResizeObserver && mapCanvas) {
             const layoutWatch = new ResizeObserver(() => {
@@ -6110,20 +9491,19 @@
         function commitNodeHome(item) {
             if (!item || !item.node) return;
             const size = canvasSize();
-            const zoom = Math.max(orbit.zoom * orbit.pulse, 0.01);
             const cx = size.width / 2 + orbit.dragX + orbit.parallaxX;
             const cy = size.height / 2 + orbit.dragY + orbit.parallaxY;
             const dx = item.x - cx;
             const dy = item.y - cy;
             const angle = Math.atan2(dy, dx) - orbit.spin;
-            const r = Math.hypot(dx, dy) / zoom;
             item.tAngle = angle;
             item.angle = angle;
-            item.tRx = r;
-            item.tRy = r;
-            item.rx = r;
-            item.ry = r;
-            nodeHomes.set(item.node.dataset.field, { angle: angle, rx: r, ry: r });
+            nodeHomes.set(item.node.dataset.field, {
+                angle: angle,
+                rx: item.tRx == null ? item.rx : item.tRx,
+                ry: item.tRy == null ? item.ry : item.tRy,
+                pinned: true
+            });
             if (typeof positionNodes === 'function') positionNodes();
             scheduleSaveLayout();
         }
@@ -6150,9 +9530,30 @@
             orbit.zoomFocusY = null;
             orbit.zoomWorldX = null;
             orbit.zoomWorldY = null;
+            orbit.dragMoved = false;
             if (mode === 'pan') {
                 orbit.targetParallaxX = 0;
                 orbit.targetParallaxY = 0;
+                orbit.hubLiveX = null;
+                orbit.hubLiveY = null;
+                orbit.hubLiveVX = 0;
+                orbit.hubLiveVY = 0;
+                orbitItems.forEach((entry) => {
+                    entry.vx = 0;
+                    entry.vy = 0;
+                    if (entry.tx != null) {
+                        entry.x = entry.tx;
+                        entry.y = entry.ty;
+                    }
+                });
+                peerBodies.forEach((entry) => {
+                    entry.vx = 0;
+                    entry.vy = 0;
+                    if (entry.tx != null) {
+                        entry.x = entry.tx;
+                        entry.y = entry.ty;
+                    }
+                });
             }
             if (mode === 'node' && item) {
                 const p = pointerOnCanvas(event);
@@ -6163,6 +9564,18 @@
                 orbit.grabVX = 0;
                 orbit.grabVY = 0;
                 item.node.classList.add('dragging');
+                mapStage.classList.add('dragging-node');
+            } else if (mode === 'peer' && item) {
+                const p = pointerOnCanvas(event);
+                if (item.x == null) item.x = item.tx;
+                if (item.y == null) item.y = item.ty;
+                orbit.grabOffX = item.x - p.x;
+                orbit.grabOffY = item.y - p.y;
+                orbit.grabX = item.x;
+                orbit.grabY = item.y;
+                orbit.grabVX = 0;
+                orbit.grabVY = 0;
+                if (item.el) item.el.classList.add('dragging');
                 mapStage.classList.add('dragging-node');
             } else if (mode === 'hub') {
                 const p = pointerOnCanvas(event);
@@ -6187,9 +9600,16 @@
                 commitNodeHome(orbit.dragItem);
                 orbit.dragItem.node.classList.remove('dragging');
             }
+            if (orbit.dragMode === 'peer' && orbit.dragItem) {
+                const body = orbit.dragItem;
+                if (body.el) body.el.classList.remove('dragging');
+                if (orbit.dragMoved) commitPeerHome(body);
+                else if (body.id && body.el) openLinkedProfile(body.id, body.el);
+            }
             orbit.dragging = false;
             orbit.dragMode = null;
             orbit.dragItem = null;
+            orbit.dragMoved = false;
             mapStage.classList.remove('panning');
             mapStage.classList.remove('dragging-node');
             scheduleSaveLayout();
@@ -6204,7 +9624,35 @@
         });
 
         if (mapStage) mapStage.addEventListener('pointerdown', (event) => {
-            if (event.button !== 1) return;
+            if (event.button === 1) {
+                event.preventDefault();
+                beginOrbitDrag(event, 'pan');
+                return;
+            }
+            if (event.button !== 0) return;
+            if (event.target.closest('#hubAdd')) return;
+            const peerEl = event.target.closest('[data-peer]');
+            if (peerEl) {
+                const body = peerBodyFromEl(peerEl);
+                if (body) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    beginOrbitDrag(event, 'peer', body);
+                    return;
+                }
+            }
+            if (event.target.closest('input, select, textarea, button, .search-btn, .secret-reveal, .node-clear, .node-more, .file-btn, .platform-trigger, .tz-trigger, .tz-pick, .tz-abbr, .cc-trigger, .cc-pick, .cc-abbr, .cc-name, .media-thumb, .platform-icon')) return;
+            const node = event.target.closest('.node');
+            if (node && !node.classList.contains('renaming')) {
+                const item = orbitItems.find((entry) => entry.node === node);
+                if (item) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    beginOrbitDrag(event, 'node', item);
+                    return;
+                }
+            }
+            if (event.target.closest('#hub')) return;
             event.preventDefault();
             beginOrbitDrag(event, 'pan');
         });
@@ -6221,22 +9669,11 @@
             beginOrbitDrag(event, 'hub');
         });
 
-        if (mapCanvas) mapCanvas.addEventListener('pointerdown', (event) => {
-            if (event.button !== 0) return;
-            if (event.target.closest('input, select, textarea, button, .search-btn, .node-clear, .node-more, .file-btn, .platform-trigger, .tz-trigger, .tz-pick, .tz-abbr, .media-thumb, .platform-icon')) return;
-            const node = event.target.closest('.node');
-            if (!node || node.classList.contains('renaming')) return;
-            const item = orbitItems.find((entry) => entry.node === node);
-            if (!item) return;
-            event.preventDefault();
-            event.stopPropagation();
-            beginOrbitDrag(event, 'node', item);
-        });
-
         if (mapStage) mapStage.addEventListener('pointermove', (event) => {
             const rect = mapCanvas.getBoundingClientRect();
             setGridSpot(event.clientX - rect.left, event.clientY - rect.top);
-            if (orbit.dragging && (orbit.dragMode === 'node' || orbit.dragMode === 'hub')) {
+            if (orbit.dragging && (orbit.dragMode === 'node' || orbit.dragMode === 'hub' || orbit.dragMode === 'peer')) {
+                if (Math.hypot(event.clientX - orbit.dragStartX, event.clientY - orbit.dragStartY) > 8) orbit.dragMoved = true;
                 const p = pointerOnCanvas(event);
                 orbit.grabVX = (event.clientX - orbit.prevCX) * 0.85;
                 orbit.grabVY = (event.clientY - orbit.prevCY) * 0.85;
@@ -6251,17 +9688,25 @@
                     tx: orbit.grabX,
                     ty: orbit.grabY,
                     sw: orbit.dragMode === 'hub'
-                        ? (hub && hub.offsetWidth || 96) * orbit.zoom
-                        : (orbit.dragItem && orbit.dragItem.sw),
+                        ? (hub && hub.offsetWidth || 220) * orbit.zoom
+                        : orbit.dragMode === 'peer'
+                            ? PEER_HUB_SIZE * orbit.zoom
+                            : (orbit.dragItem && orbit.dragItem.sw),
                     sh: orbit.dragMode === 'hub'
-                        ? (hub && hub.offsetHeight || 96) * orbit.zoom
-                        : (orbit.dragItem && orbit.dragItem.sh),
+                        ? (hub && hub.offsetHeight || 220) * orbit.zoom
+                        : orbit.dragMode === 'peer'
+                            ? PEER_HUB_SIZE * orbit.zoom
+                            : (orbit.dragItem && orbit.dragItem.sh),
                     w: orbit.dragMode === 'hub'
-                        ? (hub && hub.offsetWidth || 96)
-                        : (orbit.dragItem && orbit.dragItem.w),
+                        ? (hub && hub.offsetWidth || 220)
+                        : orbit.dragMode === 'peer'
+                            ? PEER_HUB_SIZE
+                            : (orbit.dragItem && orbit.dragItem.w),
                     h: orbit.dragMode === 'hub'
-                        ? (hub && hub.offsetHeight || 96)
-                        : (orbit.dragItem && orbit.dragItem.h)
+                        ? (hub && hub.offsetHeight || 220)
+                        : orbit.dragMode === 'peer'
+                            ? PEER_HUB_SIZE
+                            : (orbit.dragItem && orbit.dragItem.h)
                 };
                 keepNodeOnScreen(held, size.width, size.height);
                 orbit.grabX = held.x;
@@ -6283,10 +9728,10 @@
                 orbit.gridPanY = orbit.gridOriginY + dy;
                 return;
             }
-            if (!orbit.dragging || orbit.dragMode === 'node') {
+            if (!orbit.dragging || orbit.dragMode === 'node' || orbit.dragMode === 'peer') {
                 const nx = (event.clientX - rect.left) / Math.max(rect.width, 1) - 0.5;
                 const ny = (event.clientY - rect.top) / Math.max(rect.height, 1) - 0.5;
-                const strength = reduceMotion ? 6 : 14;
+                const strength = reduceMotion ? 8 : 22;
                 orbit.targetParallaxX = nx * strength;
                 orbit.targetParallaxY = ny * strength;
             }
@@ -6302,6 +9747,14 @@
         });
 
         document.getElementById('searchMenu').addEventListener('click', (event) => {
+            const browse = event.target.closest('[data-open-toolkit]');
+            if (browse) {
+                event.stopPropagation();
+                const node = document.querySelector('.node.search-open');
+                closeSearchMenu();
+                openToolkit(browse.dataset.openToolkit || (node && node.dataset.field));
+                return;
+            }
             const option = event.target.closest('[data-open-lead]');
             if (!option) return;
             event.stopPropagation();
@@ -6316,12 +9769,18 @@
             event.stopPropagation();
             const node = document.querySelector('.node.menu-open:not(.tz-open)');
             if (!node) return;
-            setUsernameStep(node, option.dataset.pickPlatform, false);
+            const fieldId = node.dataset.field;
+            const input = document.getElementById('field-' + fieldId);
+            const filled = !!(input && String(input.value || '').trim());
+            setFieldPlatform(fieldId, option.dataset.pickPlatform);
+            setUsernameStep(node, option.dataset.pickPlatform, filled);
+            if (filled) saveInputAsIs(input);
             if (isPhone()) syncPhoneField();
             closePlatformMenu();
-            const input = document.getElementById('field-' + node.dataset.field);
             if (input) input.focus();
-            activeField = node.dataset.field;
+            activeField = fieldId;
+            renderProfile();
+            recordHistory(false);
         });
 
         document.getElementById('tzMenu').addEventListener('click', (event) => {
@@ -6333,12 +9792,24 @@
             if (isPhone()) syncPhoneField();
         });
 
+        const ccMenuEl = document.getElementById('ccMenu');
+        if (ccMenuEl) ccMenuEl.addEventListener('click', (event) => {
+            const option = event.target.closest('[data-pick-cc]');
+            if (!option) return;
+            event.stopPropagation();
+            const fieldId = document.getElementById('ccMenu').dataset.field;
+            applyCountryCodePick(fieldId, option.dataset.pickCc);
+        });
+
         document.addEventListener('click', (event) => {
-            if (!event.target.closest('#platformMenu, .platform-trigger, #phonePlatformBtn, .node.menu-open:not(.tz-open)')) {
+            if (!event.target.closest('#platformMenu, .platform-trigger, #phonePlatformBtn, .node.menu-open:not(.tz-open):not(.cc-open)')) {
                 closePlatformMenu();
             }
             if (!event.target.closest('#tzMenu, .tz-trigger, .tz-pick, .tz-abbr, #phoneTzBtn, .node.tz-open')) {
                 closeTimezoneMenu();
+            }
+            if (!event.target.closest('#ccMenu, .cc-trigger, .cc-pick, .cc-abbr, .cc-name, #phoneCcBtn, .node.cc-open')) {
+                closeCountryCodeMenu();
             }
             if (!event.target.closest('#searchMenu, [data-search], #phoneFieldSearch')) {
                 closeSearchMenu();
@@ -6364,14 +9835,16 @@
             const button = event.target.closest('[data-field-act]');
             if (!button || button.disabled) return;
             event.stopPropagation();
+            const menu = document.getElementById('fieldMenu');
             const act = button.dataset.fieldAct;
-            const fieldId = document.getElementById('fieldMenu').dataset.field;
+            const fieldId = menu ? menu.dataset.field : '';
+            const extra = button.dataset.linkId || (menu && menu.dataset.peer) || '';
             closeFieldMenu();
-            runFieldAction(act, fieldId);
+            runFieldAction(act, fieldId, extra);
         });
 
         if (mapStage) mapStage.addEventListener('contextmenu', (event) => {
-            if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #exportMenu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
+            if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #ccMenu, #exportMenu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .install-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
             const node = event.target.closest('.node');
             if (node) {
                 event.preventDefault();
@@ -6381,6 +9854,12 @@
             if (event.target.closest('#hubAdd')) {
                 event.preventDefault();
                 toggleAddField();
+                return;
+            }
+            const peer = event.target.closest('[data-peer]');
+            if (peer) {
+                event.preventDefault();
+                openPeerMenu(event, peer.dataset.peer);
                 return;
             }
             if (event.target.closest('#hub')) {
@@ -6398,9 +9877,26 @@
             if (event.target.id === 'helpGuide') closeHelp();
         });
         document.getElementById('mediaClose').addEventListener('click', closeMediaViewer);
+        const mediaPrev = document.getElementById('mediaPrev');
+        const mediaNext = document.getElementById('mediaNext');
+        if (mediaPrev) mediaPrev.addEventListener('click', (event) => {
+            event.stopPropagation();
+            stepMediaGallery(-1);
+        });
+        if (mediaNext) mediaNext.addEventListener('click', (event) => {
+            event.stopPropagation();
+            stepMediaGallery(1);
+        });
         document.getElementById('mediaViewer').addEventListener('click', (event) => {
             if (event.target.id === 'mediaViewer') closeMediaViewer();
         });
+        document.getElementById('mediaViewer').addEventListener('wheel', (event) => {
+            const viewer = document.getElementById('mediaViewer');
+            if (!viewer || viewer.hidden || mediaGallery.items.length < 2) return;
+            if (Math.abs(event.deltaY) < 2 && Math.abs(event.deltaX) < 2) return;
+            event.preventDefault();
+            stepMediaGallery((event.deltaY + event.deltaX) > 0 ? 1 : -1);
+        }, { passive: false });
 
         function captureZoomFocus(mx, my) {
             const size = canvasSize();
@@ -6430,7 +9926,7 @@
         }
 
         if (mapStage) mapStage.addEventListener('wheel', (event) => {
-            if (event.target.closest('select, option, .platform-menu, .tz-menu, .search-menu, .field-menu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
+            if (event.target.closest('select, option, .platform-menu, .tz-menu, .search-menu, .field-menu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .install-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
             event.preventDefault();
             const rect = mapCanvas.getBoundingClientRect();
             let delta = event.deltaY;
@@ -6450,11 +9946,13 @@
         function tickOrbit(now) {
             const dt = Math.min(48, now - lastTick);
             lastTick = now;
-            const freezeWorld = orbit.dragging && (orbit.dragMode === 'pan' || orbit.dragMode === 'hub');
+            const freezeWorld = (orbit.dragging && (orbit.dragMode === 'pan' || orbit.dragMode === 'hub'))
+                || (!orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12);
             orbit.pulse = 1;
             if (orbit.targetZoom == null) orbit.targetZoom = orbit.zoom;
-            if (!reduceMotion && !freezeWorld) {
-                orbit.spin += dt * 0.000024;
+            if (!reduceMotion) {
+                // Keep a barely-visible drift; fast spin reintroduces overlaps every frame.
+                orbit.spin += dt * 0.000004;
             }
             if (!orbit.dragging && !orbit.zoomBusy) {
                 if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12) {
@@ -6491,7 +9989,7 @@
             orbit.spotX = follow(orbit.spotX, orbit.targetSpotX, dt, freezeCam ? snapMs : mouseMs);
             orbit.spotY = follow(orbit.spotY, orbit.targetSpotY, dt, freezeCam ? snapMs : mouseMs);
             const gridMs = reduceMotion ? 60 : (orbit.zoomBusy ? 1 : 420);
-            const drift = reduceMotion ? 1 : 1.75;
+            const drift = reduceMotion ? 1 : 2.05;
             orbit.gridShiftX = follow(orbit.gridShiftX, orbit.gridPanX + orbit.parallaxX * drift, dt, freezeCam ? 1 : gridMs);
             orbit.gridShiftY = follow(orbit.gridShiftY, orbit.gridPanY + orbit.parallaxY * drift, dt, freezeCam ? 1 : gridMs);
             if (!isPhone()) applyOrbit(dt);
