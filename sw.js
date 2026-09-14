@@ -1,4 +1,4 @@
-const CACHE = 'orbint-app-v3';
+const CACHE = 'orbint-app-v4';
 const PRECACHE = [
     './',
     './index.html',
@@ -7,7 +7,9 @@ const PRECACHE = [
     './manifest.webmanifest',
     './icons/app-180.png',
     './icons/app-192.png',
-    './icons/app-512.png'
+    './icons/app-512.png',
+    './icons/app-512-maskable.png',
+    './icons/OrbINT logo.png'
 ];
 
 self.addEventListener('install', (event) => {
