@@ -1,157 +1,180 @@
-<p align="center">
-  <a href="https://delexoo.github.io/OrbINT/">
-    <img src="icons/app-512.png" width="112" height="112" alt="OrbINT">
-  </a>
-</p>
+<div align="center">
 
-<h1 align="center">OrbINT</h1>
+<img src="icons/app-512.png" width="128" height="128" alt="OrbINT logo">
 
-<p align="center">
-  <strong>A local-first OSINT case file.</strong><br>
-  Map every fact onto a subject orbit. Search from the field you just filed.
-</p>
+# OrbINT
 
-<p align="center">
-  <a href="https://delexoo.github.io/OrbINT/"><img src="https://img.shields.io/badge/Launch-Live%20App-67e8f9?style=for-the-badge&labelColor=09090b" alt="Launch live app"></a>
-  <a href="https://github.com/Delexoo/OrbINT"><img src="https://img.shields.io/badge/GitHub-Delexoo%2FOrbINT-18181b?style=for-the-badge&logo=github&logoColor=fafafa" alt="GitHub"></a>
-  <img src="https://img.shields.io/badge/Runs-in%20the%20browser-22c55e?style=for-the-badge&labelColor=09090b" alt="Runs in the browser">
-  <img src="https://img.shields.io/badge/Storage-this%20device-a1a1aa?style=for-the-badge&labelColor=09090b" alt="Stored on this device">
-</p>
+### Local-first OSINT case file
 
-<p align="center">
-  <img src="https://img.shields.io/github/stars/Delexoo/OrbINT?style=flat-square&color=67e8f9&labelColor=18181b" alt="Stars">
-  <img src="https://img.shields.io/github/forks/Delexoo/OrbINT?style=flat-square&color=22c55e&labelColor=18181b" alt="Forks">
-  <img src="https://img.shields.io/github/last-commit/Delexoo/OrbINT?style=flat-square&color=a1a1aa&labelColor=18181b" alt="Last commit">
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=Delexoo.OrbINT&left_color=18181b&right_color=67e8f9" alt="Repository views">
-</p>
+Map every fact onto a subject orbit. Search from the field you just filed.  
+Keep the case on this device — no account, no server upload.
 
-<p align="center">
-  <a href="https://delexoo.github.io/OrbINT/">
-    <img src="https://delexoo.github.io/OrbINT/icons/app-512.png" width="72" alt="">
-  </a>
-</p>
+<br>
 
-<p align="center">
-  <a href="https://delexoo.github.io/OrbINT/"><strong>Open OrbINT →</strong></a>
-  &nbsp;·&nbsp;
-  <a href="#how-to-use">How to use</a>
-  &nbsp;·&nbsp;
-  <a href="#what-you-can-file">What you can file</a>
-</p>
+[![Open OrbINT](https://img.shields.io/badge/🌐_Open_Live_App-67e8f9?style=for-the-badge&labelColor=09090b)](https://delexoo.github.io/OrbINT/)
+[![GitHub](https://img.shields.io/badge/GitHub-Delexoo%2FOrbINT-18181b?style=for-the-badge&logo=github&logoColor=ffffff)](https://github.com/Delexoo/OrbINT)
+
+<br>
+
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fdelexoo.github.io%2FOrbINT%2F&up_message=online&down_message=offline&style=flat-square&label=live%20site&labelColor=18181b)](https://delexoo.github.io/OrbINT/)
+[![Stars](https://img.shields.io/github/stars/Delexoo/OrbINT?style=flat-square&color=67e8f9&labelColor=18181b)](https://github.com/Delexoo/OrbINT/stargazers)
+[![Forks](https://img.shields.io/github/forks/Delexoo/OrbINT?style=flat-square&color=22c55e&labelColor=18181b)](https://github.com/Delexoo/OrbINT/network/members)
+[![Last commit](https://img.shields.io/github/last-commit/Delexoo/OrbINT?style=flat-square&color=a1a1aa&labelColor=18181b)](https://github.com/Delexoo/OrbINT/commits/main)
+[![Repo views](https://visitor-badge.laobi.icu/badge?page_id=Delexoo.OrbINT&left_text=views&left_color=18181b&right_color=67e8f9)](https://github.com/Delexoo/OrbINT)
+[![Hits](https://hits.sh/delexoo.github.io/OrbINT.svg?style=flat-square&label=site%20hits&color=67e8f9&labelColor=18181b)](https://hits.sh/delexoo.github.io/OrbINT/)
+
+<br>
+
+**[Launch OrbINT](https://delexoo.github.io/OrbINT/)** · [What it is](#what-is-orbint) · [How to use](#how-to-use) · [What you can file](#what-you-can-file)
+
+</div>
 
 ---
 
 ## What is OrbINT?
 
-OrbINT is an open-source investigation desk that lives in the browser. You do not create an account. You do not upload a case to a server. Facts stay on the machine in front of you.
+**OrbINT** is an open-source investigation desk that runs entirely in the browser.
 
-The working surface is an **orbit**: the subject sits in the hub, and every field — name, phone, email, username, address, plate, VIN, IP, image — is a pill on the ring. Fill a pill, and OrbINT hands you the next places to look.
+You do not create an account. You do not sync a case to someone else’s cloud. Facts stay on the machine in front of you.
 
-Use it when you need a quiet, visual case file for **open-source intelligence**: people, accounts, infrastructure, vehicles, and records.
+The desk is an **orbit**:
+
+| | |
+| :---: | --- |
+| <img src="icons/app-192.png" width="48" alt=""> | The **subject** sits in the hub |
+| ◎ | Every fact is a **pill** on the ring — name, phone, email, username, address, plate, VIN, IP, image… |
+| ⌕ | Fill a pill and OrbINT opens the **next places to look** |
+
+Use it when you need a quiet, visual case file for open-source intelligence: people, accounts, infrastructure, vehicles, and records.
+
+<div align="center">
+
+### Try it now
+
+<a href="https://delexoo.github.io/OrbINT/">
+  <img src="https://img.shields.io/badge/delexoo.github.io%2FOrbINT-Open_in_browser-09090b?style=for-the-badge&logo=googlechrome&logoColor=67e8f9&labelColor=18181b" alt="Open live site">
+</a>
+
+</div>
 
 ---
 
 ## How to use
 
-### 1. Open the desk
+### 1 · Open the desk
 
-- **Live:** [delexoo.github.io/OrbINT](https://delexoo.github.io/OrbINT/)
-- **Local:** clone this repo and open `index.html` — no build step.
-
-### 2. Name the subject
-
-Click the hub or the case-file name. That label follows the orbit as you work.
-
-### 3. File facts on the orbit
-
-Click a pill and type. Drag pills to rearrange. Scroll to zoom. Pan the grid. Neighboring boxes may overlap for a moment, then ease apart.
-
-| Control | Action |
+| Path | |
 | --- | --- |
-| Click a pill | Edit that field |
-| Magnifying glass | Open searches for the value you filed |
-| `+` near the hub | Add another field |
-| Left case file | Read the same facts as a dossier |
-| Recenter | Bring the orbit back into view |
+| **Live** | [https://delexoo.github.io/OrbINT/](https://delexoo.github.io/OrbINT/) |
+| **Local** | Clone this repo → open `index.html` — no build, no install |
 
-### 4. Search from the field
+### 2 · Name the subject
 
-Every filled pill can open sources that already know that kind of data — people indexes, maps, reverse-image, username checks, vehicle records, and more. OrbINT copies the value when a site needs a paste.
+Click the hub or the name in the case file. That label stays with the orbit as you work.
 
-### 5. Use the toolkit
+### 3 · File facts on the orbit
 
-Open **OSINT toolkit** when a field search is not enough. Categories stay collapsed until you click them. Search the catalog, or open it from a field to see tools that match.
+Click a pill and type. Drag to rearrange. Scroll to zoom. Pan the grid.
 
-### 6. Keep photos with the case
+Neighboring boxes may overlap for a moment, then **ease apart** on their own.
 
-The portrait on the case file is the primary image. Dotted **+** tiles under it add more. Click a thumbnail to expand and scroll the set.
+| Control | What it does |
+| --- | --- |
+| **Click a pill** | Edit that field |
+| **Magnifying glass** | Open searches for the value you filed |
+| **`+` near the hub** | Add another field |
+| **Left case file** | Read the same facts as a dossier |
+| **Recenter** | Bring the orbit back into view |
 
-### 7. Work more than one profile
+### 4 · Search from the field
 
-The rail beside the case file holds saved subjects. Switch between them without leaving the orbit. Linked profiles appear as extra hubs on the map.
+Every filled pill can open sources that already know that kind of data — people indexes, maps, reverse image, username checks, vehicle records, and more.
+
+When a site needs a paste, OrbINT copies the value for you.
+
+### 5 · Use the OSINT toolkit
+
+Open **OSINT toolkit** when a field search is not enough.
+
+- Categories stay **collapsed** until you click them  
+- Search the catalog by name or host  
+- Open it from a field to surface tools that match  
+
+### 6 · Keep photos with the case
+
+The portrait on the case file is the primary image.  
+Dotted **`+`** tiles under it add more. Click a thumbnail to expand and scroll the set.
+
+### 7 · Work more than one profile
+
+The rail beside the case file holds saved subjects. Switch without leaving the orbit. Linked profiles show up as extra hubs on the map.
 
 ---
 
 ## What you can file
 
-<p align="center">
-  <img src="icons/platforms/google.svg" width="22" alt="Google">
-  &nbsp;
-  <img src="icons/platforms/x.svg" width="22" alt="X">
-  &nbsp;
-  <img src="icons/platforms/instagram.svg" width="22" alt="Instagram">
-  &nbsp;
-  <img src="icons/platforms/facebook.svg" width="22" alt="Facebook">
-  &nbsp;
-  <img src="icons/platforms/linkedin.svg" width="22" alt="LinkedIn">
-  &nbsp;
-  <img src="icons/platforms/github.svg" width="22" alt="GitHub">
-  &nbsp;
-  <img src="icons/platforms/telegram.svg" width="22" alt="Telegram">
-  &nbsp;
-  <img src="icons/platforms/discord.svg" width="22" alt="Discord">
-  &nbsp;
-  <img src="icons/platforms/tiktok.svg" width="22" alt="TikTok">
-  &nbsp;
-  <img src="icons/platforms/reddit.svg" width="22" alt="Reddit">
-  &nbsp;
-  <img src="icons/platforms/youtube.svg" width="22" alt="YouTube">
-</p>
+<div align="center">
 
-Identity, contact, accounts, location, vehicles, infrastructure, media, and notes — including:
+<img src="icons/platforms/google.svg" width="24" height="24" alt="Google">&nbsp;
+<img src="icons/platforms/x.svg" width="24" height="24" alt="X">&nbsp;
+<img src="icons/platforms/instagram.svg" width="24" height="24" alt="Instagram">&nbsp;
+<img src="icons/platforms/facebook.svg" width="24" height="24" alt="Facebook">&nbsp;
+<img src="icons/platforms/linkedin.svg" width="24" height="24" alt="LinkedIn">&nbsp;
+<img src="icons/platforms/github.svg" width="24" height="24" alt="GitHub">&nbsp;
+<img src="icons/platforms/telegram.svg" width="24" height="24" alt="Telegram">&nbsp;
+<img src="icons/platforms/discord.svg" width="24" height="24" alt="Discord">&nbsp;
+<img src="icons/platforms/tiktok.svg" width="24" height="24" alt="TikTok">&nbsp;
+<img src="icons/platforms/reddit.svg" width="24" height="24" alt="Reddit">&nbsp;
+<img src="icons/platforms/youtube.svg" width="24" height="24" alt="YouTube">&nbsp;
+<img src="icons/platforms/whatsapp.svg" width="24" height="24" alt="WhatsApp">
 
-- Name, age, birthday, occupation, company  
-- Phone, email, username, website, password  
-- Address, timezone, country code  
-- Plate, VIN, vehicle  
-- IP, domain, Wi-Fi, wallet  
-- Image, audio, records, box numbers  
+</div>
 
-Username pills can bind to a platform so searches follow that network.
+<br>
+
+| Area | Examples |
+| --- | --- |
+| **Identity** | Name, age, birthday, occupation, company |
+| **Contact** | Phone, email, username, website, password |
+| **Place** | Address, timezone, country code |
+| **Vehicle** | Plate, VIN, vehicle |
+| **Infra** | IP, domain, Wi‑Fi, wallet |
+| **Media** | Image, audio, records, notes |
+
+Username pills can bind to a **platform** so searches follow that network.
 
 ---
 
 ## How it runs
 
-OrbINT is a static web app. There is no backend in this repository.
+OrbINT is a **static web app**. There is no backend in this repository.
 
-- Cases are stored in **this browser** (`localStorage`)
-- Photos stay with the profile on this device
-- Install it as a PWA from the live site when the browser offers it
-- Export a case when you need a file off the desk
+| | |
+| --- | --- |
+| **Storage** | Cases live in this browser (`localStorage`) |
+| **Photos** | Stay with the profile on this device |
+| **Install** | Add as a PWA when the browser offers it |
+| **Export** | Take a case file off the desk when you need it |
 
-Treat it as a workstation, not a cloud vault. If you clear site data, the case leaves with it.
+Treat it as a workstation, not a cloud vault. Clear site data and the case leaves with it.
 
 ---
 
 ## Open source
 
-```text
+```bash
 git clone https://github.com/Delexoo/OrbINT.git
+cd OrbINT
 ```
 
-Then open `index.html`. That is the whole install.
+Open `index.html`. That is the whole install.
 
-<p align="center">
-  <a href="https://delexoo.github.io/OrbINT/"><img src="https://img.shields.io/badge/Open-OrbINT-09090b?style=for-the-badge&logoColor=67e8f9&color=67e8f9" alt="Open OrbINT"></a>
-</p>
+<div align="center">
+
+<br>
+
+[![Launch](https://img.shields.io/badge/Launch_OrbINT-67e8f9?style=for-the-badge&labelColor=09090b&logo=safari&logoColor=09090b)](https://delexoo.github.io/OrbINT/)
+
+<sub>Built for investigators who want the map and the case file in one place.</sub>
+
+</div>
