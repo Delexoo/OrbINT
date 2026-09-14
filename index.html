@@ -14,9 +14,10 @@
             --faint: #71717a;
             --accent: #67e8f9;
             --warn: #fbbf24;
-            --sidebar: 268px;
-            --sidebar-min: 200px;
-            --sidebar-max: 560px;
+            --sidebar: 320px;
+            --sidebar-min: 248px;
+            --sidebar-max: 620px;
+            --rail: 52px;
             --safe-t: env(safe-area-inset-top, 0px);
             --safe-r: env(safe-area-inset-right, 0px);
             --safe-b: env(safe-area-inset-bottom, 0px);
@@ -58,12 +59,186 @@
             border-right: 1px solid var(--line);
             background: var(--panel);
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             min-width: 0;
             z-index: 9;
             padding-top: var(--safe-t);
             padding-bottom: var(--safe-b);
             padding-left: var(--safe-l);
+        }
+
+        .profile-rail {
+            width: var(--rail);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 0 12px;
+            border-right: 1px solid var(--line);
+            background: #08080a;
+            min-height: 0;
+            user-select: none;
+        }
+
+        .profile-rail-list {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            overflow-x: hidden;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 0;
+        }
+
+        .profile-rail-item {
+            appearance: none;
+            position: relative;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: 1px solid var(--line);
+            border-radius: 50%;
+            background: #18181b;
+            color: #d4d4d8;
+            overflow: hidden;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+        }
+
+        .profile-rail-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .profile-rail-item span {
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1;
+            letter-spacing: -0.02em;
+        }
+
+        .profile-rail-item:hover {
+            border-color: #3f3f46;
+            background: #1c1c20;
+        }
+
+        .profile-rail-item.active {
+            border-color: #4ade80;
+            border-radius: 12px;
+            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.18);
+        }
+
+        .profile-rail-tools {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding-top: 8px;
+            border-top: 1px solid var(--line);
+            flex-shrink: 0;
+        }
+
+        .profile-rail-tools button {
+            appearance: none;
+            position: relative;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+        }
+
+        .profile-rail-tools button svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+
+        .profile-rail-tools button:hover { background: #18181b; }
+
+        .profile-rail-tools button::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: calc(100% + 8px);
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #18181b;
+            border: 1px solid var(--line);
+            color: var(--text);
+            font-size: 12px;
+            line-height: 1.2;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            z-index: 20;
+        }
+
+        .profile-rail-tools button:hover::after,
+        .profile-rail-tools button:focus-visible::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .profile-menu {
+            position: fixed;
+            z-index: 45;
+            width: 168px;
+            display: flex;
+            flex-direction: column;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #111113;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+        }
+
+        .profile-menu[hidden] { display: none !important; }
+
+        .profile-menu button {
+            appearance: none;
+            width: 100%;
+            display: block;
+            border: 0;
+            background: transparent;
+            color: var(--text);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .profile-menu button:hover { background: #1c1c20; }
+        .profile-menu button:disabled {
+            color: #52525b;
+            cursor: default;
+        }
+        .profile-menu button:disabled:hover { background: transparent; }
+        .profile-menu button.field-danger { color: #fca5a5; }
+
+        .profile-main {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .profile-resize {
@@ -239,6 +414,8 @@
         .btn.primary:hover { background: #e4e4e7; }
         .btn:focus-visible,
         .icon-btn:focus-visible,
+        .profile-rail-item:focus-visible,
+        .profile-rail-tools button:focus-visible,
         .node:focus-within {
             outline: 1px solid var(--text);
             outline-offset: 2px;
@@ -853,6 +1030,7 @@
             color: var(--text);
             display: flex;
             align-items: center;
+            flex-wrap: nowrap;
             gap: 8px;
             overflow: visible;
             cursor: grab;
@@ -888,7 +1066,7 @@
             z-index: 6;
         }
 
-        .node.branch {
+        .node.branch:not(.platform-node) {
             width: 168px;
         }
 
@@ -1230,7 +1408,14 @@
             flex: 1;
             display: flex;
             align-items: center;
+            flex-wrap: nowrap;
             gap: 8px;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .node-copy [hidden] {
+            display: none !important;
         }
 
         .node-copy label {
@@ -1251,6 +1436,7 @@
         .node.renaming .platform-trigger,
         .node.renaming .node-more,
         .node.renaming .tz-clock,
+        .node.renaming .tz-pick,
         .node.renaming .tz-trigger,
         .node.renaming select { display: none; }
 
@@ -1281,36 +1467,72 @@
             text-overflow: ellipsis;
         }
 
+        .node input[type="hidden"] {
+            display: none !important;
+            position: absolute;
+            width: 0;
+            height: 0;
+            flex: none;
+            pointer-events: none;
+        }
+
         .node input::placeholder { color: #71717a; }
 
-        .node.tz-node { width: 236px; }
+        .node.tz-node { width: 186px; }
+        .node.tz-node.filled,
+        .node.tz-node.null { width: 248px; }
+        .node.tz-node .node-copy { gap: 6px; }
 
-        .tz-trigger {
-            appearance: none;
+        .tz-pick {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .node.filled .tz-pick,
+        .node.null .tz-pick {
             flex: 0 0 auto;
-            min-width: 58px;
-            height: 26px;
-            padding: 0 8px;
-            border: 1px solid #27272a;
-            border-radius: 8px;
-            background: #141416;
-            color: var(--text);
-            font: inherit;
+        }
+
+        .tz-abbr {
+            flex: none;
             font-size: 12px;
             font-weight: 650;
             letter-spacing: 0.04em;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+            color: var(--text);
             cursor: pointer;
+            line-height: 32px;
         }
 
-        .tz-trigger.empty {
+        .tz-pick.empty .tz-abbr {
             color: #71717a;
             font-weight: 500;
             letter-spacing: 0;
         }
+
+        .node.filled .tz-abbr { color: #bbf7d0; }
+        .node.null .tz-abbr { color: #fecaca; }
+
+        .tz-trigger {
+            appearance: none;
+            flex: none;
+            width: 12px;
+            height: 22px;
+            padding: 0;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: inherit;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+        }
+
+        .tz-pick.empty .tz-trigger { color: #71717a; }
+        .node.filled .tz-trigger { color: #86efac; }
+        .node.null .tz-trigger { color: #fecaca; }
 
         .tz-trigger::after {
             content: "";
@@ -1318,26 +1540,17 @@
             height: 0;
             border-left: 3.5px solid transparent;
             border-right: 3.5px solid transparent;
-            border-top: 4px solid currentColor;
-            opacity: 0.5;
+            border-top: 4.5px solid currentColor;
+            opacity: 0.7;
         }
 
-        .tz-trigger:hover {
-            border-color: #3f3f46;
+        .tz-trigger:hover,
+        .tz-abbr:hover {
             color: #fff;
         }
 
-        .node.filled .tz-trigger {
-            background: rgba(20, 83, 45, 0.55);
-            border-color: rgba(74, 222, 128, 0.35);
-            color: #bbf7d0;
-        }
-
-        .node.null .tz-trigger {
-            background: rgba(127, 29, 29, 0.5);
-            border-color: rgba(248, 113, 113, 0.4);
-            color: #fecaca;
-        }
+        .node.filled .tz-trigger:hover,
+        .node.filled .tz-abbr:hover { color: #dcfce7; }
 
         .tz-menu {
             position: absolute;
@@ -1472,13 +1685,11 @@
 
         .tz-clock {
             flex: 1;
-            min-width: 0;
+            min-width: 4.6em;
             font-size: 12px;
             font-variant-numeric: tabular-nums;
             color: #86efac;
             line-height: 32px;
-            overflow: hidden;
-            text-overflow: ellipsis;
             white-space: nowrap;
         }
 
@@ -1486,7 +1697,8 @@
 
         .node[data-field="username"],
         .node[data-field="password"],
-        .node.platform-node { width: 236px; }
+        .node.platform-node,
+        .node.branch.platform-node { width: 236px; }
 
         .node.email-node,
         .node[data-field="email"],
@@ -1501,10 +1713,15 @@
             background: transparent;
             color: var(--muted);
             font-size: 13px;
+            line-height: 32px;
             text-align: left;
             cursor: pointer;
             padding: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
+        .platform-trigger[hidden] { display: none !important; }
 
         .platform-trigger:hover { color: var(--text); }
 
@@ -1639,9 +1856,13 @@
         @media (max-width: 1100px) {
             .profile-head, .profile-body { padding-left: 20px; padding-right: 20px; }
             .node { width: 150px; }
-            .node.branch { width: 136px; }
-            .node.tz-node { width: 210px; }
+            .node.branch:not(.platform-node) { width: 136px; }
+            .node.tz-node { width: 150px; }
+            .node.tz-node.filled,
+            .node.tz-node.null { width: 228px; }
             .node.email-node { width: 190px; }
+            .node.platform-node,
+            .node.branch.platform-node { width: 210px; }
             .hub { width: 84px; height: 84px; }
         }
 
@@ -2321,9 +2542,9 @@
             margin-top: 14px;
             padding: 12px 14px;
             border-radius: 10px;
-            border: 1px solid rgba(251, 191, 36, 0.18);
-            background: rgba(251, 191, 36, 0.06);
-            color: #fde68a;
+            border: 1px solid rgba(103, 232, 249, 0.2);
+            background: rgba(103, 232, 249, 0.07);
+            color: #a5f3fc;
             font-size: 12.5px;
             line-height: 1.55;
         }
@@ -2422,6 +2643,14 @@
 
         .confirm-cancel:hover { background: #18181b; }
 
+        .confirm-ok {
+            border: 0;
+            background: #14532d;
+            color: #bbf7d0;
+        }
+
+        .confirm-ok:hover { background: #166534; }
+
         .confirm-go {
             border: 0;
             background: #7f1d1d;
@@ -2429,6 +2658,26 @@
         }
 
         .confirm-go:hover { background: #991b1b; }
+
+        .confirm-card input {
+            width: 100%;
+            height: 36px;
+            margin-top: 14px;
+            border: 1px solid #27272a;
+            border-radius: 10px;
+            background: #111113;
+            color: var(--text);
+            padding: 0 12px;
+            font: inherit;
+            font-size: 13px;
+        }
+
+        .confirm-card input:focus {
+            outline: none;
+            border-color: #3f3f46;
+        }
+
+        .confirm-card input[hidden] { display: none !important; }
 
         .phone-facts {
             display: flex;
@@ -2857,36 +3106,53 @@
 <body>
     <div class="backdrop" id="backdrop" hidden></div>
     <aside class="profile-panel" id="profilePanel">
-        <header class="profile-head">
-            <p class="case-kicker">Case file</p>
-            <div class="profile-head-row">
-                <div class="target-face visible" id="targetFace"><img alt="" src="icons/defaultprofile.jpg"></div>
-                <div class="target-id">
-                    <h1 class="subject-name" id="subjectName">Anonymous</h1>
-                    <p class="meta" id="idStack">Unidentified · File public facts to build this profile</p>
+        <nav class="profile-rail" id="profileRail" aria-label="Saved profiles">
+            <div class="profile-rail-list" id="profileRailList"></div>
+            <div class="profile-rail-tools">
+                <button type="button" id="profileNew" data-tip="New profile" aria-label="New profile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <button type="button" id="profileUpload" data-tip="Upload profile" aria-label="Upload profile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M5 20h14"/></svg>
+                </button>
+                <button type="button" id="profileRename" data-tip="Rename profile" aria-label="Rename profile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M13.5 6.5l3 3"/></svg>
+                </button>
+                <input id="profileFile" type="file" accept=".json,application/json" hidden multiple>
+            </div>
+        </nav>
+        <div class="profile-main">
+            <header class="profile-head">
+                <p class="case-kicker">Case file</p>
+                <div class="profile-head-row">
+                    <div class="target-face visible" id="targetFace"><img alt="" src="icons/defaultprofile.jpg"></div>
+                    <div class="target-id">
+                        <h1 class="subject-name" id="subjectName">Anonymous</h1>
+                        <p class="meta" id="idStack">Unidentified · File facts to build this profile</p>
+                    </div>
+                    <button class="icon-btn" id="profileClose" type="button" aria-label="Close profile">×</button>
                 </div>
-                <button class="icon-btn" id="profileClose" type="button" aria-label="Close profile">×</button>
-            </div>
-            <div class="profile-socials" id="profileSocials"></div>
-            <div class="coverage">
-                <div class="coverage-row">
-                    <span class="coverage-label" id="coverageLabel">0 filed</span>
+                <div class="profile-socials" id="profileSocials"></div>
+                <div class="coverage">
+                    <div class="coverage-row">
+                        <span class="coverage-label" id="coverageLabel">0 filed</span>
+                    </div>
+                    <div class="bar"><span id="completenessFill"></span></div>
                 </div>
-                <div class="bar"><span id="completenessFill"></span></div>
-            </div>
-        </header>
-        <div class="profile-body">
-            <div class="section" id="factsSection">
-                <div id="factsList"><p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder information. Replace it with real public information using the diagram.</p></div>
-            </div>
-            <div class="section" id="leadsSection" hidden>
-                <div id="leadsList"></div>
-            </div>
-            <div class="section" id="cautionSection" hidden>
-                <div class="caution" id="cautionText"></div>
-            </div>
-            <div class="section" id="analysisSection" hidden>
-                <div class="analysis" id="analysisBox"></div>
+            </header>
+            <div class="profile-body">
+                <div class="section" id="factsSection">
+                    <div id="factsList"><p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder information. Replace it with real information using the diagram.</p></div>
+                </div>
+                <div class="section" id="leadsSection" hidden>
+                    <div id="leadsList"></div>
+                </div>
+                <div class="section" id="cautionSection" hidden>
+                    <div class="caution" id="cautionText"></div>
+                </div>
+                <div class="section" id="analysisSection" hidden>
+                    <div class="analysis" id="analysisBox"></div>
+                </div>
             </div>
         </div>
         <div class="profile-resize" id="profileResize" role="separator" aria-orientation="vertical" aria-label="Resize portfolio"></div>
@@ -3035,7 +3301,7 @@
             <div class="node" data-field="timezone" style="left: calc(50% + -130px - 93px); top: calc(50% + 143px - 17px);">
                 <div class="node-copy">
                     <label>Timezone</label>
-                    <button class="tz-trigger empty" type="button" aria-label="Timezone" aria-haspopup="listbox"><span class="tz-abbr">Zone</span></button>
+                    <span class="tz-pick empty"><span class="tz-abbr">Zone</span><button class="tz-trigger" type="button" aria-label="Choose timezone" aria-haspopup="listbox"></button></span>
                     <input id="field-timezone" type="hidden" value="">
                     <span class="tz-clock" data-tz-clock="timezone" hidden></span>
                     <button class="search-btn" type="button" data-search="timezone" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
@@ -3048,22 +3314,6 @@
                     <input id="field-crypto" type="text" inputmode="text" placeholder="Address" spellcheck="false" autocomplete="off">
                     <button class="search-btn" type="button" data-search="crypto" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
                     <button class="node-clear" type="button" data-clear="crypto" aria-label="Remove">×</button>
-                </div>
-            </div>
-            <div class="node" data-field="mac" style="left: calc(50% + -218px - 93px); top: calc(50% + 71px - 17px);">
-                <div class="node-copy">
-                    <label for="field-mac">MAC</label>
-                    <input id="field-mac" type="text" inputmode="text" placeholder="AA:BB:CC:DD:EE:FF" spellcheck="false" autocomplete="off">
-                    <button class="search-btn" type="button" data-search="mac" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
-                    <button class="node-clear" type="button" data-clear="mac" aria-label="Remove">×</button>
-                </div>
-            </div>
-            <div class="node" data-field="barcode" style="left: calc(50% + -238px - 93px); top: calc(50% + 24px - 17px);">
-                <div class="node-copy">
-                    <label for="field-barcode">Barcode</label>
-                    <input id="field-barcode" type="text" inputmode="text" placeholder="UPC, QR, or URL" spellcheck="false" autocomplete="off">
-                    <button class="search-btn" type="button" data-search="barcode" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
-                    <button class="node-clear" type="button" data-clear="barcode" aria-label="Remove">×</button>
                 </div>
             </div>
             <div class="node" data-field="notes" style="left: calc(50% + -238px - 93px); top: calc(50% + -24px - 17px);">
@@ -3080,14 +3330,6 @@
                     <input id="field-company" type="text" inputmode="text" placeholder="Employer or workplace" spellcheck="false" autocomplete="off">
                     <button class="search-btn" type="button" data-search="company" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
                     <button class="node-clear" type="button" data-clear="company" aria-label="Remove">×</button>
-                </div>
-            </div>
-            <div class="node" data-field="geo" style="left: calc(50% + -181px - 93px); top: calc(50% + -111px - 17px);">
-                <div class="node-copy">
-                    <label for="field-geo">Geo</label>
-                    <input id="field-geo" type="text" inputmode="text" placeholder="Place or lat, lng" spellcheck="false" autocomplete="off">
-                    <button class="search-btn" type="button" data-search="geo" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
-                    <button class="node-clear" type="button" data-clear="geo" aria-label="Remove">×</button>
                 </div>
             </div>
             <div class="node" data-field="vin" style="left: calc(50% + -130px - 93px); top: calc(50% + -143px - 17px);">
@@ -3172,13 +3414,27 @@
         </div>
     </div>
 
+    <div class="confirm-sheet" id="profilePrompt" hidden>
+        <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="profilePromptTitle" aria-describedby="profilePromptLead">
+            <h2 id="profilePromptTitle">New profile</h2>
+            <p id="profilePromptLead">Give this case a name.</p>
+            <input id="profilePromptInput" type="text" maxlength="48" placeholder="Untitled" autocomplete="off" spellcheck="false">
+            <div class="confirm-actions">
+                <button type="button" class="confirm-cancel" id="profilePromptCancel">Cancel</button>
+                <button type="button" class="confirm-ok" id="profilePromptGo">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-menu" id="profileMenu" hidden></div>
+
     <div class="help-guide" id="helpGuide" hidden>
         <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
             <div class="help-top">
                 <div>
                     <div class="help-kicker">Operator guide</div>
                     <h2 id="helpTitle">How OrbINT is meant to be used</h2>
-                    <p class="help-lead">One subject. Public facts only. File what you know on the orbit, then search outward from each field. The left sheet is the case file.</p>
+                    <p class="help-lead">One subject. File every fact you have on the orbit — people, accounts, infrastructure, vehicles, records, media — then search outward from each field. The left sheet is the case file.</p>
                 </div>
                 <button class="help-close" id="helpClose" type="button" aria-label="Close help">×</button>
             </div>
@@ -3206,7 +3462,7 @@
                             <span class="help-num">3</span>
                             <div>
                                 <strong>Read the portfolio</strong>
-                                <span>The left sheet shows the subject name, a short ID line, and filed facts by group. Click a row to focus that field. Hover a row to remove it.</span>
+                                <span>The left sheet shows the subject name, a short ID line, and filed facts by group. The rail on its left holds saved profiles. Click a row to focus that field. Hover a row to remove it.</span>
                             </div>
                         </div>
                     </div>
@@ -3220,7 +3476,7 @@
                             <span class="help-num">1</span>
                             <div>
                                 <strong>Empty field — information</strong>
-                                <span>The i icon lists public places where that kind of fact usually appears. Use this when you do not have the value yet.</span>
+                                <span>The i icon lists where that kind of fact usually turns up. Use this when you do not have the value yet.</span>
                                 <div class="help-ex"><code>Phone empty → Whitepages, TruePeopleSearch</code></div>
                             </div>
                         </div>
@@ -3233,7 +3489,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="help-callout">Public web sources only. No unauthorized access, credential attacks, dump sites, or plate-to-owner / private registration lookups.</div>
+                    <div class="help-callout">OrbINT is the full workstation: identity, accounts, infrastructure, vehicles and registration, credentials, records, media, and anything you add. File the fact, then search from the pill.</div>
                 </section>
 
                 <section class="help-section">
@@ -3246,12 +3502,12 @@
                         </div>
                         <div class="help-field">
                             <b>Image / Audio</b>
-                            <span>Paste a public URL, or use + to upload. Preview opens from the thumbnail.</span>
+                            <span>Paste a URL, or use + to upload. Preview opens from the thumbnail.</span>
                             <em>https://…/portrait.jpg</em>
                         </div>
                         <div class="help-field">
                             <b>IP</b>
-                            <span>Public geolocation and indexed services. The pin opens a map when the address looks valid.</span>
+                            <span>Geolocation, hosting, and indexed services. The pin opens a map when the address looks valid.</span>
                             <em>8.8.8.8</em>
                         </div>
                         <div class="help-field">
@@ -3265,8 +3521,8 @@
                             <em>Northwind Analytics LLC</em>
                         </div>
                         <div class="help-field">
-                            <b>VIN / Plate / MAC</b>
-                            <span>Public decode, recalls, and web mentions only — not owner or registration records.</span>
+                            <b>VIN / Plate</b>
+                            <span>Decode, history, registration, and owner trails. MAC, Geo, and Barcode live under Add a field.</span>
                             <em>1HGCM82633A004352</em>
                         </div>
                     </div>
@@ -3283,7 +3539,18 @@
                         <span class="help-kbd">Drag hub</span>
                         <span class="help-kbd">Move orbit</span>
                     </div>
-                    <p style="margin-top:12px">The + on the hub adds a field. Pick a hidden or extra one, or type a name to create your own. Right-click a field to copy, cut, paste, rename, clear, search, or remove that pill from the orbit. Right-click empty map space for Help, Recenter, Undo, Redo, Export, Share, and Reset. Recenter restores the default view. Drag the right edge of the left sheet to resize the portfolio. Reset wipes the whole case and reloads a fresh page.</p>
+                    <p style="margin-top:12px">The + on the hub adds a field. Pick a hidden or extra one, or type a name to create your own. Right-click a field to copy, cut, paste, rename, clear, search, or remove that pill from the orbit. Right-click empty map space for Help, Recenter, Undo, Redo, Export, Share, and Reset. Recenter restores the default view. Drag the right edge of the left sheet to resize the portfolio. Reset wipes every profile, the map, and saved layout, then reloads a fresh page.</p>
+                </section>
+
+                <section class="help-section">
+                    <h3>Profiles</h3>
+                    <p>Keep more than one subject. The rail on the left of the portfolio is the case shelf.</p>
+                    <div class="help-dock">
+                        <div><b>Switch</b>Click a face to open that profile. The orbit and facts follow it.</div>
+                        <div><b>New</b>Start a blank case. Name it now or leave it untitled.</div>
+                        <div><b>Upload</b>Import an OrbINT .json profile, including files from Export.</div>
+                        <div><b>Rename</b>The pencil names the current profile. Right-click a face to rename, duplicate, download, or delete.</div>
+                    </div>
                 </section>
 
                 <section class="help-section">
@@ -3291,17 +3558,18 @@
                     <div class="help-dock">
                         <div><b>Help</b>This guide.</div>
                         <div><b>Recenter</b>Reset zoom and pan. Does not touch facts.</div>
+                        <div><b>Playtest</b>Fill every visible field with random sample data. Undo restores the previous case.</div>
                         <div><b>Undo / Redo</b>Step through filed changes. Ctrl+Z and Ctrl+Y. Unlimited in this session.</div>
                         <div><b>Export</b>Download .txt, .md, .json, or .html.</div>
                         <div><b>Share</b>QR code, copy link, or the system share sheet for this site.</div>
-                        <div><b>Reset</b>Wipe the case, layout, custom fields, and saved width, then reload fresh.</div>
+                        <div><b>Reset</b>Wipe every profile, the map, custom fields, and saved width, then reload fresh.</div>
                     </div>
                 </section>
 
                 <section class="help-section">
                     <h3>A clean first pass</h3>
                     <p>Name + city, then username, then email or phone. Use the i icon or magnifier before adding a weaker identifier. Example: file <code style="font-family:ui-monospace,monospace;font-size:12px;color:#86efac">Jordan Hale</code>, search people directories, pick up <code style="font-family:ui-monospace,monospace;font-size:12px;color:#86efac">@jordanh</code> on Instagram, then check whether that handle repeats on WhatsMyName.</p>
-                    <p class="help-foot">Esc closes menus, previews, and this guide. Use only lawful, public information.</p>
+                    <p class="help-foot">Esc closes menus, previews, and this guide.</p>
                 </section>
             </div>
         </div>
@@ -3321,7 +3589,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
         <button type="button" id="dockRecenter" data-tip="Recenter" aria-label="Recenter">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
+        </button>
+        <button type="button" id="dockPlaytest" data-tip="Playtest" aria-label="Playtest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
         </button>
         <button type="button" id="dockUndo" data-tip="Undo" aria-label="Undo" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 1 1 0 12h-2"/></svg>
@@ -3388,6 +3659,7 @@
             <div class="phone-more-list">
                 <button type="button" id="phoneUndo">Undo</button>
                 <button type="button" id="phoneRedo">Redo</button>
+                <button type="button" id="phonePlaytest">Playtest</button>
                 <button type="button" id="phoneExport">Export</button>
                 <a id="phoneDonate" href="https://buy.stripe.com/9B63cu3RE2ouaKgcHLcjS00" target="_blank" rel="noopener noreferrer">Donate</a>
                 <button class="danger" type="button" id="phoneReset">Reset</button>

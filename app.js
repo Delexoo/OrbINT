@@ -1,9 +1,9 @@
         const GROUPS = [
             { id: 'identity', label: 'Identity', fields: ['name', 'username', 'image'] },
             { id: 'contact', label: 'Contact', fields: ['phone', 'email', 'password'] },
-            { id: 'location', label: 'Location', fields: ['address', 'geo', 'ip', 'wifi'] },
+            { id: 'location', label: 'Location', fields: ['address', 'ip', 'wifi'] },
             { id: 'entity', label: 'Entity', fields: ['company', 'domain', 'crypto'] },
-            { id: 'evidence', label: 'Evidence', fields: ['audio', 'vin', 'plate', 'mac', 'record', 'barcode'] },
+            { id: 'evidence', label: 'Evidence', fields: ['audio', 'vin', 'plate', 'record'] },
             { id: 'notes', label: 'Notes', fields: ['timezone', 'notes'] },
             { id: 'custom', label: 'Custom', fields: [] }
         ];
@@ -200,7 +200,7 @@
                 leads.push([platform.label, 'The associated site', 'https://www.google.com/search?q=' + encodeURIComponent(platform.label)]);
             }
             leads.push(
-                ['Have I Been Pwned', 'Check public breach exposure', 'https://haveibeenpwned.com/Passwords'],
+                ['Have I Been Pwned', 'Check breach exposure', 'https://haveibeenpwned.com/Passwords'],
                 ['Intelligence X', 'Public leak collections', 'https://intelx.io/'],
                 ['DeHashed', 'Breach compilation search', 'https://dehashed.com/']
             );
@@ -278,7 +278,7 @@
                 id: 'password',
                 label: 'Password',
                 placeholder: 'Password',
-                caution: 'Only file passwords that already appear in public sources. Do not use them to sign in.',
+                caution: 'File it as a case fact. Search exposure and related accounts.',
                 leads: (v, fact) => passwordLeads(v, fact)
             },
             {
@@ -324,10 +324,12 @@
                 id: 'plate',
                 label: 'Plate',
                 placeholder: 'Plate text',
-                caution: 'Plate-to-owner lookups are restricted in many places. Use only public photos, maps, and lawful records.',
+                caution: 'Run the plate through photos, indexes, and vehicle records.',
                 leads: (v) => [
-                    ['Public web mentions', 'Photos, posts, or dashcam stills', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '" license plate')],
-                    ['Image search', 'The plate appearing in public pictures', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v + ' license plate')]
+                    ['Web mentions', 'Photos, posts, or dashcam stills', 'https://www.google.com/search?q=' + encodeURIComponent('"' + v + '" license plate')],
+                    ['Image search', 'The plate in pictures', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v + ' license plate')],
+                    ['FindByPlate', 'Plate lookup', 'https://findbyplate.com/'],
+                    ['FaxVin', 'Plate and VIN records', 'https://www.faxvin.com/license-plate-lookup']
                 ]
             },
             {
@@ -370,24 +372,6 @@
                 ]
             },
             {
-                id: 'mac',
-                label: 'MAC',
-                placeholder: 'AA:BB:CC:DD:EE:FF',
-                caution: 'MAC addresses usually stay on the local network. Useful mainly when they already appear in a public leak or log.',
-                leads: (v) => [
-                    ['OUI / vendor', 'Manufacturer from the first 6 hex digits', 'https://www.google.com/search?q=' + encodeURIComponent(v.replace(/[:\-]/g, '').slice(0, 6) + ' OUI lookup')]
-                ]
-            },
-            {
-                id: 'barcode',
-                label: 'Barcode',
-                placeholder: 'UPC, QR, or URL',
-                leads: (v) => [
-                    ['Product lookup', 'UPC and catalog data', 'https://www.upcitemdb.com/upc/' + encodeURIComponent(v)],
-                    ['Safe URL open', 'Only if this is a known-good link', /^https?:/i.test(v) ? v : 'https://www.google.com/search?q=' + encodeURIComponent(v)]
-                ]
-            },
-            {
                 id: 'notes',
                 label: 'Notes',
                 placeholder: 'Case note',
@@ -407,20 +391,10 @@
                 ]
             },
             {
-                id: 'geo',
-                label: 'Geo',
-                placeholder: 'Place or lat, lng',
-                leads: (v) => [
-                    ['Google Maps', 'Street and satellite', 'https://www.google.com/maps/search/' + encodeURIComponent(v)],
-                    ['OpenStreetMap', 'Map and nearby features', 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)],
-                    ['Bing Maps', 'Alternate imagery', 'https://www.bing.com/maps?q=' + encodeURIComponent(v)]
-                ]
-            },
-            {
                 id: 'vin',
                 label: 'VIN',
                 placeholder: '17-character VIN',
-                caution: 'VIN decode and recalls are public. Owner and registration lookups are restricted in many places.',
+                caution: 'Decode, history, registration, and owner trails.',
                 leads: (v) => [
                     ['NHTSA decoder', 'Make, model, and plant', 'https://vpic.nhtsa.dot.gov/decoder/Decoder'],
                     ['NHTSA recalls', 'Public safety recalls', 'https://www.nhtsa.gov/recalls'],
@@ -430,6 +404,7 @@
         ];
 
         const STOCK_IDS = new Set(FIELDS.map((field) => field.id));
+        const STOCK_LABELS = Object.fromEntries(FIELDS.map((field) => [field.id, field.label]));
 
         function gq(q) { return 'https://www.google.com/search?q=' + encodeURIComponent(q); }
         function bq(q) { return 'https://www.bing.com/search?q=' + encodeURIComponent(q); }
@@ -439,7 +414,7 @@
 
         function engineSet(q) {
             return [
-                ['Google', 'Exact and related public pages', gq(q)],
+                ['Google', 'Exact and related pages', gq(q)],
                 ['Bing', 'Alternate index and cached pages', bq(q)],
                 ['Yandex', 'Often different regional hits', yq(q)],
                 ['DuckDuckGo', 'Same query, different ranking', dq(q)]
@@ -594,8 +569,11 @@
             ],
             vin: () => [
                 ['NHTSA decoder', 'Make, model, and plant', 'https://vpic.nhtsa.dot.gov/decoder/Decoder'],
-                ['NHTSA recalls', 'Public safety recalls', 'https://www.nhtsa.gov/recalls'],
-                ['Google', 'Quoted VIN in public pages', gq('"VIN"')]
+                ['FaxVin', 'VIN history and records', 'https://www.faxvin.com/'],
+                ['VIN Decoderz', 'Decode and specs', 'https://www.vindecoderz.com/'],
+                ['Bumper', 'Vehicle history', 'https://www.bumper.com/'],
+                ['NHTSA recalls', 'Safety recalls', 'https://www.nhtsa.gov/recalls'],
+                ['Google', 'Quoted VIN', gq('"VIN"')]
             ],
             social: () => [
                 ['WhatsMyName', 'Find accounts from a handle', 'https://whatsmyname.app/'],
@@ -753,9 +731,13 @@
                 ...engineSet(v)
             ],
             plate: (v) => [
-                ['Google', 'Quoted plate in posts', gq(quoted(v) + ' license plate')],
-                ['Google Images', 'Public photos', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v + ' license plate')],
-                ['Yandex Images', 'Alternate photo index', 'https://yandex.com/images/search?text=' + encodeURIComponent(v + ' license plate')]
+                ['FindByPlate', 'Plate lookup', 'https://findbyplate.com/'],
+                ['FaxVin', 'Plate and VIN records', 'https://www.faxvin.com/license-plate-lookup'],
+                ['Bumper', 'Vehicle history', 'https://www.bumper.com/'],
+                ['Google', 'Quoted plate', gq(quoted(v) + ' license plate')],
+                ['Google Images', 'Photos', 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(v + ' license plate')],
+                ['Yandex Images', 'Alternate photo index', 'https://yandex.com/images/search?text=' + encodeURIComponent(v + ' license plate')],
+                ...engineSet(quoted(v) + ' license plate')
             ],
             record: (v) => [
                 ['CourtListener', 'Federal dockets', 'https://www.courtlistener.com/?q=' + encodeURIComponent(v) + '&type=r'],
@@ -831,7 +813,10 @@
             ],
             vin: (v) => [
                 ['NHTSA decoder', 'Make, model, and plant', 'https://vpic.nhtsa.dot.gov/decoder/Decoder'],
-                ['NHTSA recalls', 'Public safety recalls', 'https://www.nhtsa.gov/recalls'],
+                ['FaxVin', 'VIN history and records', 'https://www.faxvin.com/vin-check'],
+                ['VIN Decoderz', 'Decode and specs', 'https://www.vindecoderz.com/EN/check-lookup/' + encodeURIComponent(v)],
+                ['Bumper', 'Vehicle history', 'https://www.bumper.com/vin-lookup/' + encodeURIComponent(v) + '/'],
+                ['NHTSA recalls', 'Safety recalls', 'https://www.nhtsa.gov/recalls'],
                 ['Google', 'Quoted VIN', gq(quoted(v) + ' VIN')],
                 ['News', 'Mentions', 'https://news.google.com/search?q=' + encodeURIComponent(v)],
                 ...engineSet(quoted(v))
@@ -896,6 +881,7 @@
             { id: 'airport', label: 'Airport', placeholder: 'IATA or name', group: 'location' },
             { id: 'w3w', label: 'What3words', placeholder: 'word.word.word', group: 'location' },
             { id: 'poi', label: 'POI', placeholder: 'Point of interest', group: 'location' },
+            { id: 'geo', label: 'Geo', placeholder: 'Place or lat, lng', group: 'location' },
             { id: 'title', label: 'Job title', placeholder: 'Role or title', group: 'entity' },
             { id: 'industry', label: 'Industry', placeholder: 'Sector', group: 'entity' },
             { id: 'ein', label: 'Company ID', placeholder: 'EIN, CRN, or filing no.', group: 'entity' },
@@ -907,6 +893,8 @@
             { id: 'nonprofit', label: 'Nonprofit', placeholder: 'Org name', group: 'entity' },
             { id: 'brand', label: 'Brand', placeholder: 'Product or brand', group: 'entity' },
             { id: 'vehicle', label: 'Vehicle', placeholder: 'Make and model', group: 'evidence' },
+            { id: 'mac', label: 'MAC', placeholder: 'AA:BB:CC:DD:EE:FF', group: 'evidence', caution: 'Vendor from the OUI, plus any log, leak, or network record that already has this address.' },
+            { id: 'barcode', label: 'Barcode', placeholder: 'UPC, QR, or URL', group: 'evidence' },
             { id: 'color', label: 'Color', placeholder: 'Color or paint', group: 'evidence' },
             { id: 'document', label: 'Document', placeholder: 'Title or exhibit', group: 'evidence' },
             { id: 'hash', label: 'Hash', placeholder: 'MD5, SHA, or file hash', group: 'evidence' },
@@ -930,6 +918,7 @@
 
         function buildAddedField(spec) {
             const base = spec.cloneOf || spec.id;
+            const extra = EXTRA_PRESETS.find((item) => item.id === spec.id);
             return {
                 id: spec.id,
                 label: spec.label,
@@ -939,6 +928,7 @@
                 cloneOf: spec.cloneOf || '',
                 file: spec.file || '',
                 custom: !!spec.custom,
+                caution: spec.caution || (extra && extra.caution) || '',
                 leads: (v, fact) => {
                     if (DEEP_LINKS[base]) return DEEP_LINKS[base](v, fact);
                     const source = FIELDS.find((item) => item.id === base && item !== spec);
@@ -958,8 +948,8 @@
             }
         }
 
-        function saveAddedFields() {
-            const specs = FIELDS.filter((field) => !STOCK_IDS.has(field.id)).map((field) => ({
+        function addedFieldSpecs() {
+            return FIELDS.filter((field) => !STOCK_IDS.has(field.id)).map((field) => ({
                 id: field.id,
                 label: field.label,
                 placeholder: field.placeholder,
@@ -969,7 +959,11 @@
                 file: field.file || '',
                 custom: !!field.custom
             }));
-            try { localStorage.setItem(ADDED_KEY, JSON.stringify(specs)); } catch (error) {}
+        }
+
+        function saveAddedFields() {
+            try { localStorage.setItem(ADDED_KEY, JSON.stringify(addedFieldSpecs())); } catch (error) {}
+            if (typeof queueLibrarySync === 'function') queueLibrarySync();
         }
 
         function isUrlFieldSpec(spec) {
@@ -998,6 +992,7 @@
             const map = storedFieldLabels();
             map[id] = label;
             try { localStorage.setItem(LABEL_KEY, JSON.stringify(map)); } catch (error) {}
+            if (typeof queueLibrarySync === 'function') queueLibrarySync();
         }
 
         function applyStoredFieldLabels() {
@@ -1033,7 +1028,11 @@
 
         function fieldBase(id) {
             const field = fieldById(id);
-            return (field && field.cloneOf) || id;
+            if (field && field.cloneOf) return field.cloneOf;
+            const raw = String(id || '');
+            const cut = raw.match(/^(.*)-(\d+)$/);
+            if (cut && fieldById(cut[1])) return cut[1];
+            return raw;
         }
 
         function fieldGroupId(field) {
@@ -1152,12 +1151,14 @@
             if (!node) return;
             const id = node.dataset.field;
             const input = document.getElementById('field-' + id);
+            const pick = node.querySelector('.tz-pick');
             const trigger = node.querySelector('.tz-trigger');
-            const abbr = trigger && trigger.querySelector('.tz-abbr');
+            const abbr = node.querySelector('.tz-abbr');
             if (!trigger || !abbr) return;
             const zone = resolveTimezoneValue((input && input.value) || firstValue(id));
             const nulled = !zone && isNullField(id);
             abbr.textContent = nulled ? 'Unknown' : ((timezoneMeta(zone) && timezoneMeta(zone).abbr) || 'Zone');
+            if (pick) pick.classList.toggle('empty', !zone && !nulled);
             trigger.classList.toggle('empty', !zone && !nulled);
             trigger.setAttribute('aria-label', zone ? 'Timezone ' + abbr.textContent : 'Choose timezone');
         }
@@ -1185,7 +1186,7 @@
                     el.textContent = '';
                     return;
                 }
-                const next = formatZoneTime(zone);
+                const next = formatZoneTimeShort(zone);
                 el.hidden = !next;
                 if (next) el.textContent = next;
             });
@@ -1217,7 +1218,7 @@
             }
             if (FIND_LINKS[base]) return FIND_LINKS[base]();
             const field = fieldById(fieldId);
-            return [['Google', 'Public search', gq(field ? field.label : '')]];
+            return [['Google', 'Search', gq(field ? field.label : '')]];
         }
 
         function setSearchIcon(node, filled) {
@@ -1255,6 +1256,7 @@
 
         function saveHiddenFields() {
             try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hiddenFields))); } catch (error) {}
+            if (typeof queueLibrarySync === 'function') queueLibrarySync();
         }
 
         function applyHiddenFields() {
@@ -1332,7 +1334,13 @@
             document.querySelectorAll('.node').forEach((item) => {
                 item.classList.toggle('active', item.dataset.field === id);
             });
-            if (input) {
+            if (isPlatformField(id)) {
+                const trigger = node && node.querySelector('.platform-trigger');
+                const hasPlatform = !!(node && node.dataset.platform);
+                if (input) input.hidden = !hasPlatform;
+                if (!hasPlatform && trigger) trigger.focus();
+                else if (input) input.focus();
+            } else if (input && input.type !== 'hidden') {
                 input.hidden = false;
                 input.focus();
             }
@@ -1430,6 +1438,19 @@
             }
             const preset = EXTRA_PRESETS.find((item) => item.id === id);
             if (preset) installOrbitField(preset);
+        }
+
+        function restoreFilledOptionalPresets() {
+            if (!profile || !profile.facts) return;
+            let added = false;
+            EXTRA_PRESETS.forEach((preset) => {
+                if (fieldById(preset.id)) return;
+                const items = profile.facts[preset.id] || [];
+                if (!items.some((item) => item && String(item.value || '').trim())) return;
+                FIELDS.push(buildAddedField(preset));
+                added = true;
+            });
+            if (added) saveAddedFields();
         }
 
         function addCustomField(label, placeholder) {
@@ -1669,6 +1690,7 @@
             }
             if (act === 'restore') showAllFields();
             if (act === 'recenter') recenterOrbit();
+            if (act === 'playtest') playtestFillVisibleFields();
             if (act === 'help') openHelp();
             if (act === 'undo') undoCase();
             if (act === 'redo') redoCase();
@@ -1751,6 +1773,7 @@
             menu.innerHTML =
                 '<button type="button" data-field-act="help">Help</button>' +
                 '<button type="button" data-field-act="recenter">Recenter</button>' +
+                '<button type="button" data-field-act="playtest">Playtest</button>' +
                 '<button type="button" data-field-act="undo" ' + (canUndo ? '' : 'disabled') + '>Undo</button>' +
                 '<button type="button" data-field-act="redo" ' + (canRedo ? '' : 'disabled') + '>Redo</button>' +
                 '<div class="field-sep"></div>' +
@@ -1816,7 +1839,7 @@
                     ? '<div class="search-menu-note">' + (fieldId === 'image'
                         ? 'Searches the photo itself, not the file name.'
                         : 'Opens with this value filled in. Copied for sites that need a paste.') + '</div>'
-                    : '<div class="search-menu-note">Public OSINT Framework sources for a ' + escapeHtml(field.label.toLowerCase()) + '.</div>') +
+                    : '<div class="search-menu-note">Sources for a ' + escapeHtml(field.label.toLowerCase()) + '.</div>') +
                 (field.caution ? '<div class="search-menu-note">' + escapeHtml(field.caution) + '</div>' : '') +
                 '<div class="search-list">' +
                 links.map((item) => (
@@ -1874,9 +1897,9 @@
         const SIDEBAR_KEY = 'osint-sidebar-w';
 
         function applySidebarWidth(px) {
-            const max = Math.max(200, Math.min(560, (window.innerWidth || 1200) - 220));
+            const max = Math.max(248, Math.min(620, (window.innerWidth || 1200) - 220));
             const raw = Math.round(Number(px));
-            const width = Math.max(200, Math.min(max, Number.isFinite(raw) ? raw : 268));
+            const width = Math.max(248, Math.min(max, Number.isFinite(raw) ? raw : 320));
             document.documentElement.style.setProperty('--sidebar', width + 'px');
             if (profilePanel) profilePanel.style.width = '';
             return width;
@@ -1943,6 +1966,7 @@
         profile = loadProfile();
         if (!profile.facts) profile.facts = emptyFacts();
         if (!Array.isArray(profile.nulls)) profile.nulls = [];
+        restoreFilledOptionalPresets();
 
         const mediaStore = {};
 
@@ -1958,6 +1982,7 @@
                 });
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(slim)); } catch (retry) {}
             }
+            if (typeof queueLibrarySync === 'function') queueLibrarySync();
         }
 
         const history = { past: [], future: [], applying: false, timer: 0 };
@@ -1972,6 +1997,609 @@
 
         function snapshotsEqual(a, b) {
             return !!a && !!b && JSON.stringify(a) === JSON.stringify(b);
+        }
+
+        const PROFILE_INDEX_KEY = 'osint-profile-index-v1';
+        const PROFILE_DATA_PREFIX = 'osint-profile-data-v1:';
+        let profileLibrary = null;
+        let libraryLock = false;
+        let librarySyncTimer = 0;
+        let profilePromptState = null;
+
+        function profileDataKey(id) {
+            return PROFILE_DATA_PREFIX + id;
+        }
+
+        function newProfileId() {
+            return 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        }
+
+        function factNameFrom(facts) {
+            const items = facts && facts.name;
+            if (!Array.isArray(items) || !items.length) return '';
+            const last = items[items.length - 1];
+            return String((last && last.value) || '').trim();
+        }
+
+        function compactFaceFrom(facts) {
+            const items = facts && facts.image;
+            const last = Array.isArray(items) && items.length ? items[items.length - 1] : null;
+            if (!last) return '';
+            if (last.preview && String(last.preview).length < 120000) return String(last.preview);
+            if (last.media && /^https?:/i.test(String(last.media))) return String(last.media);
+            if (last.value && /^https?:/i.test(String(last.value))) return String(last.value);
+            return '';
+        }
+
+        function displayProfileName(entry) {
+            if (!entry) return 'Untitled';
+            if (entry.named && String(entry.title || '').trim()) return String(entry.title).trim();
+            if (entry.id && profileLibrary && entry.id === profileLibrary.activeId) {
+                const live = typeof subjectDisplayName === 'function' ? subjectDisplayName() : '';
+                if (live && live !== 'Anonymous') return live;
+            }
+            const saved = factNameFrom(entry.facts);
+            if (saved) return saved;
+            if (String(entry.title || '').trim()) return String(entry.title).trim();
+            return 'Untitled';
+        }
+
+        function profileLetter(name) {
+            const ch = String(name || 'U').replace(/[^A-Za-z0-9]/g, '').charAt(0);
+            return (ch || 'U').toUpperCase();
+        }
+
+        function emptyLibraryEntry(id, title, named) {
+            return {
+                id: id,
+                kind: 'orbint-profile',
+                title: String(title || '').trim().slice(0, 48),
+                named: !!named,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                analysis: '',
+                facts: {},
+                nulls: [],
+                added: [],
+                labels: {},
+                hidden: [],
+                layout: null
+            };
+        }
+
+        function readStoredJson(key, fallback) {
+            try {
+                const raw = JSON.parse(localStorage.getItem(key) || '');
+                return raw == null ? fallback : raw;
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        function writeStoredJson(key, value) {
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+                return true;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function loadProfileEntry(id) {
+            const raw = readStoredJson(profileDataKey(id), null);
+            if (!raw || typeof raw !== 'object') return null;
+            raw.id = id;
+            raw.facts = raw.facts && typeof raw.facts === 'object' ? raw.facts : {};
+            raw.nulls = Array.isArray(raw.nulls) ? raw.nulls.filter(Boolean) : [];
+            raw.added = Array.isArray(raw.added) ? raw.added : [];
+            raw.labels = raw.labels && typeof raw.labels === 'object' && !Array.isArray(raw.labels) ? raw.labels : {};
+            raw.hidden = Array.isArray(raw.hidden) ? raw.hidden : [];
+            return raw;
+        }
+
+        function saveProfileEntry(entry) {
+            if (!entry || !entry.id) return;
+            writeStoredJson(profileDataKey(entry.id), entry);
+        }
+
+        function deleteProfileEntry(id) {
+            try { localStorage.removeItem(profileDataKey(id)); } catch (error) {}
+        }
+
+        function saveProfileIndex() {
+            if (!profileLibrary) return;
+            writeStoredJson(PROFILE_INDEX_KEY, {
+                activeId: profileLibrary.activeId,
+                order: profileLibrary.order.slice()
+            });
+        }
+
+        function currentLayoutSnapshot() {
+            if (typeof loadSavedLayout === 'function') {
+                try { return loadSavedLayout(); } catch (error) {}
+            }
+            return readStoredJson(LAYOUT_KEY, null);
+        }
+
+        function captureWorkspace(id, prev) {
+            const snap = typeof snapshotProfile === 'function' ? snapshotProfile() : {
+                analysis: (profile && profile.analysis) || '',
+                facts: (profile && profile.facts) || {},
+                nulls: (profile && Array.isArray(profile.nulls)) ? profile.nulls : []
+            };
+            const title = prev && prev.named ? prev.title : (displayProfileName({
+                id: id,
+                title: prev && prev.title,
+                named: prev && prev.named,
+                facts: snap.facts
+            }));
+            return {
+                id: id,
+                kind: 'orbint-profile',
+                title: String(title || '').trim().slice(0, 48),
+                named: !!(prev && prev.named),
+                createdAt: (prev && prev.createdAt) || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                analysis: snap.analysis || '',
+                facts: snap.facts || {},
+                nulls: Array.isArray(snap.nulls) ? snap.nulls : [],
+                added: addedFieldSpecs(),
+                labels: storedFieldLabels(),
+                hidden: Array.from(hiddenFields),
+                layout: currentLayoutSnapshot()
+            };
+        }
+
+        function queueLibrarySync() {
+            if (libraryLock || !profileLibrary) return;
+            clearTimeout(librarySyncTimer);
+            librarySyncTimer = setTimeout(syncActiveLibrary, 80);
+        }
+
+        function flushLibrarySync() {
+            clearTimeout(librarySyncTimer);
+            librarySyncTimer = 0;
+            if (typeof saveOrbitLayout === 'function') {
+                try { saveOrbitLayout(); } catch (error) {}
+            }
+            syncActiveLibrary();
+        }
+
+        function syncActiveLibrary() {
+            if (libraryLock || !profileLibrary || !profileLibrary.activeId) return;
+            const id = profileLibrary.activeId;
+            const prev = profileLibrary.items[id] || emptyLibraryEntry(id, '', false);
+            const next = captureWorkspace(id, prev);
+            profileLibrary.items[id] = next;
+            saveProfileEntry(next);
+            saveProfileIndex();
+        }
+
+        function resetStockFields() {
+            for (let i = FIELDS.length - 1; i >= 0; i--) {
+                if (!STOCK_IDS.has(FIELDS[i].id)) FIELDS.splice(i, 1);
+            }
+            FIELDS.forEach((field) => {
+                if (STOCK_LABELS[field.id]) field.label = STOCK_LABELS[field.id];
+            });
+        }
+
+        function removeNonStockNodes() {
+            if (!mapCanvas) return;
+            mapCanvas.querySelectorAll('.node').forEach((node) => {
+                if (!STOCK_IDS.has(node.dataset.field)) node.remove();
+            });
+        }
+
+        function clearSessionMedia() {
+            Object.keys(mediaStore).forEach((id) => {
+                if (mediaStore[id] && mediaStore[id].src && String(mediaStore[id].src).indexOf('blob:') === 0) {
+                    URL.revokeObjectURL(mediaStore[id].src);
+                }
+                delete mediaStore[id];
+            });
+            if (typeof closeMediaViewer === 'function') closeMediaViewer();
+        }
+
+        function applyOrbitLayout(layout) {
+            nodeHomes.clear();
+            orbitItems = [];
+            cachedLayout = layout && layout.items ? layout : null;
+            if (cachedLayout) {
+                orbit.dragX = Number.isFinite(cachedLayout.dragX) ? cachedLayout.dragX : 0;
+                orbit.dragY = Number.isFinite(cachedLayout.dragY) ? cachedLayout.dragY : 0;
+                orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
+                orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
+                if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
+                    orbit.zoom = cachedLayout.zoom;
+                    orbit.targetZoom = cachedLayout.zoom;
+                } else if (typeof recenterOrbit === 'function') {
+                    recenterOrbit();
+                }
+                (cachedLayout.homes || []).forEach((entry) => {
+                    if (entry && entry[0] && entry[1]) nodeHomes.set(entry[0], entry[1]);
+                });
+                orbit.restoreHomes = nodeHomes.size > 0;
+            } else {
+                if (typeof recenterOrbit === 'function') recenterOrbit();
+                orbit.restoreHomes = false;
+            }
+            try {
+                if (cachedLayout) localStorage.setItem(LAYOUT_KEY, JSON.stringify(cachedLayout));
+                else localStorage.removeItem(LAYOUT_KEY);
+            } catch (error) {}
+        }
+
+        function applyWorkspace(entry) {
+            if (!entry) return;
+            libraryLock = true;
+            try {
+                closeProfileMenu();
+                closeProfilePrompt();
+                if (typeof closeFieldMenu === 'function') closeFieldMenu();
+                if (typeof closeSearchMenu === 'function') closeSearchMenu();
+                if (typeof closePlatformMenu === 'function') closePlatformMenu();
+                if (typeof closeExportMenu === 'function') closeExportMenu();
+                clearSessionMedia();
+                revealedPasswords.clear();
+                activeField = null;
+                history.past = [];
+                history.future = [];
+                history.applying = true;
+
+                resetStockFields();
+                removeNonStockNodes();
+                (entry.added || []).forEach((spec) => {
+                    if (!spec || !spec.id || isUrlFieldSpec(spec) || fieldById(spec.id)) return;
+                    FIELDS.push(buildAddedField(spec));
+                });
+
+                hiddenFields = new Set(entry.hidden || []);
+                const labels = entry.labels && typeof entry.labels === 'object' ? entry.labels : {};
+                try { localStorage.setItem(ADDED_KEY, JSON.stringify(entry.added || [])); } catch (error) {}
+                try { localStorage.setItem(LABEL_KEY, JSON.stringify(labels)); } catch (error) {}
+                try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hiddenFields))); } catch (error) {}
+
+                profile.facts = Object.assign(emptyFacts(), entry.facts || {});
+                profile.analysis = entry.analysis || '';
+                profile.nulls = Array.isArray(entry.nulls) ? entry.nulls.filter(Boolean) : [];
+                restoreFilledOptionalPresets();
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(profile)); } catch (error) {}
+
+                applyOrbitLayout(entry.layout || null);
+                createNodes();
+                applyStoredFieldLabels();
+                applyHiddenFields();
+                renderProfile();
+                renderNodes();
+                updateHubProgress();
+                orbit.snapLayout = true;
+                if (typeof positionNodes === 'function') positionNodes();
+                orbit.snapLayout = false;
+                orbit.restoreHomes = false;
+                history.applying = false;
+                pushHistory();
+                updateHistoryButtons();
+            } finally {
+                libraryLock = false;
+            }
+        }
+
+        function renderProfileRail() {
+            const list = document.getElementById('profileRailList');
+            if (!list || !profileLibrary) return;
+            const stamp = profileLibrary.order.map((id) => {
+                const entry = profileLibrary.items[id] || { id: id };
+                const live = id === profileLibrary.activeId;
+                const facts = live ? profile.facts : entry.facts;
+                const name = displayProfileName(live ? Object.assign({}, entry, { facts: facts, id: id }) : entry);
+                const face = compactFaceFrom(facts);
+                return id + (live ? '*' : '') + ':' + name + ':' + (face ? String(face.length) + face.slice(-20) : profileLetter(name));
+            }).join('|');
+            if (list.dataset.stamp === stamp) return;
+            list.dataset.stamp = stamp;
+            list.innerHTML = profileLibrary.order.map((id) => {
+                const entry = profileLibrary.items[id] || { id: id };
+                const live = id === profileLibrary.activeId;
+                const facts = live ? profile.facts : entry.facts;
+                const name = displayProfileName(live ? Object.assign({}, entry, { facts: facts, id: id }) : entry);
+                const face = compactFaceFrom(facts);
+                const active = live ? ' active' : '';
+                const mark = face
+                    ? '<img alt="" src="' + escapeHtml(face) + '">'
+                    : '<span>' + escapeHtml(profileLetter(name)) + '</span>';
+                return '<button type="button" class="profile-rail-item' + active + '" data-profile="' + escapeHtml(id) + '" title="' + escapeHtml(name) + '" aria-label="' + escapeHtml(name) + '" aria-current="' + (live ? 'true' : 'false') + '">' + mark + '</button>';
+            }).join('');
+        }
+
+        function closeProfileMenu() {
+            const menu = document.getElementById('profileMenu');
+            if (menu) menu.hidden = true;
+        }
+
+        function closeProfilePrompt() {
+            hideSheet(document.getElementById('profilePrompt'));
+            profilePromptState = null;
+        }
+
+        function openProfilePrompt(mode, id) {
+            closeProfileMenu();
+            const sheet = document.getElementById('profilePrompt');
+            const title = document.getElementById('profilePromptTitle');
+            const lead = document.getElementById('profilePromptLead');
+            const input = document.getElementById('profilePromptInput');
+            const go = document.getElementById('profilePromptGo');
+            if (!sheet || !title || !lead || !go) return;
+            profilePromptState = { mode: mode, id: id || (profileLibrary && profileLibrary.activeId) };
+            const entry = profileLibrary && profileLibrary.items[profilePromptState.id];
+            const currentName = displayProfileName(entry);
+            input.hidden = mode === 'delete';
+            go.className = mode === 'delete' ? 'confirm-go' : 'confirm-ok';
+            if (mode === 'create') {
+                title.textContent = 'New profile';
+                lead.textContent = 'Give this case a name. Leave it blank to keep it untitled.';
+                go.textContent = 'Create';
+                input.value = '';
+                input.placeholder = 'Untitled';
+            } else if (mode === 'rename') {
+                title.textContent = 'Rename profile';
+                lead.textContent = 'This name is for the rail. It does not change the Name field.';
+                go.textContent = 'Rename';
+                input.value = currentName === 'Untitled' || currentName === 'Anonymous' ? '' : currentName;
+                input.placeholder = currentName || 'Untitled';
+            } else {
+                title.textContent = 'Delete profile?';
+                lead.textContent = '"' + currentName + '" will be removed from this browser. This cannot be undone.';
+                go.textContent = 'Delete';
+                input.value = '';
+            }
+            showSheet(sheet);
+            if (!input.hidden) {
+                requestAnimationFrame(function () {
+                    input.focus();
+                    input.select();
+                });
+            } else {
+                const cancel = document.getElementById('profilePromptCancel');
+                if (cancel) cancel.focus();
+            }
+        }
+
+        function submitProfilePrompt() {
+            if (!profilePromptState) return;
+            const mode = profilePromptState.mode;
+            const id = profilePromptState.id;
+            const input = document.getElementById('profilePromptInput');
+            const value = input ? input.value : '';
+            closeProfilePrompt();
+            if (mode === 'create') createProfile(value);
+            else if (mode === 'rename') renameProfile(id, value);
+            else if (mode === 'delete') deleteProfile(id);
+        }
+
+        function openProfileMenu(event, id) {
+            const menu = document.getElementById('profileMenu');
+            if (!menu || !profileLibrary) return;
+            closeFieldMenu();
+            closeExportMenu();
+            const only = profileLibrary.order.length < 2;
+            menu.innerHTML =
+                '<button type="button" data-profile-act="open">Open</button>' +
+                '<button type="button" data-profile-act="rename">Rename</button>' +
+                '<button type="button" data-profile-act="duplicate">Duplicate</button>' +
+                '<button type="button" data-profile-act="download">Download</button>' +
+                '<button type="button" class="field-danger" data-profile-act="delete"' + (only ? ' disabled' : '') + '>Delete</button>';
+            menu.dataset.profile = id;
+            menu.hidden = false;
+            const left = event.clientX;
+            const top = event.clientY;
+            const w = menu.offsetWidth || 168;
+            const h = menu.offsetHeight || 180;
+            menu.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
+            menu.style.top = Math.max(8, Math.min(top, window.innerHeight - h - 8)) + 'px';
+        }
+
+        function switchProfile(id) {
+            if (!profileLibrary || !id || id === profileLibrary.activeId) return;
+            if (!profileLibrary.items[id]) return;
+            flushLibrarySync();
+            profileLibrary.activeId = id;
+            saveProfileIndex();
+            applyWorkspace(profileLibrary.items[id]);
+            renderProfileRail();
+        }
+
+        function createProfile(title) {
+            if (!profileLibrary) return;
+            flushLibrarySync();
+            const id = newProfileId();
+            const name = String(title || '').trim().slice(0, 48);
+            const entry = emptyLibraryEntry(id, name, !!name);
+            profileLibrary.items[id] = entry;
+            profileLibrary.order.push(id);
+            profileLibrary.activeId = id;
+            saveProfileEntry(entry);
+            saveProfileIndex();
+            applyWorkspace(entry);
+            renderProfileRail();
+        }
+
+        function renameProfile(id, title) {
+            if (!profileLibrary || !id) return;
+            const entry = profileLibrary.items[id];
+            const name = String(title || '').trim().slice(0, 48);
+            if (!entry || !name) return;
+            if (id === profileLibrary.activeId) flushLibrarySync();
+            entry.title = name;
+            entry.named = true;
+            entry.updatedAt = new Date().toISOString();
+            saveProfileEntry(entry);
+            saveProfileIndex();
+            renderProfileRail();
+        }
+
+        function duplicateProfile(id) {
+            if (!profileLibrary || !id) return;
+            if (id === profileLibrary.activeId) flushLibrarySync();
+            const source = profileLibrary.items[id];
+            if (!source) return;
+            const copy = JSON.parse(JSON.stringify(source));
+            copy.id = newProfileId();
+            copy.createdAt = new Date().toISOString();
+            copy.updatedAt = copy.createdAt;
+            const base = displayProfileName(source);
+            copy.title = /copy$/i.test(base) ? base : (base + ' copy');
+            copy.named = true;
+            profileLibrary.items[copy.id] = copy;
+            const at = profileLibrary.order.indexOf(id);
+            profileLibrary.order.splice(at < 0 ? profileLibrary.order.length : at + 1, 0, copy.id);
+            profileLibrary.activeId = copy.id;
+            saveProfileEntry(copy);
+            saveProfileIndex();
+            applyWorkspace(copy);
+            renderProfileRail();
+        }
+
+        function deleteProfile(id) {
+            if (!profileLibrary || !id || profileLibrary.order.length < 2) return;
+            const at = profileLibrary.order.indexOf(id);
+            if (at < 0) return;
+            const wasActive = profileLibrary.activeId === id;
+            profileLibrary.order.splice(at, 1);
+            delete profileLibrary.items[id];
+            deleteProfileEntry(id);
+            if (wasActive) {
+                const nextId = profileLibrary.order[Math.max(0, at - 1)] || profileLibrary.order[0];
+                profileLibrary.activeId = nextId;
+                saveProfileIndex();
+                applyWorkspace(profileLibrary.items[nextId]);
+            } else {
+                saveProfileIndex();
+            }
+            renderProfileRail();
+        }
+
+        function exportProfileBundle(id) {
+            if (!profileLibrary) return {};
+            if (id === profileLibrary.activeId) flushLibrarySync();
+            const entry = profileLibrary.items[id];
+            return entry ? JSON.parse(JSON.stringify(entry)) : {};
+        }
+
+        function downloadProfile(id) {
+            const bundle = exportProfileBundle(id);
+            const name = displayProfileName(bundle).replace(/[^\w\-]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+            downloadBlob('orbint-' + (name || 'profile') + '.json', 'application/json', JSON.stringify(bundle, null, 2));
+        }
+
+        function coerceImportedEntry(raw, fallbackTitle) {
+            if (!raw || typeof raw !== 'object') return null;
+            const source = raw.facts && typeof raw.facts === 'object' ? raw : (raw.profile && raw.profile.facts ? raw.profile : null);
+            if (!source || typeof source.facts !== 'object') return null;
+            const id = newProfileId();
+            const title = String(raw.title || source.title || fallbackTitle || '').trim().slice(0, 48);
+            const named = !!(raw.named || raw.title || source.title);
+            return {
+                id: id,
+                kind: 'orbint-profile',
+                title: title,
+                named: named && !!title,
+                createdAt: raw.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                analysis: source.analysis || raw.analysis || '',
+                facts: source.facts,
+                nulls: Array.isArray(source.nulls) ? source.nulls : (Array.isArray(raw.nulls) ? raw.nulls : []),
+                added: Array.isArray(raw.added) ? raw.added : (Array.isArray(source.added) ? source.added : []),
+                labels: (raw.labels && typeof raw.labels === 'object' && !Array.isArray(raw.labels)) ? raw.labels
+                    : ((source.labels && typeof source.labels === 'object' && !Array.isArray(source.labels)) ? source.labels : {}),
+                hidden: Array.isArray(raw.hidden) ? raw.hidden : (Array.isArray(source.hidden) ? source.hidden : []),
+                layout: raw.layout || source.layout || null
+            };
+        }
+
+        function importedEntriesFrom(data, filename) {
+            const fallback = String(filename || '').replace(/\.json$/i, '').replace(/^orbint-/, '').replace(/[-_]+/g, ' ').trim();
+            if (Array.isArray(data)) {
+                return data.map((item) => coerceImportedEntry(item, fallback)).filter(Boolean);
+            }
+            if (!data || typeof data !== 'object') return [];
+            if (Array.isArray(data.profiles)) {
+                return data.profiles.map((item) => coerceImportedEntry(item, fallback)).filter(Boolean);
+            }
+            if (data.items && Array.isArray(data.order)) {
+                return data.order.map((id) => coerceImportedEntry(data.items[id], fallback)).filter(Boolean);
+            }
+            const one = coerceImportedEntry(data, fallback);
+            return one ? [one] : [];
+        }
+
+        function importProfileEntries(entries) {
+            if (!profileLibrary || !entries || !entries.length) return;
+            flushLibrarySync();
+            let lastId = '';
+            entries.forEach((entry) => {
+                profileLibrary.items[entry.id] = entry;
+                profileLibrary.order.push(entry.id);
+                saveProfileEntry(entry);
+                lastId = entry.id;
+            });
+            if (!lastId) return;
+            profileLibrary.activeId = lastId;
+            saveProfileIndex();
+            applyWorkspace(profileLibrary.items[lastId]);
+            renderProfileRail();
+        }
+
+        function uploadProfileFiles(fileList) {
+            const files = Array.from(fileList || []).filter((file) => file);
+            if (!files.length) return;
+            const jobs = files.map((file) => file.text().then((text) => {
+                let data = null;
+                try { data = JSON.parse(text); } catch (error) { return []; }
+                return importedEntriesFrom(data, file.name);
+            }));
+            Promise.all(jobs).then((groups) => {
+                const entries = groups.reduce((all, group) => all.concat(group), []);
+                importProfileEntries(entries);
+            }).catch(function () {});
+        }
+
+        function pickProfileUpload() {
+            const input = document.getElementById('profileFile');
+            if (!input) return;
+            input.value = '';
+            input.click();
+        }
+
+        function initProfileLibrary() {
+            const index = readStoredJson(PROFILE_INDEX_KEY, null);
+            profileLibrary = { activeId: '', order: [], items: {} };
+            if (index && Array.isArray(index.order) && index.order.length) {
+                index.order.forEach((id) => {
+                    if (!id) return;
+                    const entry = loadProfileEntry(id);
+                    if (!entry) return;
+                    profileLibrary.items[id] = entry;
+                    profileLibrary.order.push(id);
+                });
+                profileLibrary.activeId = profileLibrary.items[index.activeId] ? index.activeId : profileLibrary.order[0];
+            }
+            if (!profileLibrary.order.length) {
+                const id = newProfileId();
+                const seed = captureWorkspace(id, emptyLibraryEntry(id, factNameFrom(profile.facts), false));
+                profileLibrary.items[id] = seed;
+                profileLibrary.order = [id];
+                profileLibrary.activeId = id;
+                saveProfileEntry(seed);
+                saveProfileIndex();
+            } else {
+                const active = profileLibrary.items[profileLibrary.activeId];
+                const live = captureWorkspace(profileLibrary.activeId, active);
+                profileLibrary.items[profileLibrary.activeId] = live;
+                saveProfileEntry(live);
+                saveProfileIndex();
+            }
+            renderProfileRail();
         }
 
         function updateHistoryButtons() {
@@ -2143,6 +2771,198 @@
             const fieldId = input.id.replace('field-', '');
             const value = fieldBase(fieldId) === 'timezone' ? resolveTimezoneValue(input.value) : input.value;
             writeLatestFact(fieldId, value, extrasFromInput(fieldId, value));
+        }
+
+        function playtestPick(list) {
+            return list[Math.floor(Math.random() * list.length)];
+        }
+
+        function playtestInt(min, max) {
+            return min + Math.floor(Math.random() * (max - min + 1));
+        }
+
+        function playtestHex(len) {
+            let out = '';
+            for (let i = 0; i < len; i++) out += '0123456789abcdef'.charAt(Math.floor(Math.random() * 16));
+            return out;
+        }
+
+        function playtestDigits(len) {
+            let out = '';
+            for (let i = 0; i < len; i++) out += String(playtestInt(0, 9));
+            return out;
+        }
+
+        function playtestMakePersona() {
+            const first = playtestPick(['Jordan', 'Riley', 'Casey', 'Avery', 'Quinn', 'Morgan', 'Reese', 'Skyler', 'Harper', 'Cameron', 'Drew', 'Emerson']);
+            const last = playtestPick(['Hale', 'Voss', 'Mercer', 'Lang', 'Whitaker', 'Brooks', 'Keene', 'Solis', 'Hart', 'Nguyen', 'Patel', 'Okada']);
+            const place = playtestPick([
+                { zone: 'America/Los_Angeles', city: 'Portland', region: 'Oregon', postal: '97214', country: 'United States', area: '503', street: '1842 SE Division St', neighborhood: 'Hawthorne', geo: '45.5047, -122.6540', wifi: 'CedarHaus5G', airport: 'PDX', hotel: 'Ace Hotel Portland', landmark: 'Powell\'s City of Books' },
+                { zone: 'America/New_York', city: 'Brooklyn', region: 'New York', postal: '11215', country: 'United States', area: '347', street: '418 7th Ave', neighborhood: 'Park Slope', geo: '40.6602, -73.9982', wifi: 'SlopeFiber', airport: 'JFK', hotel: 'The William Vale', landmark: 'Prospect Park' },
+                { zone: 'America/Chicago', city: 'Austin', region: 'Texas', postal: '78704', country: 'United States', area: '512', street: '2211 S Lamar Blvd', neighborhood: 'South Lamar', geo: '30.2500, -97.7649', wifi: 'LamarGuest', airport: 'AUS', hotel: 'Hotel San Jose', landmark: 'Barton Springs' },
+                { zone: 'America/Denver', city: 'Denver', region: 'Colorado', postal: '80205', country: 'United States', area: '720', street: '3227 Larimer St', neighborhood: 'RiNo', geo: '39.7611, -104.9817', wifi: 'RiNoNet', airport: 'DEN', hotel: 'The Maven', landmark: 'Union Station' }
+            ]);
+            const handle = (first + last).toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) + String(playtestInt(2, 88));
+            const company = playtestPick(['Northline Logistics', 'Harbor & Pine', 'Kitewell Analytics', 'Redcedar Studio', 'Lowbridge Press']);
+            const n = playtestInt(100, 899);
+            return {
+                first: first,
+                last: last,
+                fullName: first + ' ' + last,
+                handle: handle,
+                email: handle + '@gmail.com',
+                emailAlt: first.toLowerCase() + '.' + last.toLowerCase() + '@outlook.com',
+                phone: place.area + playtestDigits(7),
+                phoneAlt: place.area + playtestDigits(7),
+                password: playtestPick(['Sunset', 'Cedar', 'Harbor', 'Maple']) + playtestInt(10, 99) + '!',
+                passwordAlt: playtestPick(['River', 'Night', 'Quartz']) + playtestInt(10, 99) + '#',
+                company: company,
+                title: playtestPick(['Analyst', 'Coordinator', 'Designer', 'Operator', 'Producer']),
+                industry: playtestPick(['Logistics', 'Media', 'Software', 'Retail', 'Transport']),
+                domain: handle + '.net',
+                site: 'https://' + handle + '.net',
+                image: 'https://picsum.photos/seed/' + handle + '/800/600.jpg',
+                audio: 'https://example.com/audio/' + handle + '-voicemail.mp3',
+                video: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                plate: playtestPick(['AVA', 'NXT', 'RNO', 'SLP']) + playtestInt(100, 999),
+                vin: '1HGCM' + playtestInt(100, 999) + playtestPick(['A', 'B', 'C']) + playtestInt(10, 99) + playtestDigits(6),
+                crypto: '0x' + playtestHex(40),
+                ip: playtestInt(20, 220) + '.' + playtestInt(1, 254) + '.' + playtestInt(1, 254) + '.' + playtestInt(1, 254),
+                mac: [0, 1, 2, 3, 4, 5].map(function () { return playtestHex(2); }).join(':'),
+                record: place.region.slice(0, 2).toUpperCase() + '-' + playtestInt(2022, 2026) + '-CV-' + playtestInt(1000, 9999),
+                notes: 'Public traces cluster around ' + place.city + '. Handle repeats on more than one site.',
+                quote: '"Mostly in ' + place.city + ' these days."',
+                event: 'Seen near ' + place.neighborhood + ', March 2026',
+                date: playtestPick(['3 Mar 2026', '18 Jan 2026', '9 Nov 2025']),
+                status: playtestPick(['Open', 'Linked', 'Need corroboration']),
+                color: playtestPick(['Matte black', 'Forest green', 'White', 'Navy']),
+                vehicle: playtestPick(['2018 Honda Civic', '2016 Toyota RAV4', '2014 Ford F-150']),
+                language: playtestPick(['English', 'English, Spanish']),
+                occupation: playtestPick(['Freight coordinator', 'Graphic designer', 'Night auditor']),
+                bio: place.city + ' / ' + company,
+                n: n,
+                place: place
+            };
+        }
+
+        function playtestValueFor(field, persona, extra, usedPlatforms) {
+            const id = field.id;
+            const base = fieldBase(id);
+            const key = (id + ' ' + (field.label || '') + ' ' + (field.placeholder || '')).toLowerCase();
+            const place = persona.place;
+            if (isPlatformField(id)) {
+                const pool = PLATFORMS.filter((item) => !usedPlatforms.has(item.id));
+                const platform = playtestPick(pool.length ? pool : PLATFORMS);
+                usedPlatforms.add(platform.id);
+                extra.platform = platform.id;
+                if (base === 'password') return id === 'password' ? persona.password : persona.passwordAlt + String(persona.n);
+                return '@' + persona.handle + (id === 'username' ? '' : String(playtestInt(2, 9)));
+            }
+            if (base === 'name') return persona.fullName;
+            if (base === 'email' || base === 'email2') return base === 'email2' || id !== 'email' ? persona.emailAlt : persona.email;
+            if (base === 'phone' || base === 'phone2' || base === 'fax' || /phone|fax|tel/.test(key)) {
+                return formatPhoneNumber(id === 'phone' || base === 'phone' ? persona.phone : persona.phoneAlt);
+            }
+            if (base === 'address') return place.street + ', ' + place.city + ', ' + place.region + ' ' + place.postal;
+            if (base === 'timezone') return place.zone;
+            if (base === 'image' || base === 'screenshot') {
+                extra.preview = persona.image;
+                extra.media = persona.image;
+                extra.kind = 'image';
+                return persona.image;
+            }
+            if (base === 'audio') {
+                extra.media = persona.audio;
+                extra.kind = 'audio';
+                return persona.audio;
+            }
+            if (base === 'ip') return persona.ip;
+            if (base === 'wifi') return place.wifi;
+            if (base === 'plate') return persona.plate;
+            if (base === 'record') return persona.record;
+            if (base === 'domain' || isUrlFieldSpec(field)) return persona.domain;
+            if (base === 'crypto') return persona.crypto;
+            if (base === 'notes') return persona.notes;
+            if (base === 'company') return persona.company;
+            if (base === 'vin') return persona.vin.slice(0, 17);
+            if (base === 'city') return place.city;
+            if (base === 'country') return place.country;
+            if (base === 'postal') return place.postal;
+            if (base === 'region') return place.region;
+            if (base === 'neighborhood') return place.neighborhood;
+            if (base === 'landmark') return place.landmark;
+            if (base === 'hotel') return place.hotel;
+            if (base === 'airport') return place.airport;
+            if (base === 'geo') return place.geo;
+            if (base === 'title') return persona.title;
+            if (base === 'industry') return persona.industry;
+            if (base === 'mac') return persona.mac.toUpperCase();
+            if (base === 'video') return persona.video;
+            if (base === 'telegram') return '@' + persona.handle;
+            if (base === 'discord') return persona.handle + '#' + playtestInt(1000, 9999);
+            if (base === 'skype') return persona.handle;
+            if (base === 'signal') return formatPhoneNumber(persona.phoneAlt);
+            if (base === 'hashtag') return '#' + persona.city.replace(/\s+/g, '');
+            if (base === 'mention') return '@' + persona.handle;
+            if (base === 'keyword') return persona.fullName + ' ' + place.city;
+            if (base === 'quote') return persona.quote;
+            if (base === 'event') return persona.event;
+            if (base === 'date') return persona.date;
+            if (base === 'status') return persona.status;
+            if (base === 'source') return 'Public web mention, ' + persona.date;
+            if (base === 'color') return persona.color;
+            if (base === 'vehicle') return persona.vehicle;
+            if (base === 'language') return persona.language;
+            if (base === 'occupation') return persona.occupation;
+            if (base === 'bio') return persona.bio;
+            if (base === 'w3w') return playtestPick(['cedar', 'harbor', 'maple']) + '.' + playtestPick(['quiet', 'rapid', 'solar']) + '.' + playtestPick(['river', 'orbit', 'linen']);
+            if (base === 'hash') return playtestHex(64);
+            if (base === 'uuid') return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : playtestHex(8) + '-' + playtestHex(4) + '-4' + playtestHex(3) + '-a' + playtestHex(3) + '-' + playtestHex(12);
+            if (base === 'imei') return playtestDigits(15);
+            if (base === 'barcode') return playtestDigits(12);
+            if (base === 'filename') return persona.handle + '_id.jpg';
+            if (base === 'useragent') return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+            if (base === 'exif') return 'iPhone 14, ' + place.geo;
+            if (base === 'asn') return 'AS' + playtestInt(1000, 64999);
+            if (base === 'ein') return playtestInt(10, 99) + '-' + playtestDigits(7);
+            if (base === 'pgp') return playtestHex(40).toUpperCase();
+            if (base === 'callsign') return 'W' + playtestPick(['A', 'B', 'K', 'N']) + playtestPick(['A', 'E', 'I', 'O']) + playtestPick(['L', 'M', 'R', 'T']);
+            if (base === 'aircraft') return 'N' + playtestInt(10000, 99999);
+            if (base === 'vessel') return 'MV ' + persona.last;
+            if (base === 'brand') return persona.company.split(' ')[0];
+            if (/url|website|link/.test(key)) return persona.site;
+            if (/user|handle|alias/.test(key)) return '@' + persona.handle;
+            if (/city/.test(key)) return place.city;
+            if (/email/.test(key)) return persona.emailAlt;
+            return persona.fullName + ' — ' + String(field.label || 'note').toLowerCase();
+        }
+
+        function playtestFillVisibleFields() {
+            const nodes = Array.from(document.querySelectorAll('.node:not(.off)'));
+            if (!nodes.length) return;
+            const persona = playtestMakePersona();
+            const usedPlatforms = new Set();
+            nodes.forEach((node) => {
+                const id = node.dataset.field;
+                const field = fieldById(id);
+                if (!field) return;
+                const extra = {};
+                const value = playtestValueFor(field, persona, extra, usedPlatforms);
+                if (!value) return;
+                if (isNullField(id)) setFieldNull(id, false, true);
+                const fact = { value: value, addedAt: new Date().toISOString() };
+                Object.keys(extra).forEach((key) => { fact[key] = extra[key]; });
+                if (extra.platform) node.dataset.platform = extra.platform;
+                profile.facts[id] = [fact];
+                const input = document.getElementById('field-' + id);
+                if (input) input.value = fieldBase(id) === 'timezone' ? resolveTimezoneValue(value) : value;
+            });
+            saveProfile();
+            renderProfile();
+            renderNodes();
+            updateHubProgress();
+            if (isPhone() && phoneFieldId) syncPhoneField();
+            recordHistory(true);
         }
 
         function removeFact(id, value) {
@@ -2573,8 +3393,8 @@
             } else {
                 idStack.hidden = false;
                 idStack.textContent = isPhone()
-                    ? 'No public facts yet'
-                    : 'Unidentified · File public facts to build this profile';
+                    ? 'No facts yet'
+                    : 'Unidentified · File facts to build this profile';
             }
 
             const factsSection = document.getElementById('factsSection');
@@ -2613,7 +3433,7 @@
             } else if (name !== 'Anonymous' || socials.length || firstValue('image')) {
                 factsList.innerHTML = '';
             } else {
-                factsList.innerHTML = '<p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder information. Replace it with real public information using the diagram.</p>';
+                factsList.innerHTML = '<p class="empty-note empty-brief"><strong>Anonymous</strong>Placeholder information. Replace it with real information using the diagram.</p>';
             }
 
             const analysisSection = document.getElementById('analysisSection');
@@ -2626,6 +3446,7 @@
                 analysisBox.textContent = '';
             }
             renderLeads(activeField);
+            if (typeof renderProfileRail === 'function') renderProfileRail();
         }
 
         function renderLeads(fieldId) {
@@ -3278,7 +4099,7 @@
             if (!mapCanvas) return;
             mapCanvas.querySelectorAll('.node').forEach((node) => {
                 const id = node.dataset.field;
-                if (id === 'url' || (id && id.indexOf('url-') === 0)) node.remove();
+                if (id === 'url' || (id && id.indexOf('url-') === 0) || (id && !fieldById(id))) node.remove();
             });
             mapCanvas.querySelectorAll('.node').forEach((node) => {
                 node.style.left = '';
@@ -3295,7 +4116,7 @@
                     node.innerHTML =
                         '<div class="node-copy">' +
                             '<label>' + escapeHtml(field.label) + '</label>' +
-                            '<button class="tz-trigger empty" type="button" aria-label="Timezone" aria-haspopup="listbox"><span class="tz-abbr">Zone</span></button>' +
+                            '<span class="tz-pick empty"><span class="tz-abbr">Zone</span><button class="tz-trigger" type="button" aria-label="Choose timezone" aria-haspopup="listbox"></button></span>' +
                             '<input id="field-' + field.id + '" type="hidden" value="">' +
                             '<span class="tz-clock" data-tz-clock="' + field.id + '" hidden></span>' +
                             '<button class="search-btn" type="button" data-search="' + field.id + '" aria-label="How to find this">' + FIND_ICON + '</button>' +
@@ -3368,7 +4189,7 @@
                 const filled = syncNodeFilled(input);
                 node.classList.toggle('active', activeField === field.id);
 
-                if (fieldBase(field.id) === 'username') {
+                if (isPlatformField(field.id)) {
                     const platformId = (fact && fact.platform) || node.dataset.platform || '';
                     setUsernameStep(node, platformId, filled);
                     return;
@@ -3411,6 +4232,10 @@
             targetSpotY: null,
             gridShiftX: 0,
             gridShiftY: 0,
+            gridPanX: 0,
+            gridPanY: 0,
+            gridOriginX: 0,
+            gridOriginY: 0,
             dragging: false,
             dragMode: null,
             dragStartX: 0,
@@ -3430,7 +4255,8 @@
             panVY: 0,
             prevCX: 0,
             prevCY: 0,
-            snapLayout: true
+            snapLayout: true,
+            restoreHomes: false
         };
         const LAYOUT_KEY = 'osint-orbit-layout-v1';
         const nodeHomes = new Map();
@@ -3467,11 +4293,14 @@
                     h: size.height,
                     dragX: orbit.dragX,
                     dragY: orbit.dragY,
+                    gridPanX: orbit.gridPanX,
+                    gridPanY: orbit.gridPanY,
                     zoom: orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom,
                     homes: Array.from(nodeHomes.entries()),
                     items: items
                 }));
             } catch (error) {}
+            if (typeof queueLibrarySync === 'function') queueLibrarySync();
         }
 
         function scheduleSaveLayout() {
@@ -3483,6 +4312,8 @@
         if (cachedLayout) {
             if (Number.isFinite(cachedLayout.dragX)) orbit.dragX = cachedLayout.dragX;
             if (Number.isFinite(cachedLayout.dragY)) orbit.dragY = cachedLayout.dragY;
+            orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
+            orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
             if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
                 orbit.zoom = cachedLayout.zoom;
                 orbit.targetZoom = cachedLayout.zoom;
@@ -3538,6 +4369,8 @@
         }
 
         function keepHubOnScreen(width, height) {
+            const prevX = orbit.dragX;
+            const prevY = orbit.dragY;
             if (orbit.dragging && orbit.dragMode === 'hub') {
                 orbit.dragX = orbit.grabX - width / 2 - orbit.parallaxX;
                 orbit.dragY = orbit.grabY - height / 2 - orbit.parallaxY;
@@ -3549,6 +4382,9 @@
             if (orbit.dragging && orbit.dragMode === 'hub') {
                 orbit.grabX = box.x;
                 orbit.grabY = box.y;
+            } else {
+                orbit.gridPanX += orbit.dragX - prevX;
+                orbit.gridPanY += orbit.dragY - prevY;
             }
             return box;
         }
@@ -3683,11 +4519,26 @@
                     const midR = Math.max(parent.rx + extra, 90);
                     const angNeed = Math.atan2((Math.max.apply(null, list.map((child) => child.w)) + 16) / 2, midR) * 2;
                     const fan = list.length > 1 ? Math.min(1.15, angNeed * (list.length - 1)) : 0;
+                    const home = nodeHomes.get(pid);
+                    const live = orbitItems.find((item) => item.node && item.node.dataset.field === pid);
+                    const polar = (home && Number.isFinite(home.angle))
+                        ? {
+                            angle: home.angle,
+                            rx: Number.isFinite(home.rx) ? home.rx : parent.rx,
+                            ry: Number.isFinite(home.ry) ? home.ry : parent.ry
+                        }
+                        : live
+                            ? {
+                                angle: live.tAngle == null ? live.angle : live.tAngle,
+                                rx: live.tRx == null ? live.rx : live.tRx,
+                                ry: live.tRy == null ? live.ry : live.tRy
+                            }
+                            : { angle: parent.angle, rx: parent.rx, ry: parent.ry };
                     list.forEach((child, i) => {
                         const t = list.length === 1 ? 0.5 : i / (list.length - 1);
-                        child.angle = parent.angle + (t - 0.5) * fan;
-                        child.rx = Math.min(maxRx, parent.rx + extra);
-                        child.ry = Math.min(maxRy, parent.ry + extra);
+                        child.angle = polar.angle + (t - 0.5) * fan;
+                        child.rx = Math.min(maxRx, polar.rx + extra);
+                        child.ry = Math.min(maxRy, polar.ry + extra);
                         project(child);
                         placeKids(child.node.dataset.field);
                     });
@@ -3705,10 +4556,15 @@
                             child.rx = Math.min(maxRx, child.rx + 12);
                             child.ry = Math.min(maxRy, child.ry + 10);
                             if (parent) {
-                                const away = shortestAngle(other.angle, child.angle) >= 0 ? 0.05 : -0.05;
-                                child.angle += away;
-                                const drift = shortestAngle(parent.angle, child.angle);
-                                if (Math.abs(drift) > 0.85) child.angle = parent.angle + Math.sign(drift || 1) * 0.85;
+                                const only = (kids[child.parentId] || []).length <= 1;
+                                if (only) {
+                                    child.angle = polar.angle;
+                                } else {
+                                    const away = shortestAngle(other.angle, child.angle) >= 0 ? 0.05 : -0.05;
+                                    child.angle += away;
+                                    const drift = shortestAngle(parent.angle, child.angle);
+                                    if (Math.abs(drift) > 0.85) child.angle = parent.angle + Math.sign(drift || 1) * 0.85;
+                                }
                             }
                             project(child);
                         });
@@ -3795,12 +4651,19 @@
                         const parent = move.parentId && items.find((item) => item.node.dataset.field === move.parentId);
                         move.rx = Math.min(maxRx, move.rx + 8);
                         move.ry = Math.min(maxRy, move.ry + 6);
-                        move.angle += shortestAngle(other.angle, move.angle) >= 0 ? 0.04 : -0.04;
+                        if (!(parent && items.filter((entry) => entry.parentId === move.parentId).length <= 1)) {
+                            move.angle += shortestAngle(other.angle, move.angle) >= 0 ? 0.04 : -0.04;
+                        }
                         if (aName) a.angle = -Math.PI / 2;
                         if (bName) b.angle = -Math.PI / 2;
                         if (parent) {
-                            const drift = shortestAngle(parent.angle, move.angle);
-                            if (Math.abs(drift) > 0.85) move.angle = parent.angle + Math.sign(drift || 1) * 0.85;
+                            const only = items.filter((entry) => entry.parentId === move.parentId).length <= 1;
+                            if (only) {
+                                move.angle = parent.angle;
+                            } else {
+                                const drift = shortestAngle(parent.angle, move.angle);
+                                if (Math.abs(drift) > 0.85) move.angle = parent.angle + Math.sign(drift || 1) * 0.85;
+                            }
                         }
                         project(move);
                         if (aName) project(a);
@@ -3827,7 +4690,14 @@
                 let ry = item.ry;
                 let x = item.x;
                 let y = item.y;
-                if (orbit.snapLayout) {
+                const home = (!item.parentId && orbit.restoreHomes) ? nodeHomes.get(item.node.dataset.field) : null;
+                if (home && Number.isFinite(home.angle)) {
+                    angle = home.angle;
+                    rx = Number.isFinite(home.rx) ? home.rx : rx;
+                    ry = Number.isFinite(home.ry) ? home.ry : rx;
+                    x = cx + Math.cos(angle) * rx;
+                    y = cy + Math.sin(angle) * ry;
+                } else if (orbit.snapLayout) {
                     angle = item.angle;
                     rx = item.rx;
                     ry = item.ry;
@@ -3851,9 +4721,9 @@
                     angle: angle,
                     rx: rx,
                     ry: ry,
-                    tAngle: item.angle,
-                    tRx: item.rx,
-                    tRy: item.ry,
+                    tAngle: (home && Number.isFinite(home.angle)) ? home.angle : item.angle,
+                    tRx: (home && Number.isFinite(home.rx)) ? home.rx : item.rx,
+                    tRy: (home && Number.isFinite(home.ry)) ? home.ry : item.ry,
                     w: item.w,
                     h: item.h,
                     line: line,
@@ -3895,9 +4765,11 @@
             const height = size.height;
             if (!width || !height || !orbitItems.length) return;
 
-            if (!orbit.zoomBusy || orbit.dragging) keepHubOnScreen(width, height);
+            if ((!orbit.zoomBusy && orbit.zoomWorldX == null) || orbit.dragging) keepHubOnScreen(width, height);
 
             const zoom = orbit.zoom;
+            const zoomJump = Math.abs((orbit.prevZoom == null ? zoom : orbit.prevZoom) - zoom) > 0.00001;
+            orbit.prevZoom = zoom;
             const cx = width / 2 + orbit.dragX + orbit.parallaxX;
             const cy = height / 2 + orbit.dragY + orbit.parallaxY;
             if (orbit.hubPx == null) {
@@ -3918,38 +4790,6 @@
             const nodeGrab = orbit.dragging && orbit.dragMode === 'node' ? orbit.dragItem : null;
             const byId = new Map(orbitItems.map((item) => [item.node.dataset.field, item]));
 
-            function isAncestor(maybeAncestor, item) {
-                if (!maybeAncestor || !item) return false;
-                const root = maybeAncestor.node.dataset.field;
-                let cur = item;
-                const seen = new Set();
-                while (cur && cur.parentId && !seen.has(cur.node.dataset.field)) {
-                    seen.add(cur.node.dataset.field);
-                    if (cur.parentId === root) return true;
-                    cur = byId.get(cur.parentId);
-                }
-                return false;
-            }
-
-            const settle = reduceMotion || orbit.snapLayout ? 1 : 1 - Math.exp(-(dt || 16) / 360);
-            orbitItems.forEach((item) => {
-                if (item !== nodeGrab) {
-                    item.angle += shortestAngle(item.angle, item.tAngle == null ? item.angle : item.tAngle) * settle;
-                    item.rx += ((item.tRx == null ? item.rx : item.tRx) - item.rx) * settle;
-                    item.ry += ((item.tRy == null ? item.ry : item.tRy) - item.ry) * settle;
-                }
-                const angle = item.angle + orbit.spin;
-                item.tx = cx + Math.cos(angle) * item.rx * zoom;
-                item.ty = cy + Math.sin(angle) * item.ry * zoom;
-                item.sw = item.w * zoom;
-                item.sh = item.h * zoom;
-            });
-
-            const step = Math.min(Math.max(dt || 16, 8), 32) / 16.67;
-            const livePhysics = !reduceMotion && !orbit.snapLayout && (nodeGrab || orbitItems.some((item) => {
-                return Math.hypot(item.vx || 0, item.vy || 0) > 0.12 || Math.hypot((item.x || 0) - item.tx, (item.y || 0) - item.ty) > 0.7;
-            }));
-
             if (nodeGrab) {
                 const parent = nodeGrab.parentId ? byId.get(nodeGrab.parentId) : null;
                 const px = parent ? parent.x : cx;
@@ -3962,72 +4802,138 @@
                 const cur = Math.hypot(dx, dy);
                 if (cur > rest) {
                     const extra = cur - rest;
-                    const pull = extra * extra / (extra + 180);
-                    nodeGrab.x = orbit.grabX - (dx / cur) * pull * 0.42;
-                    nodeGrab.y = orbit.grabY - (dy / cur) * pull * 0.42;
+                    const pull = extra * extra / (extra + 420);
+                    nodeGrab.x = orbit.grabX - (dx / cur) * pull * 0.18;
+                    nodeGrab.y = orbit.grabY - (dy / cur) * pull * 0.18;
                 } else {
                     nodeGrab.x = orbit.grabX;
                     nodeGrab.y = orbit.grabY;
                 }
                 nodeGrab.vx = 0;
                 nodeGrab.vy = 0;
+                const liveDx = nodeGrab.x - cx;
+                const liveDy = nodeGrab.y - cy;
+                nodeGrab.angle = Math.atan2(liveDy, liveDx) - orbit.spin;
+                const liveR = Math.hypot(liveDx, liveDy) / Math.max(zoom, 0.01);
+                nodeGrab.rx = liveR;
+                nodeGrab.ry = liveR;
             }
 
-            if (!livePhysics) {
-                orbitItems.forEach((item) => {
-                    if (item === nodeGrab) return;
-                    item.x = item.tx;
-                    item.y = item.ty;
-                    item.vx = 0;
-                    item.vy = 0;
-                });
-            } else {
-                orbitItems.forEach((item) => {
-                    if (item === nodeGrab) return;
-                    const linked = nodeGrab && (isAncestor(nodeGrab, item) || isAncestor(item, nodeGrab));
-                    const kHome = linked ? 0.05 : 0.36;
-                    item.vx = (item.vx || 0) + (item.tx - item.x) * kHome * step;
-                    item.vy = (item.vy || 0) + (item.ty - item.y) * kHome * step;
-                });
-                orbitItems.forEach((item) => {
-                    const parent = item.parentId ? byId.get(item.parentId) : null;
-                    const px = parent ? parent.x : cx;
-                    const py = parent ? parent.y : cy;
-                    const ptx = parent ? parent.tx : cx;
-                    const pty = parent ? parent.ty : cy;
-                    const rest = Math.max(Math.hypot(item.tx - ptx, item.ty - pty), 8);
-                    const dx = item.x - px;
-                    const dy = item.y - py;
-                    const cur = Math.hypot(dx, dy);
-                    if (cur < 0.001) return;
-                    const stretch = cur - rest;
-                    if (Math.abs(stretch) < 0.5) return;
-                    const nx = dx / cur;
-                    const ny = dy / cur;
-                    const kLink = parent ? 0.2 : 0.12;
-                    if (item !== nodeGrab) {
-                        item.vx -= nx * stretch * kLink * step;
-                        item.vy -= ny * stretch * kLink * step;
+            const settle = reduceMotion || orbit.snapLayout ? 1 : 1 - Math.exp(-(dt || 16) / 980);
+            orbitItems.forEach((item) => {
+                if (item.parentId || item === nodeGrab) return;
+                item.angle += shortestAngle(item.angle, item.tAngle == null ? item.angle : item.tAngle) * settle;
+                item.rx += ((item.tRx == null ? item.rx : item.tRx) - item.rx) * settle;
+                item.ry += ((item.tRy == null ? item.ry : item.tRy) - item.ry) * settle;
+            });
+
+            const kidsByParent = {};
+            orbitItems.forEach((item) => {
+                if (!item.parentId) return;
+                if (!kidsByParent[item.parentId]) kidsByParent[item.parentId] = [];
+                kidsByParent[item.parentId].push(item);
+            });
+            function deriveKids(pid) {
+                const parent = byId.get(pid);
+                const list = kidsByParent[pid];
+                if (!parent || !list) return;
+                const pAngle = parent.tAngle == null ? parent.angle : parent.tAngle;
+                const pRx = parent.tRx == null ? parent.rx : parent.tRx;
+                const pRy = parent.tRy == null ? parent.ry : parent.tRy;
+                list.forEach((child) => {
+                    if (child !== nodeGrab) {
+                        const fan = (child.tAngle == null ? child.angle : child.tAngle) - pAngle;
+                        child.angle = parent.angle + fan;
+                        child.rx = parent.rx + ((child.tRx == null ? child.rx : child.tRx) - pRx);
+                        child.ry = parent.ry + ((child.tRy == null ? child.ry : child.tRy) - pRy);
                     }
-                    if (parent && parent !== nodeGrab) {
-                        parent.vx = (parent.vx || 0) + nx * stretch * kLink * 0.7 * step;
-                        parent.vy = (parent.vy || 0) + ny * stretch * kLink * 0.7 * step;
-                    }
-                });
-                orbitItems.forEach((item) => {
-                    if (item === nodeGrab) return;
-                    item.vx *= Math.pow(0.8, step);
-                    item.vy *= Math.pow(0.8, step);
-                    item.x += item.vx * step;
-                    item.y += item.vy * step;
-                    if (!nodeGrab && Math.hypot(item.x - item.tx, item.y - item.ty) < 0.45 && Math.hypot(item.vx, item.vy) < 0.2) {
-                        item.x = item.tx;
-                        item.y = item.ty;
-                        item.vx = 0;
-                        item.vy = 0;
-                    }
+                    deriveKids(child.node.dataset.field);
                 });
             }
+            orbitItems.forEach((item) => {
+                if (!item.parentId) deriveKids(item.node.dataset.field);
+            });
+
+            orbitItems.forEach((item) => {
+                const angle = item.angle + orbit.spin;
+                item.tx = cx + Math.cos(angle) * item.rx * zoom;
+                item.ty = cy + Math.sin(angle) * item.ry * zoom;
+                item.sw = item.w * zoom;
+                item.sh = item.h * zoom;
+            });
+
+            const posMs = reduceMotion || orbit.snapLayout || orbit.zoomBusy || zoomJump ? 1 : (nodeGrab ? 520 : 420);
+            const step = Math.min(Math.max(dt || 16, 8), 32) / 16.67;
+            const hubDrag = orbit.dragging && orbit.dragMode === 'hub';
+            const leftover = orbitItems.some((item) => {
+                return Math.hypot(item.vx || 0, item.vy || 0) > 0.22 || Math.hypot((item.x || item.tx) - item.tx, (item.y || item.ty) - item.ty) > 1.1;
+            });
+            const tug = !reduceMotion && !orbit.snapLayout && !orbit.zoomBusy && !zoomJump && (hubDrag || leftover);
+
+            const ordered = [];
+            const seen = new Set();
+            function visit(item) {
+                if (!item || seen.has(item)) return;
+                seen.add(item);
+                if (item.parentId) visit(byId.get(item.parentId));
+                ordered.push(item);
+            }
+            orbitItems.forEach(visit);
+
+            ordered.forEach((item) => {
+                if (item === nodeGrab) return;
+                const parent = item.parentId ? byId.get(item.parentId) : null;
+                const targetX = parent ? parent.x + (item.tx - parent.tx) : item.tx;
+                const targetY = parent ? parent.y + (item.ty - parent.ty) : item.ty;
+                if (!tug) {
+                    const ease = item.parentId ? Math.min(posMs, 140) : posMs;
+                    const fromX = item.x == null ? targetX : item.x;
+                    const fromY = item.y == null ? targetY : item.y;
+                    item.x = follow(fromX, targetX, dt, ease);
+                    item.y = follow(fromY, targetY, dt, ease);
+                    item.vx = 0;
+                    item.vy = 0;
+                    if (Math.hypot(item.x - targetX, item.y - targetY) < 0.25) {
+                        item.x = targetX;
+                        item.y = targetY;
+                    }
+                    return;
+                }
+                if (item.x == null) item.x = targetX;
+                if (item.y == null) item.y = targetY;
+                if (hubDrag) {
+                    item.x += hvx * 0.38;
+                    item.y += hvy * 0.38;
+                }
+                const kHome = hubDrag ? 0.055 : 0.14;
+                const damp = hubDrag ? 0.9 : 0.84;
+                item.vx = (item.vx || 0) + (targetX - item.x) * kHome * step;
+                item.vy = (item.vy || 0) + (targetY - item.y) * kHome * step;
+                const px = parent ? parent.x : cx;
+                const py = parent ? parent.y : cy;
+                const ptx = parent ? parent.tx : cx;
+                const pty = parent ? parent.ty : cy;
+                const rest = Math.max(Math.hypot(item.tx - ptx, item.ty - pty), 10);
+                const ldx = item.x - px;
+                const ldy = item.y - py;
+                const cur = Math.hypot(ldx, ldy);
+                if (cur > rest + 6) {
+                    const stretch = cur - rest;
+                    const kLink = hubDrag ? 0.16 : 0.11;
+                    item.vx -= (ldx / cur) * stretch * kLink * step;
+                    item.vy -= (ldy / cur) * stretch * kLink * step;
+                }
+                item.vx *= Math.pow(damp, step);
+                item.vy *= Math.pow(damp, step);
+                item.x += item.vx * step;
+                item.y += item.vy * step;
+                if (!hubDrag && Math.hypot(item.x - targetX, item.y - targetY) < 0.45 && Math.hypot(item.vx, item.vy) < 0.2) {
+                    item.x = targetX;
+                    item.y = targetY;
+                    item.vx = 0;
+                    item.vy = 0;
+                }
+            });
 
             orbitItems.forEach((item) => {
                 item.node.style.left = '0px';
@@ -4549,7 +5455,7 @@
             if (navigator.share) {
                 navigator.share({
                     title: 'OrbINT',
-                    text: 'Public-source OSINT case file',
+                    text: 'The full OSINT case file',
                     url: url
                 }).catch(function () {});
                 return;
@@ -4568,6 +5474,8 @@
             closeFieldMenu();
             closeShare();
             closeAddField();
+            closeProfileMenu();
+            closeProfilePrompt();
             showSheet(document.getElementById('helpGuide'));
         }
 
@@ -4588,7 +5496,12 @@
             closeExportMenu();
             if (format === 'txt') downloadBlob(caseFileName('txt'), 'text/plain', casePlainText());
             else if (format === 'md') downloadBlob(caseFileName('md'), 'text/markdown', caseText());
-            else if (format === 'json') downloadBlob(caseFileName('json'), 'application/json', JSON.stringify(profile, null, 2));
+            else if (format === 'json') {
+                const bundle = (profileLibrary && typeof exportProfileBundle === 'function')
+                    ? exportProfileBundle(profileLibrary.activeId)
+                    : profile;
+                downloadBlob(caseFileName('json'), 'application/json', JSON.stringify(bundle, null, 2));
+            }
             else if (format === 'html') downloadBlob(caseFileName('html'), 'text/html', caseHtml());
         }
 
@@ -4635,6 +5548,10 @@
         function recenterOrbit() {
             orbit.dragX = 0;
             orbit.dragY = 0;
+            orbit.gridPanX = 0;
+            orbit.gridPanY = 0;
+            orbit.gridShiftX = 0;
+            orbit.gridShiftY = 0;
             orbit.zoom = 1;
             orbit.targetZoom = 1;
             orbit.zoomFocusX = null;
@@ -4646,12 +5563,11 @@
             orbit.parallaxY = 0;
             orbit.targetParallaxX = 0;
             orbit.targetParallaxY = 0;
-            orbit.gridShiftX = 0;
-            orbit.gridShiftY = 0;
         }
 
         try { createNodes(); applyStoredFieldLabels(); applyHiddenFields(); } catch (error) { console.error(error); }
         try { document.body.classList.toggle('phone', isPhone()); if (isPhone()) setPanelOpen(true); } catch (error) {}
+        try { initProfileLibrary(); } catch (error) { console.error(error); }
         try { renderProfile(); } catch (error) { console.error(error); }
         try { renderNodes(); } catch (error) { console.error(error); }
         try { initSidebarWidth(); } catch (error) {}
@@ -4731,7 +5647,7 @@
                 else openSearchMenu(fieldId);
                 return;
             }
-            const tzTrigger = event.target.closest('.tz-trigger');
+            const tzTrigger = event.target.closest('.tz-pick, .tz-trigger, .tz-abbr');
             if (tzTrigger) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -4886,6 +5802,7 @@
             if (event.target.id === 'resetConfirm') closeResetConfirm();
         });
         document.getElementById('dockRecenter').addEventListener('click', recenterOrbit);
+        document.getElementById('dockPlaytest').addEventListener('click', playtestFillVisibleFields);
         const dockAdd = document.getElementById('dockAdd');
         if (dockAdd) dockAdd.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -4930,6 +5847,8 @@
         });
         document.getElementById('phoneUndo').addEventListener('click', () => { closePhoneMore(); undoCase(); });
         document.getElementById('phoneRedo').addEventListener('click', () => { closePhoneMore(); redoCase(); });
+        const phonePlaytest = document.getElementById('phonePlaytest');
+        if (phonePlaytest) phonePlaytest.addEventListener('click', () => { closePhoneMore(); playtestFillVisibleFields(); });
         document.getElementById('phoneExport').addEventListener('click', () => { closePhoneMore(); toggleExportMenu(); });
         document.getElementById('phoneReset').addEventListener('click', () => { closePhoneMore(); resetCase(); });
         document.getElementById('phoneFieldDone').addEventListener('click', () => {
@@ -5031,8 +5950,62 @@
         document.getElementById('profileToggle').addEventListener('click', () => setPanelOpen(true));
         document.getElementById('profileClose').addEventListener('click', () => setPanelOpen(false));
         backdrop.addEventListener('click', () => setPanelOpen(false));
+        const profileRailList = document.getElementById('profileRailList');
+        if (profileRailList) {
+            profileRailList.addEventListener('click', (event) => {
+                const btn = event.target.closest('[data-profile]');
+                if (!btn) return;
+                switchProfile(btn.dataset.profile);
+            });
+            profileRailList.addEventListener('contextmenu', (event) => {
+                const btn = event.target.closest('[data-profile]');
+                if (!btn) return;
+                event.preventDefault();
+                openProfileMenu(event, btn.dataset.profile);
+            });
+            profileRailList.addEventListener('error', (event) => {
+                const img = event.target.closest('img');
+                const btn = event.target.closest('.profile-rail-item');
+                if (!img || !btn) return;
+                btn.innerHTML = '<span>' + escapeHtml(profileLetter(btn.getAttribute('title') || 'U')) + '</span>';
+            }, true);
+        }
+        document.getElementById('profileNew').addEventListener('click', () => openProfilePrompt('create'));
+        document.getElementById('profileUpload').addEventListener('click', pickProfileUpload);
+        document.getElementById('profileRename').addEventListener('click', () => openProfilePrompt('rename'));
+        document.getElementById('profileFile').addEventListener('change', (event) => {
+            uploadProfileFiles(event.target.files);
+            event.target.value = '';
+        });
+        document.getElementById('profilePromptCancel').addEventListener('click', closeProfilePrompt);
+        document.getElementById('profilePromptGo').addEventListener('click', submitProfilePrompt);
+        document.getElementById('profilePromptInput').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                submitProfilePrompt();
+            }
+        });
+        const profilePromptSheet = document.getElementById('profilePrompt');
+        if (profilePromptSheet) profilePromptSheet.addEventListener('click', (event) => {
+            if (event.target.id === 'profilePrompt') closeProfilePrompt();
+        });
+        document.getElementById('profileMenu').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-profile-act]');
+            if (!button || button.disabled) return;
+            event.stopPropagation();
+            const act = button.dataset.profileAct;
+            const id = document.getElementById('profileMenu').dataset.profile;
+            closeProfileMenu();
+            if (act === 'open') switchProfile(id);
+            else if (act === 'rename') openProfilePrompt('rename', id);
+            else if (act === 'duplicate') duplicateProfile(id);
+            else if (act === 'download') downloadProfile(id);
+            else if (act === 'delete') openProfilePrompt('delete', id);
+        });
         document.addEventListener('keydown', (event) => {
             const key = (event.key || '').toLowerCase();
+            const promptOpen = profilePromptSheet && !profilePromptSheet.hidden;
+            if (promptOpen && (event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) return;
             if ((event.ctrlKey || event.metaKey) && key === 'z' && !event.shiftKey) {
                 event.preventDefault();
                 undoCase();
@@ -5044,6 +6017,15 @@
                 return;
             }
             if (event.key === 'Escape') {
+                if (promptOpen) {
+                    closeProfilePrompt();
+                    return;
+                }
+                const profileMenu = document.getElementById('profileMenu');
+                if (profileMenu && !profileMenu.hidden) {
+                    closeProfileMenu();
+                    return;
+                }
                 const phoneField = document.getElementById('phoneField');
                 if (phoneField && !phoneField.hidden) {
                     closePhoneField();
@@ -5095,7 +6077,7 @@
                 closePhoneField();
                 closePhoneMore();
                 const saved = Number(localStorage.getItem(SIDEBAR_KEY));
-                applySidebarWidth(saved || 268);
+                applySidebarWidth(saved || 320);
                 positionNodes();
             }
             renderProfile();
@@ -5142,6 +6124,7 @@
             item.rx = r;
             item.ry = r;
             nodeHomes.set(item.node.dataset.field, { angle: angle, rx: r, ry: r });
+            if (typeof positionNodes === 'function') positionNodes();
             scheduleSaveLayout();
         }
 
@@ -5157,6 +6140,8 @@
             orbit.dragStartY = event.clientY;
             orbit.dragOriginX = orbit.dragX;
             orbit.dragOriginY = orbit.dragY;
+            orbit.gridOriginX = orbit.gridPanX;
+            orbit.gridOriginY = orbit.gridPanY;
             orbit.prevCX = event.clientX;
             orbit.prevCY = event.clientY;
             orbit.panVX = 0;
@@ -5238,7 +6223,7 @@
 
         if (mapCanvas) mapCanvas.addEventListener('pointerdown', (event) => {
             if (event.button !== 0) return;
-            if (event.target.closest('input, select, textarea, button, .search-btn, .node-clear, .node-more, .file-btn, .platform-trigger, .tz-trigger, .media-thumb, .platform-icon')) return;
+            if (event.target.closest('input, select, textarea, button, .search-btn, .node-clear, .node-more, .file-btn, .platform-trigger, .tz-trigger, .tz-pick, .tz-abbr, .media-thumb, .platform-icon')) return;
             const node = event.target.closest('.node');
             if (!node || node.classList.contains('renaming')) return;
             const item = orbitItems.find((entry) => entry.node === node);
@@ -5290,14 +6275,18 @@
                 orbit.panVY = event.clientY - orbit.prevCY;
                 orbit.prevCX = event.clientX;
                 orbit.prevCY = event.clientY;
-                orbit.dragX = orbit.dragOriginX + (event.clientX - orbit.dragStartX);
-                orbit.dragY = orbit.dragOriginY + (event.clientY - orbit.dragStartY);
+                const dx = event.clientX - orbit.dragStartX;
+                const dy = event.clientY - orbit.dragStartY;
+                orbit.dragX = orbit.dragOriginX + dx;
+                orbit.dragY = orbit.dragOriginY + dy;
+                orbit.gridPanX = orbit.gridOriginX + dx;
+                orbit.gridPanY = orbit.gridOriginY + dy;
                 return;
             }
-            if (!orbit.dragging || orbit.dragMode === 'node' || orbit.dragMode === 'hub') {
+            if (!orbit.dragging || orbit.dragMode === 'node') {
                 const nx = (event.clientX - rect.left) / Math.max(rect.width, 1) - 0.5;
                 const ny = (event.clientY - rect.top) / Math.max(rect.height, 1) - 0.5;
-                const strength = reduceMotion ? 6 : 22;
+                const strength = reduceMotion ? 6 : 14;
                 orbit.targetParallaxX = nx * strength;
                 orbit.targetParallaxY = ny * strength;
             }
@@ -5348,7 +6337,7 @@
             if (!event.target.closest('#platformMenu, .platform-trigger, #phonePlatformBtn, .node.menu-open:not(.tz-open)')) {
                 closePlatformMenu();
             }
-            if (!event.target.closest('#tzMenu, .tz-trigger, #phoneTzBtn, .node.tz-open')) {
+            if (!event.target.closest('#tzMenu, .tz-trigger, .tz-pick, .tz-abbr, #phoneTzBtn, .node.tz-open')) {
                 closeTimezoneMenu();
             }
             if (!event.target.closest('#searchMenu, [data-search], #phoneFieldSearch')) {
@@ -5359,6 +6348,9 @@
             }
             if (!fieldMenuGuard && !event.target.closest('#fieldMenu, .node-more')) {
                 closeFieldMenu();
+            }
+            if (!event.target.closest('#profileMenu, .profile-rail-item')) {
+                closeProfileMenu();
             }
         });
 
@@ -5379,7 +6371,7 @@
         });
 
         if (mapStage) mapStage.addEventListener('contextmenu', (event) => {
-            if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #exportMenu, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
+            if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #exportMenu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
             const node = event.target.closest('.node');
             if (node) {
                 event.preventDefault();
@@ -5424,8 +6416,12 @@
         function applyZoomFocus(nextZoom) {
             if (orbit.zoomWorldX == null || orbit.zoomFocusX == null) return;
             const size = canvasSize();
-            orbit.dragX = orbit.zoomFocusX - orbit.zoomWorldX * nextZoom - size.width / 2 - orbit.parallaxX;
-            orbit.dragY = orbit.zoomFocusY - orbit.zoomWorldY * nextZoom - size.height / 2 - orbit.parallaxY;
+            const nextX = orbit.zoomFocusX - orbit.zoomWorldX * nextZoom - size.width / 2 - orbit.parallaxX;
+            const nextY = orbit.zoomFocusY - orbit.zoomWorldY * nextZoom - size.height / 2 - orbit.parallaxY;
+            orbit.gridPanX += nextX - orbit.dragX;
+            orbit.gridPanY += nextY - orbit.dragY;
+            orbit.dragX = nextX;
+            orbit.dragY = nextY;
         }
 
         function followZoom(current, target, dt, ms) {
@@ -5434,7 +6430,7 @@
         }
 
         if (mapStage) mapStage.addEventListener('wheel', (event) => {
-            if (event.target.closest('select, option, .platform-menu, .tz-menu, .search-menu, .field-menu, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
+            if (event.target.closest('select, option, .platform-menu, .tz-menu, .search-menu, .field-menu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
             event.preventDefault();
             const rect = mapCanvas.getBoundingClientRect();
             let delta = event.deltaY;
@@ -5444,30 +6440,30 @@
             const next = clamp(current * Math.exp(-delta * 0.00105), 0.4, 2.8);
             captureZoomFocus(event.clientX - rect.left, event.clientY - rect.top);
             orbit.targetZoom = next;
+            orbit.zoom = next;
             orbit.zoomBusy = true;
-            if (reduceMotion) {
-                orbit.zoom = next;
-                applyZoomFocus(next);
-                orbit.zoomBusy = false;
-            }
+            applyZoomFocus(next);
+            if (reduceMotion) orbit.zoomBusy = false;
         }, { passive: false });
 
         let lastTick = performance.now();
         function tickOrbit(now) {
             const dt = Math.min(48, now - lastTick);
             lastTick = now;
-            const freezeWorld = orbit.dragging && orbit.dragMode === 'pan';
+            const freezeWorld = orbit.dragging && (orbit.dragMode === 'pan' || orbit.dragMode === 'hub');
             orbit.pulse = 1;
             if (orbit.targetZoom == null) orbit.targetZoom = orbit.zoom;
             if (!reduceMotion && !freezeWorld) {
                 orbit.spin += dt * 0.000024;
             }
             if (!orbit.dragging && !orbit.zoomBusy) {
-                if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.25) {
+                if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12) {
                     orbit.dragX += orbit.panVX;
                     orbit.dragY += orbit.panVY;
-                    orbit.panVX *= 0.9;
-                    orbit.panVY *= 0.9;
+                    orbit.gridPanX += orbit.panVX;
+                    orbit.gridPanY += orbit.panVY;
+                    orbit.panVX *= 0.86;
+                    orbit.panVY *= 0.86;
                 } else {
                     orbit.panVX = 0;
                     orbit.panVY = 0;
@@ -5480,30 +6476,32 @@
                 orbit.spotX = orbit.targetSpotX;
                 orbit.spotY = orbit.targetSpotY;
             }
-            const mouseMs = reduceMotion ? 50 : 180;
-            const snapMs = 18;
-            orbit.parallaxX = follow(orbit.parallaxX, orbit.targetParallaxX, dt, freezeWorld ? snapMs : mouseMs);
-            orbit.parallaxY = follow(orbit.parallaxY, orbit.targetParallaxY, dt, freezeWorld ? snapMs : mouseMs);
-            orbit.spotX = follow(orbit.spotX, orbit.targetSpotX, dt, mouseMs);
-            orbit.spotY = follow(orbit.spotY, orbit.targetSpotY, dt, mouseMs);
-            const zoomMs = reduceMotion ? 1 : 220;
+            const zoomMs = reduceMotion ? 1 : 48;
             orbit.zoom = followZoom(orbit.zoom, orbit.targetZoom, dt, zoomMs);
-            if (Math.abs(Math.log(orbit.zoom / Math.max(orbit.targetZoom, 0.01))) < 0.00035) {
+            if (Math.abs(Math.log(orbit.zoom / Math.max(orbit.targetZoom, 0.01))) < 0.0008) {
                 orbit.zoom = orbit.targetZoom;
             }
-            orbit.zoomBusy = orbit.zoom !== orbit.targetZoom;
             if (orbit.zoomWorldX != null) applyZoomFocus(orbit.zoom);
-            if (!orbit.zoomBusy) {
+            orbit.zoomBusy = orbit.zoom !== orbit.targetZoom || orbit.zoomWorldX != null;
+            const freezeCam = freezeWorld || orbit.zoomBusy;
+            const mouseMs = reduceMotion ? 50 : 280;
+            const snapMs = 18;
+            orbit.parallaxX = follow(orbit.parallaxX, freezeCam ? orbit.parallaxX : orbit.targetParallaxX, dt, freezeCam ? snapMs : mouseMs);
+            orbit.parallaxY = follow(orbit.parallaxY, freezeCam ? orbit.parallaxY : orbit.targetParallaxY, dt, freezeCam ? snapMs : mouseMs);
+            orbit.spotX = follow(orbit.spotX, orbit.targetSpotX, dt, freezeCam ? snapMs : mouseMs);
+            orbit.spotY = follow(orbit.spotY, orbit.targetSpotY, dt, freezeCam ? snapMs : mouseMs);
+            const gridMs = reduceMotion ? 60 : (orbit.zoomBusy ? 1 : 420);
+            const drift = reduceMotion ? 1 : 1.75;
+            orbit.gridShiftX = follow(orbit.gridShiftX, orbit.gridPanX + orbit.parallaxX * drift, dt, freezeCam ? 1 : gridMs);
+            orbit.gridShiftY = follow(orbit.gridShiftY, orbit.gridPanY + orbit.parallaxY * drift, dt, freezeCam ? 1 : gridMs);
+            if (!isPhone()) applyOrbit(dt);
+            if (orbit.zoom === orbit.targetZoom) {
+                orbit.zoomBusy = false;
                 orbit.zoomFocusX = null;
                 orbit.zoomFocusY = null;
                 orbit.zoomWorldX = null;
                 orbit.zoomWorldY = null;
             }
-            const gridMs = reduceMotion ? 60 : (orbit.zoomBusy ? 1 : 280);
-            const drift = reduceMotion ? 1 : 1.75;
-            orbit.gridShiftX = follow(orbit.gridShiftX, orbit.dragX + orbit.parallaxX * drift, dt, freezeWorld || orbit.zoomBusy ? 1 : gridMs);
-            orbit.gridShiftY = follow(orbit.gridShiftY, orbit.dragY + orbit.parallaxY * drift, dt, freezeWorld || orbit.zoomBusy ? 1 : gridMs);
-            if (!isPhone()) applyOrbit(dt);
             const sec = Math.floor(now / 1000);
             if (sec !== tickOrbit.clockSec) {
                 tickOrbit.clockSec = sec;
