@@ -3833,8 +3833,10 @@
             if (panel) panel.classList.remove('replay-boot');
             if (dock) dock.classList.remove('replay-boot');
             if (donate) donate.classList.remove('replay-boot');
-            const animate = !reduceMotion && !(typeof isPhone === 'function' && isPhone());
+            const animate = !reduceMotion;
+            if (typeof isPhone === 'function' && isPhone() && typeof setPanelOpen === 'function') setPanelOpen(false);
             const span = animate ? bloomOrbitFromHub() : 0;
+            if (animate && typeof kickOrbit === 'function') kickOrbit();
             requestAnimationFrame(function () {
                 replayCss(panel, 'replay-boot', 700);
                 replayCss(dock, 'replay-boot', 750);
@@ -3842,6 +3844,7 @@
                 if (animate && mapStage) {
                     void mapStage.offsetWidth;
                     mapStage.classList.add('boot-enter');
+                    if (typeof kickOrbit === 'function') kickOrbit();
                     introTimer = setTimeout(function () {
                         if (mapStage) mapStage.classList.remove('boot-enter');
                         if (typeof clearOrbitBloomDelays === 'function') clearOrbitBloomDelays();
@@ -3907,7 +3910,10 @@
                 orbit.snapLayout = true;
                 if (typeof positionNodes === 'function') positionNodes();
                 orbit.snapLayout = false;
-                if (fromHub && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) bloomOrbitFromHub();
+                if (fromHub && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    bloomOrbitFromHub();
+                    if (typeof kickOrbit === 'function') kickOrbit();
+                }
                 orbit.restoreHomes = false;
                 history.applying = false;
                 pushHistory();
@@ -4055,18 +4061,35 @@
         function openLinkedProfile(id, fromEl) {
             if (!profileLibrary || !id || id === profileLibrary.activeId) return;
             if (!profileLibrary.items[id]) return;
-            const skip = !fromEl || !mapCanvas || (typeof isPhone === 'function' && isPhone())
-                || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (skip) {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 switchProfile(id);
+                return;
+            }
+            const source = fromEl && fromEl.getBoundingClientRect
+                ? fromEl
+                : document.querySelector('.peer-hub[data-peer="' + id + '"]');
+            if (!source || !mapCanvas || !hub) {
+                switchProfile(id);
+                return;
+            }
+            if (typeof isPhone === 'function' && isPhone() && profilePanel && profilePanel.classList.contains('open')) {
+                if (profileFlyLock) return;
+                profileFlyLock = true;
+                setPanelOpen(false);
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(function () {
+                        profileFlyLock = false;
+                        openLinkedProfile(id, document.querySelector('.peer-hub[data-peer="' + id + '"]') || source);
+                    });
+                });
                 return;
             }
             if (profileFlyLock) return;
             profileFlyLock = true;
             const canvasRect = mapCanvas.getBoundingClientRect();
-            const peerRect = fromEl.getBoundingClientRect();
-            const hubRect = hub ? hub.getBoundingClientRect() : peerRect;
-            const fly = fromEl.cloneNode(true);
+            const peerRect = source.getBoundingClientRect();
+            const hubRect = hub.getBoundingClientRect();
+            const fly = source.cloneNode(true);
             fly.classList.add('peer-hub-fly');
             fly.removeAttribute('data-peer');
             fly.setAttribute('aria-hidden', 'true');
@@ -4101,26 +4124,29 @@
                 if (destFamily) letterEl.style.fontFamily = destFamily;
             }
             void fly.offsetWidth;
-            fly.style.left = (hubRect.left - canvasRect.left + hubRect.width / 2) + 'px';
-            fly.style.top = (hubRect.top - canvasRect.top + hubRect.height / 2) + 'px';
-            fly.style.width = hubRect.width + 'px';
-            fly.style.height = hubRect.height + 'px';
-            if (nameEl && destFont) {
-                nameEl.style.fontSize = destFont;
-                nameEl.style.fontWeight = destWeight;
-                nameEl.style.letterSpacing = destTrack;
-                nameEl.style.lineHeight = destLeading;
-                nameEl.style.width = '72%';
-            }
-            if (letterEl && destFont) {
-                letterEl.style.fontSize = destFont;
-                letterEl.style.fontWeight = destWeight;
-            }
+            requestAnimationFrame(function () {
+                fly.style.left = (hubRect.left - canvasRect.left + hubRect.width / 2) + 'px';
+                fly.style.top = (hubRect.top - canvasRect.top + hubRect.height / 2) + 'px';
+                fly.style.width = hubRect.width + 'px';
+                fly.style.height = hubRect.height + 'px';
+                if (nameEl && destFont) {
+                    nameEl.style.fontSize = destFont;
+                    nameEl.style.fontWeight = destWeight;
+                    nameEl.style.letterSpacing = destTrack;
+                    nameEl.style.lineHeight = destLeading;
+                    nameEl.style.width = '72%';
+                }
+                if (letterEl && destFont) {
+                    letterEl.style.fontSize = destFont;
+                    letterEl.style.fontWeight = destWeight;
+                }
+            });
             let landed = false;
             const finish = function () {
                 if (landed) return;
                 landed = true;
                 switchProfile(id, { keepCamera: true, fromHub: true });
+                if (typeof kickOrbit === 'function') kickOrbit();
                 if (mapStage) {
                     mapStage.classList.remove('profile-fly');
                     mapStage.classList.add('profile-enter');
@@ -4136,11 +4162,11 @@
             };
             fly.addEventListener('transitionend', function done(event) {
                 if (event.target !== fly) return;
-                if (event.propertyName && event.propertyName !== 'left' && event.propertyName !== 'width') return;
+                if (event.propertyName && event.propertyName !== 'left' && event.propertyName !== 'width' && event.propertyName !== 'top' && event.propertyName !== 'height') return;
                 fly.removeEventListener('transitionend', done);
                 finish();
             });
-            setTimeout(finish, 640);
+            setTimeout(finish, 700);
         }
 
         function createProfile(title) {
@@ -5575,7 +5601,82 @@
                 return '<div class="group">' + heading + fields.map(dossierFieldRowHtml).join('') + '</div>';
             }).join('');
             return body +
-                '<button type="button" class="dossier-add" data-dossier-add>+ Add information</button>';
+                '<button type="button" class="dossier-add" data-dossier-add>+ Add information</button>' +
+                '<p class="site-updated" data-site-updated hidden></p>';
+        }
+
+        const SITE_REPO = 'Delexoo/OrbINT';
+        let siteUpdatedAt = '';
+        let siteUpdatedLoading = false;
+        let siteUpdatedTimer = 0;
+
+        function siteUpdatedLabel(iso) {
+            const then = new Date(iso).getTime();
+            if (!Number.isFinite(then)) return '';
+            const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+            let amount;
+            let unit;
+            if (secs < 60) {
+                amount = secs;
+                unit = amount === 1 ? 'sec' : 'secs';
+            } else if (secs < 3600) {
+                amount = Math.floor(secs / 60);
+                unit = 'min';
+            } else if (secs < 86400) {
+                amount = Math.floor(secs / 3600);
+                unit = amount === 1 ? 'hour' : 'hours';
+            } else if (secs < 365 * 86400) {
+                amount = Math.floor(secs / 86400);
+                unit = amount === 1 ? 'day' : 'days';
+            } else {
+                amount = Math.floor(secs / (365 * 86400));
+                unit = amount === 1 ? 'year' : 'years';
+            }
+            return 'Last updated: ' + amount + ' ' + unit + ' ago';
+        }
+
+        function paintSiteUpdated() {
+            const el = document.querySelector('[data-site-updated]');
+            if (!el || !siteUpdatedAt) return;
+            const text = siteUpdatedLabel(siteUpdatedAt);
+            if (!text) return;
+            if (el.textContent !== text) el.textContent = text;
+            el.hidden = false;
+            if (!siteUpdatedTimer) siteUpdatedTimer = setInterval(paintSiteUpdated, 1000);
+        }
+
+        function loadSiteUpdated() {
+            paintSiteUpdated();
+            if (siteUpdatedAt || siteUpdatedLoading) return;
+            siteUpdatedLoading = true;
+            const headers = { Accept: 'application/vnd.github+json' };
+            fetch('https://api.github.com/repos/' + SITE_REPO + '/commits/main', { headers: headers })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('github');
+                    return res.json();
+                })
+                .then(function (data) {
+                    const at = data && data.commit && ((data.commit.committer && data.commit.committer.date) || (data.commit.author && data.commit.author.date));
+                    if (!at) throw new Error('date');
+                    siteUpdatedAt = at;
+                    paintSiteUpdated();
+                })
+                .catch(function () {
+                    return fetch('https://api.github.com/repos/' + SITE_REPO, { headers: headers })
+                        .then(function (res) {
+                            if (!res.ok) return null;
+                            return res.json();
+                        })
+                        .then(function (repo) {
+                            const at = repo && (repo.pushed_at || repo.updated_at);
+                            if (!at) return;
+                            siteUpdatedAt = at;
+                            paintSiteUpdated();
+                        });
+                })
+                .finally(function () {
+                    siteUpdatedLoading = false;
+                });
         }
 
         function syncSheetInputs(except) {
@@ -5684,6 +5785,7 @@
                 } else {
                     factsList.innerHTML = dossierHtml();
                 }
+                loadSiteUpdated();
             }
 
             const analysisSection = document.getElementById('analysisSection');
@@ -5861,12 +5963,6 @@
             const layer = document.getElementById('peerHubs');
             const lines = document.getElementById('peerLinkLayer');
             if (!layer) return;
-            if (typeof isPhone === 'function' && isPhone()) {
-                layer.innerHTML = '';
-                if (lines) lines.innerHTML = '';
-                peerBodies = [];
-                return;
-            }
             const ids = linkedProfileIds();
             const rows = ids.map((id) => {
                 const entry = profileLibrary.items[id];
@@ -6045,29 +6141,52 @@
             }, 280);
         }
 
+        function phonePeerOnScreen(sx, sy) {
+            const size = canvasSize();
+            const insets = orbitViewInsets();
+            const pad = 36;
+            return sx >= insets.left + pad &&
+                sx <= size.width - insets.right - pad &&
+                sy >= insets.top + pad &&
+                sy <= size.height - insets.bottom - pad;
+        }
+
         function computePeerTargets(hx, hy, zoom) {
-            const worldRing = hubPeerClearance() + 48;
+            const z = Math.max(zoom || 1, 0.01);
+            const phone = typeof isPhone === 'function' && isPhone();
+            const worldRing = hubPeerClearance() + (phone ? 28 : 48);
             let far = worldRing;
-            if (orbitItems.length) {
+            if (!phone && orbitItems.length) {
                 const reach = Math.max.apply(null, orbitItems.map((item) => {
                     if (item.x == null || item.y == null) return 0;
-                    return (Math.hypot(item.x - hx, item.y - hy) + Math.max(item.sw || item.w || 0, item.sh || item.h || 0) / 2) / Math.max(zoom, 0.01);
+                    return (Math.hypot(item.x - hx, item.y - hy) + Math.max(item.sw || item.w || 0, item.sh || item.h || 0) / 2) / z;
                 }));
                 if (reach) far = Math.max(far, reach + 64);
             }
             const unplaced = [];
             peerBodies.forEach((body) => {
-                body.sw = PEER_HUB_SIZE * zoom;
-                body.sh = PEER_HUB_SIZE * zoom;
+                body.sw = PEER_HUB_SIZE * z;
+                body.sh = PEER_HUB_SIZE * z;
                 const home = peerHomeFor(body.id);
                 if (home) {
-                    const clear = unclipPeerWorld(home.x, home.y, body.id);
-                    if (Math.hypot(clear.x - home.x, clear.y - home.y) > 1.5) {
-                        peerHomes[body.id] = { x: clear.x, y: clear.y };
-                        schedulePeerHomeFix();
+                    let wx = home.x;
+                    let wy = home.y;
+                    if (phone && !phonePeerOnScreen(hx + wx * z, hy + wy * z)) {
+                        const ang = (wx === 0 && wy === 0) ? -Math.PI / 2 : Math.atan2(wy, wx);
+                        const parked = unclipPeerWorld(Math.cos(ang) * worldRing, Math.sin(ang) * worldRing, body.id);
+                        wx = parked.x;
+                        wy = parked.y;
+                    } else if (!phone) {
+                        const clear = unclipPeerWorld(home.x, home.y, body.id);
+                        if (Math.hypot(clear.x - home.x, clear.y - home.y) > 1.5) {
+                            peerHomes[body.id] = { x: clear.x, y: clear.y };
+                            schedulePeerHomeFix();
+                        }
+                        wx = clear.x;
+                        wy = clear.y;
                     }
-                    body.tx = hx + clear.x * zoom;
-                    body.ty = hy + clear.y * zoom;
+                    body.tx = hx + wx * z;
+                    body.ty = hy + wy * z;
                     return;
                 }
                 unplaced.push(body);
@@ -6075,8 +6194,8 @@
             unplaced.forEach((body, i) => {
                 const angle = -Math.PI / 2 + (i / Math.max(unplaced.length, 1)) * Math.PI * 2;
                 const clear = unclipPeerWorld(Math.cos(angle) * far, Math.sin(angle) * far, body.id);
-                body.tx = hx + clear.x * zoom;
-                body.ty = hy + clear.y * zoom;
+                body.tx = hx + clear.x * z;
+                body.ty = hy + clear.y * z;
             });
         }
 
@@ -7669,6 +7788,7 @@
             snapLayout: true,
             restoreHomes: false,
             userZoomed: false,
+            freeCam: false,
             fitZoom: 1,
             fitZooming: false,
             fitCount: -1,
@@ -7740,6 +7860,7 @@
             orbit.gridShiftX = 0;
             orbit.gridShiftY = 0;
             orbit.userZoomed = false;
+            orbit.freeCam = false;
             orbit.fitZooming = true;
             orbit.zoom = 1;
             orbit.targetZoom = 1;
@@ -7779,11 +7900,11 @@
         }
 
         function orbitMinZoom() {
-            return isPhone() ? 0.55 : 0.4;
+            return 0.001;
         }
 
         function orbitMaxZoom() {
-            return 2.8;
+            return 500;
         }
 
         function orbitViewInsets() {
@@ -8461,9 +8582,7 @@
 
             if (orbit.fitCount !== nodes.length) {
                 orbit.fitCount = nodes.length;
-                orbit.userZoomed = false;
             }
-            if (phone && !orbit.pinching && (orbit.zoom || 1) < 0.72) orbit.userZoomed = false;
             let maxDx = hubClear + 24;
             let maxDy = hubClear + 24;
             items.forEach((item) => {
@@ -8700,7 +8819,7 @@
             const viewPan = (orbit.dragging && orbit.dragMode === 'pan')
                 || (!orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12);
             const holdingField = orbit.dragging && (orbit.dragMode === 'node' || orbit.dragMode === 'peer');
-            if (!viewPan && !holdingField && ((!orbit.zoomBusy && orbit.zoomWorldX == null) || orbit.dragging)) keepHubOnScreen(width, height);
+            if (!viewPan && !holdingField && !orbit.userZoomed && !orbit.freeCam && ((!orbit.zoomBusy && orbit.zoomWorldX == null) || orbit.dragging)) keepHubOnScreen(width, height);
 
             const zoom = orbit.zoom;
             const zoomJump = Math.abs((orbit.prevZoom == null ? zoom : orbit.prevZoom) - zoom) > 0.00001;
@@ -9593,7 +9712,7 @@
             if (navigator.share) {
                 navigator.share({
                     title: 'OrbINT',
-                    text: 'The full OSINT case file',
+                    text: 'Open-source Reconnaissance Bureau of Intelligence',
                     url: url
                 }).catch(function () {});
                 return;
@@ -9667,16 +9786,26 @@
                 } catch (error) {}
             };
             const reloadFresh = function () {
-                location.replace(location.origin + location.pathname);
+                const url = new URL(location.href);
+                url.searchParams.set('v', String(Date.now()));
+                location.replace(url.pathname + url.search + url.hash);
+            };
+            const dropWorkers = (navigator.serviceWorker && navigator.serviceWorker.getRegistrations)
+                ? navigator.serviceWorker.getRegistrations().then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+                : Promise.resolve();
+            const dropCaches = (window.caches && caches.keys)
+                ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+                : Promise.resolve();
+            const bustHttp = function () {
+                const files = ['./', './index.html', './app.js', './app.js?v=9', './osint-tools.js', './osint-tools.js?v=9', './sw.js', './manifest.webmanifest'];
+                return Promise.all(files.map(function (path) {
+                    return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
+                }));
             };
             Promise.resolve(clearAllProfileImages()).then(function () {
                 wipeLocal();
-                if (window.caches && caches.keys) {
-                    caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))).catch(function () {}).then(reloadFresh);
-                    return;
-                }
-                reloadFresh();
-            });
+                return Promise.all([dropWorkers, dropCaches]).then(bustHttp);
+            }).then(reloadFresh).catch(reloadFresh);
         }
 
         function recenterOrbit() {
@@ -9691,6 +9820,7 @@
             orbit.hubLiveVX = 0;
             orbit.hubLiveVY = 0;
             orbit.userZoomed = false;
+            orbit.freeCam = false;
             orbit.fitZooming = true;
             orbit.zoomFocusX = null;
             orbit.zoomFocusY = null;
@@ -10284,7 +10414,7 @@
             if (sheet && !sheet.hidden) fillInstallSheet();
         });
         if (navigator.serviceWorker) {
-            navigator.serviceWorker.register('sw.js').catch(function () {});
+            navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function () {});
         }
         document.getElementById('hubAdd').addEventListener('click', (event) => {
             event.preventDefault();
@@ -10400,7 +10530,10 @@
             profileRailList.addEventListener('click', (event) => {
                 const btn = event.target.closest('[data-profile]');
                 if (!btn) return;
-                switchProfile(btn.dataset.profile);
+                const id = btn.dataset.profile;
+                const peer = document.querySelector('.peer-hub[data-peer="' + id + '"]');
+                if (peer) openLinkedProfile(id, peer);
+                else switchProfile(id);
             });
             profileRailList.addEventListener('contextmenu', (event) => {
                 const btn = event.target.closest('[data-profile]');
@@ -10443,7 +10576,11 @@
             const act = button.dataset.profileAct;
             const id = document.getElementById('profileMenu').dataset.profile;
             closeProfileMenu();
-            if (act === 'open') switchProfile(id);
+            if (act === 'open') {
+                const peer = document.querySelector('.peer-hub[data-peer="' + id + '"]');
+                if (peer) openLinkedProfile(id, peer);
+                else switchProfile(id);
+            }
             else if (act === 'rename') openProfilePrompt('rename', id);
             else if (act === 'duplicate') duplicateProfile(id);
             else if (act === 'download') downloadProfile(id);
@@ -10564,6 +10701,7 @@
         let layoutSizeKey = '';
         function relayoutIfNeeded(force) {
             if (orbit.dragging || orbit.pinching) return;
+            if (mapStage && (mapStage.classList.contains('boot-enter') || mapStage.classList.contains('profile-enter') || mapStage.classList.contains('profile-fly'))) return;
             syncCanvasBox();
             const size = canvasSize();
             const key = Math.round(size.width) + 'x' + Math.round(size.height);
@@ -10578,31 +10716,36 @@
             window.visualViewport.addEventListener('resize', () => relayoutIfNeeded(false));
         }
         requestAnimationFrame(() => {
-            const animate = !reduceMotion && !(typeof isPhone === 'function' && isPhone());
+            const animate = !reduceMotion;
+            function startIntro() {
+                const span = animate ? bloomOrbitFromHub() : 0;
+                if (mapCanvas) mapCanvas.classList.add('orbit-ready');
+                if (mapStage) mapStage.classList.add('orbit-ready');
+                if (animate && mapStage) {
+                    void mapStage.offsetWidth;
+                    mapStage.classList.add('boot-enter');
+                    if (typeof kickOrbit === 'function') kickOrbit();
+                    setTimeout(function () {
+                        if (mapStage) mapStage.classList.remove('boot-enter');
+                        if (typeof clearOrbitBloomDelays === 'function') clearOrbitBloomDelays();
+                    }, Math.max(800, span + 720));
+                }
+                saveOrbitLayout();
+            }
             if (isPhone()) resetPhoneOrbitCamera();
             orbit.snapLayout = true;
             positionNodes();
             orbit.snapLayout = false;
-            const span = animate ? bloomOrbitFromHub() : 0;
-            if (mapCanvas) mapCanvas.classList.add('orbit-ready');
-            if (mapStage) mapStage.classList.add('orbit-ready');
-            if (animate && mapStage) {
-                mapStage.classList.add('boot-enter');
-                setTimeout(function () {
-                    if (mapStage) mapStage.classList.remove('boot-enter');
-                    if (typeof clearOrbitBloomDelays === 'function') clearOrbitBloomDelays();
-                }, Math.max(800, span + 720));
-            }
             if (isPhone()) {
-                requestAnimationFrame(() => {
+                requestAnimationFrame(function () {
                     resetPhoneOrbitCamera();
                     orbit.snapLayout = true;
                     positionNodes();
                     orbit.snapLayout = false;
-                    saveOrbitLayout();
+                    startIntro();
                 });
             } else {
-                saveOrbitLayout();
+                startIntro();
             }
         });
         if (window.ResizeObserver && mapCanvas) {
@@ -10678,6 +10821,10 @@
             closeFieldMenu();
             syncCanvasBox();
             orbit.dragging = true;
+            if (mode === 'pan' || mode === 'hub') {
+                orbit.freeCam = true;
+                orbit.userZoomed = true;
+            }
             if (typeof kickOrbit === 'function') kickOrbit();
             orbit.dragMode = mode || 'pan';
             orbit.dragItem = item || null;
@@ -10849,7 +10996,7 @@
         if (mapStage) mapStage.addEventListener('pointermove', (event) => {
             if (orbit.pinching) return;
             if (orbit.dragging && (orbit.dragMode === 'node' || orbit.dragMode === 'hub' || orbit.dragMode === 'peer')) {
-                if (Math.hypot(event.clientX - orbit.dragStartX, event.clientY - orbit.dragStartY) > 8) orbit.dragMoved = true;
+                if (Math.hypot(event.clientX - orbit.dragStartX, event.clientY - orbit.dragStartY) > ((event.pointerType === 'touch' && orbit.dragMode === 'peer') ? 16 : 8)) orbit.dragMoved = true;
                 const p = pointerOnCanvas(event);
                 orbit.grabVX = event.clientX - orbit.prevCX;
                 orbit.grabVY = event.clientY - orbit.prevCY;
@@ -10869,7 +11016,6 @@
                     w: orbit.dragMode === 'hub' ? 220 : (orbit.dragMode === 'peer' ? PEER_HUB_SIZE : (item && item.w) || 186),
                     h: orbit.dragMode === 'hub' ? 220 : (orbit.dragMode === 'peer' ? PEER_HUB_SIZE : (item && item.h) || 34)
                 };
-                keepNodeOnScreen(held, canvasBox.width, canvasBox.height);
                 orbit.grabX = held.x;
                 orbit.grabY = held.y;
                 if (orbit.dragMode === 'hub') {
@@ -11186,6 +11332,7 @@
             const next = clamp(current * Math.exp(-delta * 0.00105), orbitMinZoom(), orbitMaxZoom());
             captureZoomFocus(event.clientX - rect.left, event.clientY - rect.top);
             orbit.userZoomed = true;
+            orbit.freeCam = true;
             orbit.fitZooming = false;
             orbit.targetZoom = next;
             orbit.zoom = next;
@@ -11223,6 +11370,7 @@
             orbit.pinchDist = dist;
             orbit.pinchZoom = orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom;
             orbit.userZoomed = true;
+            orbit.freeCam = true;
             orbit.fitZooming = false;
             if (typeof kickOrbit === 'function') kickOrbit();
         }
@@ -11311,10 +11459,14 @@
                 const item = orbitItems[i];
                 if (item.comingHome || (item.bloomWait || 0) > 0) return true;
                 if (Math.abs(item.vx || 0) > 0.05 || Math.abs(item.vy || 0) > 0.05) return true;
+                const wantRx = item.tRx == null ? item.rx : item.tRx;
+                const wantRy = item.tRy == null ? item.ry : item.tRy;
+                if (Math.abs((item.rx || 0) - wantRx) > 0.8 || Math.abs((item.ry || 0) - wantRy) > 0.8) return true;
             }
             for (let i = 0; i < peerBodies.length; i++) {
                 const body = peerBodies[i];
                 if (Math.abs(body.vx || 0) > 0.05 || Math.abs(body.vy || 0) > 0.05) return true;
+                if (body.tx != null && body.x != null && Math.hypot(body.tx - body.x, (body.ty || 0) - (body.y || 0)) > 0.8) return true;
             }
             return false;
         }

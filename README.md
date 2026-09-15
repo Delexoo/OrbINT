@@ -4,10 +4,9 @@
 
 # OrbINT
 
-### Local-first OSINT case file
+### Open-source Reconnaissance Bureau of Intelligence
 
-Map every fact onto a subject orbit. Search from the field you just filed.  
-Keep the case on this device — no account, no server upload.
+An organized intelligence unit dedicated to collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources.
 
 <br>
 
@@ -33,9 +32,11 @@ Keep the case on this device — no account, no server upload.
 
 ## What is OrbINT?
 
-**OrbINT** is an open-source investigation desk that runs entirely in the browser.
+**OrbINT** is the **Open-source Reconnaissance Bureau of Intelligence**.
 
-You do not create an account. You do not sync a case to someone else’s cloud. Facts stay on the machine in front of you.
+An organized intelligence unit dedicated to collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources.
+
+It runs entirely in the browser. You do not create an account. You do not sync a case to someone else’s cloud. Facts stay on the machine in front of you.
 
 The desk is an **orbit**:
 
@@ -45,7 +46,7 @@ The desk is an **orbit**:
 | ◎ | Every fact is a **pill** on the ring — name, phone, email, username, address, plate, VIN, IP, image… |
 | ⌕ | Fill a pill and OrbINT opens the **next places to look** |
 
-Use it when you need a quiet, visual case file for open-source intelligence: people, accounts, infrastructure, vehicles, and records.
+Use it to collect, organize, analyze, and manage open-source reconnaissance: people, accounts, infrastructure, vehicles, and records.
 
 <div align="center">
 
@@ -175,6 +176,6 @@ Open `index.html`. That is the whole install.
 
 [![Launch](https://img.shields.io/badge/Launch_OrbINT-67e8f9?style=for-the-badge&labelColor=09090b&logo=safari&logoColor=09090b)](https://delexoo.github.io/OrbINT/)
 
-<sub>Built for investigators who want the map and the case file in one place.</sub>
+<sub>Open-source Reconnaissance Bureau of Intelligence.</sub>
 
 </div>

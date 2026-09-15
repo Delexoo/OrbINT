@@ -2,7 +2,7 @@
   "id": "./",
   "name": "OrbINT",
   "short_name": "OrbINT",
-  "description": "Local OSINT case file",
+  "description": "An organized intelligence unit dedicated to collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
