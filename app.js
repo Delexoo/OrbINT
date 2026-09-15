@@ -3704,15 +3704,19 @@
             cachedLayout = layout && layout.items ? layout : null;
             if (cachedLayout) {
                 if (!keepCamera) {
-                    orbit.dragX = Number.isFinite(cachedLayout.dragX) ? cachedLayout.dragX : 0;
-                    orbit.dragY = Number.isFinite(cachedLayout.dragY) ? cachedLayout.dragY : 0;
-                    orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
-                    orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
-                    if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
-                        orbit.zoom = cachedLayout.zoom;
-                        orbit.targetZoom = cachedLayout.zoom;
-                    } else if (typeof recenterOrbit === 'function') {
-                        recenterOrbit();
+                    if (typeof resetPhoneOrbitCamera === 'function' && resetPhoneOrbitCamera()) {
+                        // Phone always refits instead of restoring a desktop camera.
+                    } else {
+                        orbit.dragX = Number.isFinite(cachedLayout.dragX) ? cachedLayout.dragX : 0;
+                        orbit.dragY = Number.isFinite(cachedLayout.dragY) ? cachedLayout.dragY : 0;
+                        orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
+                        orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
+                        if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
+                            orbit.zoom = cachedLayout.zoom;
+                            orbit.targetZoom = cachedLayout.zoom;
+                        } else if (typeof recenterOrbit === 'function') {
+                            recenterOrbit();
+                        }
                     }
                 }
                 (cachedLayout.homes || []).forEach((entry) => {
@@ -4076,29 +4080,42 @@
             if (mapStage) mapStage.classList.add('profile-fly');
             const nameEl = fly.querySelector('.peer-hub-name');
             const letterEl = fly.querySelector('.peer-hub-letter');
+            const hubTitle = document.getElementById('hubTitle');
+            const destType = hubTitle ? getComputedStyle(hubTitle) : null;
+            const destWeight = destType && destType.fontWeight ? destType.fontWeight : '700';
+            const destTrack = destType && destType.letterSpacing ? destType.letterSpacing : '-0.04em';
+            const destLeading = destType && destType.lineHeight ? destType.lineHeight : '1.15';
+            const destFamily = destType && destType.fontFamily ? destType.fontFamily : '';
+            const destFont = destType ? destType.fontSize : '';
             if (nameEl) {
                 const startName = getComputedStyle(nameEl);
                 nameEl.style.fontSize = startName.fontSize;
-                nameEl.style.fontWeight = startName.fontWeight;
-                nameEl.style.letterSpacing = '-0.03em';
-                nameEl.style.lineHeight = '1.2';
+                nameEl.style.fontWeight = destWeight;
+                nameEl.style.letterSpacing = destTrack;
+                nameEl.style.lineHeight = destLeading;
+                if (destFamily) nameEl.style.fontFamily = destFamily;
                 nameEl.style.width = '78%';
+            }
+            if (letterEl) {
+                letterEl.style.fontWeight = destWeight;
+                if (destFamily) letterEl.style.fontFamily = destFamily;
             }
             void fly.offsetWidth;
             fly.style.left = (hubRect.left - canvasRect.left + hubRect.width / 2) + 'px';
             fly.style.top = (hubRect.top - canvasRect.top + hubRect.height / 2) + 'px';
             fly.style.width = hubRect.width + 'px';
             fly.style.height = hubRect.height + 'px';
-            const hubTitle = document.getElementById('hubTitle');
-            const destFont = hubTitle ? getComputedStyle(hubTitle).fontSize : '';
             if (nameEl && destFont) {
                 nameEl.style.fontSize = destFont;
-                nameEl.style.fontWeight = '650';
-                nameEl.style.letterSpacing = '-0.04em';
-                nameEl.style.lineHeight = '1.15';
+                nameEl.style.fontWeight = destWeight;
+                nameEl.style.letterSpacing = destTrack;
+                nameEl.style.lineHeight = destLeading;
                 nameEl.style.width = '72%';
             }
-            if (letterEl && destFont) letterEl.style.fontSize = destFont;
+            if (letterEl && destFont) {
+                letterEl.style.fontSize = destFont;
+                letterEl.style.fontWeight = destWeight;
+            }
             let landed = false;
             const finish = function () {
                 if (landed) return;
@@ -4437,10 +4454,7 @@
             if (toggle) toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
             const dockPort = document.getElementById('dockPortfolio');
             if (dockPort) dockPort.setAttribute('aria-expanded', next ? 'true' : 'false');
-            if (phone && !next) {
-                if (typeof positionNodes === 'function') positionNodes();
-                if (typeof kickOrbit === 'function') kickOrbit();
-            }
+            if (phone && !next && typeof kickOrbit === 'function') kickOrbit();
         }
 
         function latestFact(id) {
@@ -7658,6 +7672,9 @@
             fitZoom: 1,
             fitZooming: false,
             fitCount: -1,
+            pinching: false,
+            pinchDist: 0,
+            pinchZoom: 1,
             raf: 0,
             tickAt: 0
         };
@@ -7668,6 +7685,7 @@
         const PEER_HUB_SIZE = 92;
         let cachedLayout = null;
         let saveLayoutTimer = 0;
+        const pinchPointers = new Map();
 
         function loadSavedLayout() {
             try {
@@ -7713,15 +7731,38 @@
             saveLayoutTimer = setTimeout(saveOrbitLayout, 160);
         }
 
+        function resetPhoneOrbitCamera() {
+            if (typeof isPhone !== 'function' || !isPhone()) return false;
+            orbit.dragX = 0;
+            orbit.dragY = 0;
+            orbit.gridPanX = 0;
+            orbit.gridPanY = 0;
+            orbit.gridShiftX = 0;
+            orbit.gridShiftY = 0;
+            orbit.userZoomed = false;
+            orbit.fitZooming = true;
+            orbit.zoom = 1;
+            orbit.targetZoom = 1;
+            orbit.zoomFocusX = null;
+            orbit.zoomFocusY = null;
+            orbit.zoomWorldX = null;
+            orbit.zoomWorldY = null;
+            orbit.zoomBusy = false;
+            orbit.pinching = false;
+            return true;
+        }
+
         cachedLayout = loadSavedLayout();
         if (cachedLayout) {
-            if (Number.isFinite(cachedLayout.dragX)) orbit.dragX = cachedLayout.dragX;
-            if (Number.isFinite(cachedLayout.dragY)) orbit.dragY = cachedLayout.dragY;
-            orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
-            orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
-            if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
-                orbit.zoom = cachedLayout.zoom;
-                orbit.targetZoom = cachedLayout.zoom;
+            if (!resetPhoneOrbitCamera()) {
+                if (Number.isFinite(cachedLayout.dragX)) orbit.dragX = cachedLayout.dragX;
+                if (Number.isFinite(cachedLayout.dragY)) orbit.dragY = cachedLayout.dragY;
+                orbit.gridPanX = Number.isFinite(cachedLayout.gridPanX) ? cachedLayout.gridPanX : orbit.dragX;
+                orbit.gridPanY = Number.isFinite(cachedLayout.gridPanY) ? cachedLayout.gridPanY : orbit.dragY;
+                if (Number.isFinite(cachedLayout.zoom) && cachedLayout.zoom > 0) {
+                    orbit.zoom = cachedLayout.zoom;
+                    orbit.targetZoom = cachedLayout.zoom;
+                }
             }
             (cachedLayout.homes || []).forEach((entry) => {
                 if (entry && entry[0] && entry[1]) nodeHomes.set(entry[0], entry[1]);
@@ -7737,14 +7778,28 @@
             return Math.min(max, Math.max(min, value));
         }
 
+        function orbitMinZoom() {
+            return isPhone() ? 0.55 : 0.4;
+        }
+
+        function orbitMaxZoom() {
+            return 2.8;
+        }
+
+        function orbitViewInsets() {
+            if (!isPhone()) return { top: 0, right: 0, bottom: 0, left: 0 };
+            return { top: 56, right: 10, bottom: 78, left: 10 };
+        }
+
         function nodeScreenLimits(item, width, height) {
-            const pad = 14;
+            const insets = orbitViewInsets();
+            const pad = isPhone() ? 6 : 14;
             const halfW = Math.max((item.sw || item.w || 0) / 2, 8);
             const halfH = Math.max((item.sh || item.h || 0) / 2, 8);
-            const minX = pad + halfW;
-            const maxX = width - pad - halfW;
-            const minY = pad + halfH;
-            const maxY = height - pad - halfH;
+            const minX = insets.left + pad + halfW;
+            const maxX = width - insets.right - pad - halfW;
+            const minY = insets.top + pad + halfH;
+            const maxY = height - insets.bottom - pad - halfH;
             return {
                 x: minX > maxX ? width / 2 : clamp(item.x, minX, maxX),
                 y: minY > maxY ? height / 2 : clamp(item.y, minY, maxY),
@@ -7804,19 +7859,20 @@
         let canvasBox = { left: 0, top: 0, width: 0, height: 0 };
 
         function syncCanvasBox() {
-            if (!mapCanvas) return canvasBox;
-            const r = mapCanvas.getBoundingClientRect();
+            const stage = mapStage || mapCanvas;
+            if (!stage) return canvasBox;
+            const r = stage.getBoundingClientRect();
             canvasBox = {
                 left: r.left,
                 top: r.top,
-                width: mapCanvas.clientWidth || r.width,
-                height: mapCanvas.clientHeight || r.height
+                width: r.width || stage.clientWidth || window.innerWidth || 0,
+                height: r.height || stage.clientHeight || window.innerHeight || 0
             };
             return canvasBox;
         }
 
         function canvasSize() {
-            if (!canvasBox.width || !canvasBox.height) syncCanvasBox();
+            if (isPhone() || !canvasBox.width || !canvasBox.height) syncCanvasBox();
             if (canvasBox.width && canvasBox.height) return { width: canvasBox.width, height: canvasBox.height };
             const canvasW = mapCanvas && mapCanvas.clientWidth;
             const canvasH = mapCanvas && mapCanvas.clientHeight;
@@ -7835,8 +7891,12 @@
 
             const cx = width / 2;
             const cy = height / 2;
-            const pad = 16;
-            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + 6 : 116;
+            const phone = isPhone();
+            const insets = orbitViewInsets();
+            const innerW = Math.max(80, width - insets.left - insets.right);
+            const innerH = Math.max(80, height - insets.top - insets.bottom);
+            const pad = phone ? 8 : 16;
+            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + (phone ? 4 : 6) : (phone ? 60 : 116);
 
             const visibleIds = new Set(nodes.map((node) => node.dataset.field));
 
@@ -7862,10 +7922,8 @@
             const roots = items.filter((item) => !item.parentId);
             const maxNodeW = Math.max.apply(null, items.map((item) => item.w));
             const maxNodeH = Math.max.apply(null, items.map((item) => item.h));
-            const viewMaxRx = Math.max(80, width / 2 - pad - maxNodeW / 2);
-            const viewMaxRy = Math.max(80, height / 2 - pad - maxNodeH / 2);
-            const maxRx = viewMaxRx * 1.12;
-            const maxRy = viewMaxRy * 1.12;
+            const viewMaxRx = Math.max(phone ? 36 : 80, innerW / 2 - pad - maxNodeW / 2);
+            const viewMaxRy = Math.max(phone ? 36 : 80, innerH / 2 - pad - maxNodeH / 2);
             const hubMinX = hubClear + maxNodeW / 2 + 2;
             const hubMinY = hubClear + maxNodeH / 2 + 2;
 
@@ -7891,11 +7949,13 @@
                 const at = Math.min(ordered.length, Math.max(0, Math.round(idJitter(nameItem.node.dataset.field) * ordered.length)));
                 ordered.splice(at, 0, nameItem);
             }
-            const boxGap = 12 + Math.min(6, Math.max(0, roots.length - 10) * 0.2);
-            let ovalRatio = 0.6;
+            const boxGap = (phone ? 8 : 12) + Math.min(6, Math.max(0, roots.length - 10) * 0.2);
+            let ovalRatio = phone ? 1.08 : 0.6;
 
             function ovalRy(rx) {
-                return Math.min(Math.max(rx * ovalRatio, hubMinY + 10), viewMaxRy * 1.06);
+                const lo = hubMinY + 10;
+                const hi = phone ? viewMaxRy * 1.08 : viewMaxRy * 1.06;
+                return Math.min(Math.max(rx * ovalRatio, lo), hi);
             }
 
             function poleAmount(angle) {
@@ -7904,6 +7964,7 @@
             }
 
             function isPinnedRoot(item) {
+                if (phone) return false;
                 const home = nodeHomes.get(item.node.dataset.field);
                 return !!(home && home.pinned && Number.isFinite(home.angle));
             }
@@ -7957,7 +8018,11 @@
             });
 
             const crowd = Math.min(1, roots.length / 22);
-            let ringRx = Math.min(maxRx, Math.max(hubMinX + 40, viewMaxRx * (0.78 + crowd * 0.14)));
+            let maxRx = phone ? viewMaxRx * 1.22 : viewMaxRx * 1.12;
+            let maxRy = phone ? viewMaxRy * 1.18 : viewMaxRy * 1.12;
+            let ringRx = phone
+                ? Math.min(maxRx, Math.max(Math.min(hubMinX + 10, viewMaxRx), viewMaxRx * (0.86 + crowd * 0.08)))
+                : Math.min(maxRx, Math.max(hubMinX + 40, viewMaxRx * (0.78 + crowd * 0.14)));
             let ringRy = ovalRy(ringRx);
             packRoots(ringRx, ringRy);
 
@@ -8044,7 +8109,9 @@
             }
 
             function spreadRootsOnOval() {
-                for (let grow = 0; grow < 10; grow++) {
+                const growLimit = phone ? 8 : 10;
+                const ratioCap = phone ? 1.16 : 0.68;
+                for (let grow = 0; grow < growLimit; grow++) {
                     packRoots(ringRx, ringRy);
                     roots.forEach((item) => {
                         if (!item.radialLift) {
@@ -8053,11 +8120,11 @@
                         }
                         project(item);
                     });
-                    for (let iter = 0; iter < 36; iter++) {
+                    for (let iter = 0; iter < (phone ? 28 : 36); iter++) {
                         let hits = 0;
                         for (let i = 0; i < roots.length; i++) {
                             for (let j = i + 1; j < roots.length; j++) {
-                                if (separatePair(roots[i], roots[j], boxGap * 0.45)) hits++;
+                                if (separatePair(roots[i], roots[j], boxGap * (phone ? 0.4 : 0.45))) hits++;
                             }
                         }
                         if (!hits) return;
@@ -8066,10 +8133,10 @@
                     // Leave a few pixels of clip; the live ease finishes it.
                     if (!stuck.hits || (stuck.needX < 8 && stuck.needY < 8)) return;
                     if (ringRx < maxRx - 0.5) {
-                        ringRx = Math.min(maxRx, ringRx * 1.025);
+                        ringRx = Math.min(maxRx, ringRx * (phone ? 1.02 : 1.025));
                         ringRy = ovalRy(ringRx);
-                    } else if (ovalRatio < 0.68) {
-                        ovalRatio = Math.min(0.68, ovalRatio + 0.015);
+                    } else if (ovalRatio < ratioCap) {
+                        ovalRatio = Math.min(ratioCap, ovalRatio + (phone ? 0.02 : 0.015));
                         ringRy = ovalRy(ringRx);
                     } else {
                         return;
@@ -8078,6 +8145,7 @@
             }
 
             roots.forEach((item) => {
+                if (phone) return;
                 const home = nodeHomes.get(item.node.dataset.field);
                 if (home && home.pinned && Number.isFinite(home.angle)) item.angle = home.angle;
             });
@@ -8095,7 +8163,7 @@
                     const parent = byId.get(pid);
                     const list = kids[pid];
                     if (!parent || !list) return;
-                    const extra = radialExtent(parent) + Math.max.apply(null, list.map((child) => radialExtent(child, parent.angle))) + 28;
+                    const extra = radialExtent(parent) + Math.max.apply(null, list.map((child) => radialExtent(child, parent.angle))) + (phone ? 18 : 28);
                     const midR = Math.max(parent.rx + extra, 90);
                     const angNeed = Math.atan2((Math.max.apply(null, list.map((child) => child.w)) + 16) / 2, midR) * 2;
                     const fan = list.length > 1 ? Math.min(1.15, angNeed * (list.length - 1)) : 0;
@@ -8174,7 +8242,7 @@
                 return false;
             }
 
-            const chrome = chromeBoxes();
+            const chrome = phone ? [] : chromeBoxes();
 
             function unstackPoles() {
                 spreadRootsOnOval();
@@ -8395,18 +8463,21 @@
                 orbit.fitCount = nodes.length;
                 orbit.userZoomed = false;
             }
+            if (phone && !orbit.pinching && (orbit.zoom || 1) < 0.72) orbit.userZoomed = false;
             let maxDx = hubClear + 24;
             let maxDy = hubClear + 24;
             items.forEach((item) => {
                 maxDx = Math.max(maxDx, Math.abs(item.x - cx) + item.w / 2);
                 maxDy = Math.max(maxDy, Math.abs(item.y - cy) + item.h / 2);
             });
-            const availX = Math.max(80, width / 2 - 36);
-            const availY = Math.max(80, height / 2 - 44);
+            const availX = Math.max(phone ? 40 : 80, innerW / 2);
+            const availY = Math.max(phone ? 40 : 80, innerH / 2);
             const raw = Math.min(1, availX / Math.max(maxDx, 1), availY / Math.max(maxDy, 1));
-            const fit = Math.max(0.86, 1 - (1 - raw) * 0.32);
+            const fit = phone
+                ? clamp(Math.max(raw * 0.96, 0.78), 0.78, 1)
+                : Math.max(0.86, 1 - (1 - raw) * 0.32);
             orbit.fitZoom = fit;
-            if (!orbit.dragging && !orbit.userZoomed) {
+            if (!orbit.dragging && !orbit.userZoomed && !orbit.pinching) {
                 orbit.targetZoom = fit;
                 orbit.fitZooming = Math.abs(orbit.zoom - fit) > 0.008;
                 if (orbit.snapLayout || reduceMotion) {
@@ -9631,7 +9702,9 @@
             orbit.targetParallaxX = 0;
             orbit.targetParallaxY = 0;
             nodeHomes.clear();
+            if (isPhone()) orbit.snapLayout = true;
             if (typeof positionNodes === 'function') positionNodes();
+            if (isPhone()) orbit.snapLayout = false;
         }
 
         try { createNodes(); applyStoredFieldLabels(); applyHiddenFields(); } catch (error) { console.error(error); }
@@ -10467,24 +10540,46 @@
         });
 
         function onViewportChange() {
-            document.body.classList.toggle('phone', isPhone());
-            setPanelOpen(false);
-            if (!isPhone()) {
+            const phone = isPhone();
+            document.body.classList.toggle('phone', phone);
+            if (!phone) {
+                setPanelOpen(false);
                 closePhoneField();
                 closePhoneMore();
                 const saved = Number(localStorage.getItem(SIDEBAR_KEY));
                 applySidebarWidth(saved && saved !== 268 && saved !== 320 ? saved : SIDEBAR_DEFAULT);
+            } else {
+                resetPhoneOrbitCamera();
+                orbit.snapLayout = true;
             }
+            syncCanvasBox();
             if (typeof positionNodes === 'function') positionNodes();
+            orbit.snapLayout = false;
             renderProfile();
         }
 
         if (drawerQuery.addEventListener) drawerQuery.addEventListener('change', onViewportChange);
         else drawerQuery.addListener(onViewportChange);
 
-        window.addEventListener('resize', () => { if (typeof positionNodes === 'function') positionNodes(); });
+        let layoutSizeKey = '';
+        function relayoutIfNeeded(force) {
+            if (orbit.dragging || orbit.pinching) return;
+            syncCanvasBox();
+            const size = canvasSize();
+            const key = Math.round(size.width) + 'x' + Math.round(size.height);
+            if (!force && key === layoutSizeKey) return;
+            layoutSizeKey = key;
+            if (isPhone() && !orbit.userZoomed) orbit.fitZooming = true;
+            if (typeof positionNodes === 'function') positionNodes();
+        }
+
+        window.addEventListener('resize', () => relayoutIfNeeded(false));
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => relayoutIfNeeded(false));
+        }
         requestAnimationFrame(() => {
             const animate = !reduceMotion && !(typeof isPhone === 'function' && isPhone());
+            if (isPhone()) resetPhoneOrbitCamera();
             orbit.snapLayout = true;
             positionNodes();
             orbit.snapLayout = false;
@@ -10498,18 +10593,28 @@
                     if (typeof clearOrbitBloomDelays === 'function') clearOrbitBloomDelays();
                 }, Math.max(800, span + 720));
             }
-            saveOrbitLayout();
+            if (isPhone()) {
+                requestAnimationFrame(() => {
+                    resetPhoneOrbitCamera();
+                    orbit.snapLayout = true;
+                    positionNodes();
+                    orbit.snapLayout = false;
+                    saveOrbitLayout();
+                });
+            } else {
+                saveOrbitLayout();
+            }
         });
         if (window.ResizeObserver && mapCanvas) {
             const layoutWatch = new ResizeObserver(() => {
-                if (orbit.dragging) return;
-                positionNodes();
+                if (orbit.dragging || orbit.pinching) return;
+                relayoutIfNeeded(false);
             });
             layoutWatch.observe(mapCanvas);
         }
 
         function pointerOnCanvas(event) {
-            if (!canvasBox.width) syncCanvasBox();
+            if (isPhone() || !canvasBox.width) syncCanvasBox();
             return { x: event.clientX - canvasBox.left, y: event.clientY - canvasBox.top };
         }
 
@@ -10566,6 +10671,7 @@
         }
 
         function beginOrbitDrag(event, mode, item) {
+            if (orbit.pinching) return;
             closePlatformMenu();
             closeSearchMenu();
             closeExportMenu();
@@ -10693,6 +10799,7 @@
         });
 
         if (mapStage) mapStage.addEventListener('pointerdown', (event) => {
+            if (orbit.pinching || pinchPointers.size >= 2) return;
             if (event.button === 1) {
                 event.preventDefault();
                 beginOrbitDrag(event, 'pan');
@@ -10727,6 +10834,7 @@
         });
 
         if (hub) hub.addEventListener('pointerdown', (event) => {
+            if (orbit.pinching || pinchPointers.size >= 2) return;
             if (event.target.closest('#hubAdd')) {
                 event.stopPropagation();
                 return;
@@ -10739,6 +10847,7 @@
         });
 
         if (mapStage) mapStage.addEventListener('pointermove', (event) => {
+            if (orbit.pinching) return;
             if (orbit.dragging && (orbit.dragMode === 'node' || orbit.dragMode === 'hub' || orbit.dragMode === 'peer')) {
                 if (Math.hypot(event.clientX - orbit.dragStartX, event.clientY - orbit.dragStartY) > 8) orbit.dragMoved = true;
                 const p = pointerOnCanvas(event);
@@ -11074,7 +11183,7 @@
             if (event.deltaMode === 1) delta *= 16;
             else if (event.deltaMode === 2) delta *= rect.height || 800;
             const current = orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom;
-            const next = clamp(current * Math.exp(-delta * 0.00105), 0.4, 2.8);
+            const next = clamp(current * Math.exp(-delta * 0.00105), orbitMinZoom(), orbitMaxZoom());
             captureZoomFocus(event.clientX - rect.left, event.clientY - rect.top);
             orbit.userZoomed = true;
             orbit.fitZooming = false;
@@ -11086,9 +11195,107 @@
             if (typeof kickOrbit === 'function') kickOrbit();
         }, { passive: false });
 
+        function pinchPointList() {
+            return Array.from(pinchPointers.values());
+        }
+
+        function pinchDistance() {
+            const pts = pinchPointList();
+            if (pts.length < 2) return 0;
+            return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        }
+
+        function pinchCenter() {
+            const pts = pinchPointList();
+            if (pts.length < 2) return { x: 0, y: 0 };
+            return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        }
+
+        function startOrbitPinch() {
+            if (orbit.dragging) endOrbitDrag({ pointerId: -1 });
+            orbit.panVX = 0;
+            orbit.panVY = 0;
+            syncCanvasBox();
+            const dist = Math.max(pinchDistance(), 8);
+            const c = pinchCenter();
+            captureZoomFocus(c.x - canvasBox.left, c.y - canvasBox.top);
+            orbit.pinching = true;
+            orbit.pinchDist = dist;
+            orbit.pinchZoom = orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom;
+            orbit.userZoomed = true;
+            orbit.fitZooming = false;
+            if (typeof kickOrbit === 'function') kickOrbit();
+        }
+
+        function moveOrbitPinch() {
+            if (!orbit.pinching || pinchPointers.size < 2 || orbit.pinchDist < 8) return;
+            const dist = pinchDistance();
+            if (dist < 8) return;
+            const next = clamp(orbit.pinchZoom * (dist / orbit.pinchDist), orbitMinZoom(), orbitMaxZoom());
+            const c = pinchCenter();
+            captureZoomFocus(c.x - canvasBox.left, c.y - canvasBox.top);
+            orbit.targetZoom = next;
+            orbit.zoom = next;
+            orbit.zoomBusy = true;
+            applyZoomFocus(next);
+            if (typeof kickOrbit === 'function') kickOrbit();
+        }
+
+        function endOrbitPinch(pointerId) {
+            pinchPointers.delete(pointerId);
+            if (pinchPointers.size < 2) {
+                orbit.pinching = false;
+                orbit.pinchDist = 0;
+                orbit.zoomBusy = false;
+                if (typeof kickOrbit === 'function') kickOrbit();
+            }
+        }
+
+        if (mapStage) {
+            mapStage.addEventListener('pointerdown', (event) => {
+                if (event.pointerType !== 'touch') return;
+                if (event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                pinchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                if (pinchPointers.size >= 2) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    startOrbitPinch();
+                }
+            }, true);
+            mapStage.addEventListener('pointermove', (event) => {
+                if (!pinchPointers.has(event.pointerId)) return;
+                pinchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                if (!orbit.pinching || pinchPointers.size < 2) return;
+                event.preventDefault();
+                event.stopPropagation();
+                moveOrbitPinch();
+            }, { capture: true, passive: false });
+            mapStage.addEventListener('pointerup', (event) => {
+                if (event.pointerType === 'touch') endOrbitPinch(event.pointerId);
+            }, true);
+            mapStage.addEventListener('pointercancel', (event) => {
+                if (event.pointerType === 'touch') endOrbitPinch(event.pointerId);
+            }, true);
+            mapStage.addEventListener('lostpointercapture', (event) => {
+                if (event.pointerType === 'touch') endOrbitPinch(event.pointerId);
+            }, true);
+            ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
+                mapStage.addEventListener(name, (event) => {
+                    if (event.target.closest && event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                    event.preventDefault();
+                });
+            });
+            mapStage.addEventListener('touchmove', (event) => {
+                if (event.target.closest && event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                if (event.touches && event.touches.length > 1) event.preventDefault();
+            }, { passive: false });
+        }
+
         function orbitIsBusy() {
             if (document.hidden) return false;
             if (orbit.dragging) return true;
+            if (orbit.pinching) return true;
+            if (!reduceMotion && !isPhone() && !document.hidden) return true;
             if (orbit.zoomBusy || orbit.zoomWorldX != null) return true;
             if (Math.abs((orbit.zoom || 1) - (orbit.targetZoom == null ? orbit.zoom : orbit.targetZoom)) > 0.0008) return true;
             if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.08) return true;
@@ -11123,7 +11330,7 @@
             orbit.tickAt = now;
             if (orbit.dragging || !canvasBox.width) syncCanvasBox();
             if (orbit.targetZoom == null) orbit.targetZoom = orbit.zoom;
-            if (!orbit.dragging && !orbit.zoomBusy) {
+            if (!orbit.dragging && !orbit.zoomBusy && !orbit.pinching) {
                 if (Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12) {
                     orbit.dragX += orbit.panVX;
                     orbit.dragY += orbit.panVY;
@@ -11143,8 +11350,12 @@
                 orbit.spotX = orbit.targetSpotX;
                 orbit.spotY = orbit.targetSpotY;
             }
-            const freezeWorld = !!orbit.dragging
+            const freezeWorld = !!orbit.dragging || !!orbit.pinching
                 || (!orbit.dragging && Math.hypot(orbit.panVX || 0, orbit.panVY || 0) > 0.12);
+            const holdingField = orbit.dragging && (orbit.dragMode === 'node' || orbit.dragMode === 'peer');
+            if (!reduceMotion && !isPhone() && !orbit.pinching && !holdingField) {
+                orbit.spin += dt * 0.00007;
+            }
             const zoomMs = reduceMotion ? 1 : (orbit.fitZooming && !orbit.zoomWorldX ? 640 : 48);
             orbit.zoom = followZoom(orbit.zoom, orbit.targetZoom, dt, zoomMs);
             if (Math.abs(Math.log(orbit.zoom / Math.max(orbit.targetZoom, 0.01))) < 0.0008) {

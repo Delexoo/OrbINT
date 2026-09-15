@@ -1,4 +1,4 @@
-const CACHE = 'orbint-app-v5';
+const CACHE = 'orbint-app-v8';
 const PRECACHE = [
     './',
     './index.html',

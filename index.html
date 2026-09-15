@@ -1234,7 +1234,7 @@
             z-index: 3;
             width: 72%;
             font-size: 24px;
-            font-weight: 650;
+            font-weight: 700;
             letter-spacing: -0.04em;
             overflow: hidden;
             display: -webkit-box;
@@ -2613,7 +2613,7 @@
             display: none;
             place-items: center;
             font-size: 22px;
-            font-weight: 650;
+            font-weight: 700;
             color: #a1a1aa;
             pointer-events: none;
         }
@@ -2629,8 +2629,8 @@
             background: none;
             color: #fafafa;
             font-size: 11px;
-            font-weight: 600;
-            letter-spacing: -0.03em;
+            font-weight: 700;
+            letter-spacing: -0.04em;
             text-align: center;
             line-height: 1.2;
             overflow: hidden;
@@ -3445,35 +3445,51 @@
             html, body {
                 overflow: hidden;
                 max-width: 100%;
+                width: 100%;
+                height: 100%;
+                height: 100dvh;
+                overscroll-behavior: none;
+                touch-action: manipulation;
             }
-            body { grid-template-columns: 1fr; }
+            body {
+                display: block;
+                grid-template-columns: none;
+            }
             .donate,
             .profile-resize,
             .backdrop,
             .phone-bar { display: none !important; }
+            .profile-panel,
+            .dock-anchor,
+            .donate {
+                animation: none !important;
+            }
             .profile-panel {
                 position: fixed;
                 inset: 0;
                 width: 100% !important;
                 max-width: none;
-                height: 100vh;
+                height: 100%;
                 height: 100dvh;
-                z-index: 22;
-                transform: translateY(12px);
+                z-index: 1;
+                transform: translate3d(0, 12px, 0);
                 opacity: 0;
                 visibility: hidden;
                 pointer-events: none;
                 border-right: 0;
+                overflow: hidden;
                 overflow-x: hidden;
-                padding-bottom: calc(76px + var(--safe-b));
-                animation: none;
-                transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease, visibility 0.28s;
+                padding-bottom: calc(20px + var(--safe-b));
+                animation: none !important;
+                transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
             }
             .profile-panel.open {
-                transform: none;
+                z-index: 40;
+                transform: translate3d(0, 0, 0);
                 opacity: 1;
                 visibility: visible;
                 pointer-events: auto;
+                overflow: hidden;
             }
             .icon-btn {
                 display: grid !important;
@@ -3513,7 +3529,13 @@
                 margin-top: 8px;
             }
             .bar span { border-radius: 99px; }
-            .profile-body { padding: 4px 16px 28px; width: 100%; }
+            .profile-main { min-height: 0; overflow: hidden; }
+            .profile-body {
+                padding: 4px 16px 28px;
+                width: 100%;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
             .phone-facts,
             .phone-facts .phone-group,
             .phone-facts .phone-group-card {
@@ -3525,10 +3547,12 @@
                 inset: 0;
                 width: 100%;
                 height: 100%;
+                height: 100dvh;
                 overflow: hidden;
                 pointer-events: auto;
                 background: var(--bg);
                 z-index: 1;
+                touch-action: none;
             }
             .map-grid,
             .map-canvas,
@@ -3548,25 +3572,73 @@
             }
             .map-toggle {
                 display: inline-flex !important;
+                position: fixed !important;
+                top: calc(12px + var(--safe-t));
+                left: calc(12px + var(--safe-l));
+                z-index: 32;
                 align-items: center;
                 justify-content: center;
                 height: 36px;
                 padding: 0 14px;
                 border-radius: 999px;
-                background: rgba(9, 9, 11, 0.88);
+                background: rgba(9, 9, 11, 0.92);
                 border: 1px solid var(--line);
                 color: var(--text);
                 font-size: 13px;
                 font-weight: 650;
                 letter-spacing: -0.02em;
                 box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+                touch-action: manipulation;
+                pointer-events: auto;
             }
             body.panel-open .map-toggle { visibility: hidden; pointer-events: none; }
-            .hub { --hub-size: min(148px, 42vw); }
-            .hub-title { font-size: 16px; }
+            .hub { --hub-size: min(140px, 40vw); }
+            .hub-title { font-size: 15px; }
             .hub-add {
-                width: 38px;
-                height: 38px;
+                width: 36px;
+                height: 36px;
+            }
+            .node {
+                width: 118px;
+                height: 30px;
+                padding: 0 7px;
+                gap: 5px;
+            }
+            .node.branch:not(.platform-node) { width: 110px; }
+            .node.tz-node { width: 118px; }
+            .node.tz-node.filled,
+            .node.tz-node.null { width: 146px; }
+            .node.cc-node { width: 124px; }
+            .node.cc-node.filled,
+            .node.cc-node.null { width: 148px; }
+            .node.email-node { width: 128px; }
+            .node[data-field="os"],
+            .node[data-field="phoneos"] { width: 128px; }
+            .node.platform-node,
+            .node.branch.platform-node { width: 128px; }
+            .node.secret-node.platform-node,
+            .node.branch.secret-node.platform-node { width: 136px; }
+            .node-copy { gap: 4px; }
+            .node-copy label {
+                max-width: 48px;
+                font-size: 11px;
+            }
+            .node input,
+            .node-rename,
+            .platform-trigger {
+                height: 26px;
+                font-size: 12px;
+                line-height: 26px;
+            }
+            .node-more {
+                width: 14px;
+                height: 14px;
+                top: -5px;
+                right: -5px;
+            }
+            .peer-hub {
+                width: 64px;
+                height: 64px;
             }
             .dock-add,
             .dock-portfolio,
@@ -3579,27 +3651,32 @@
                 display: flex;
                 justify-content: center;
                 pointer-events: none;
-                z-index: 30;
+                z-index: 35;
+                transform: translateZ(0);
+                animation: none !important;
+            }
+            body.panel-open .dock-anchor {
+                visibility: hidden;
+                pointer-events: none;
             }
             .dock,
             .export-menu { pointer-events: auto; }
             .dock {
-                width: 100%;
-                max-width: 520px;
-                justify-content: space-between;
-                gap: 0;
+                width: auto;
+                max-width: 100%;
+                justify-content: center;
+                gap: 2px;
                 padding: 5px 6px;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: none;
+                overflow: hidden;
+                background: rgba(9, 9, 11, 0.96);
             }
             .dock::-webkit-scrollbar { display: none; }
             .dock > button {
-                width: 34px;
-                height: 34px;
-                min-width: 30px;
-                max-width: 42px;
-                flex: 1 0 30px;
+                width: 36px;
+                height: 36px;
+                min-width: 32px;
+                max-width: 40px;
+                flex: 0 0 auto;
                 touch-action: manipulation;
             }
             .dock > button svg {
