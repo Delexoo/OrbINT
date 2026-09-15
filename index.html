@@ -3454,6 +3454,8 @@
             .node.branch.secret-node.platform-node { width: 214px; }
             .hub { --hub-size: 188px; }
             .hub-title { font-size: 21px; }
+            .node.image-node,
+            .node[data-field="image"] { width: 150px; }
         }
 
         @media (max-width: 820px) {
@@ -3607,53 +3609,60 @@
                 pointer-events: auto;
             }
             body.panel-open .map-toggle { visibility: hidden; pointer-events: none; }
-            .hub { --hub-size: min(140px, 40vw); }
-            .hub-title { font-size: 15px; }
+            .hub { --hub-size: min(104px, 30vw); }
+            .hub-title { font-size: 13px; }
             .hub-add {
-                width: 36px;
-                height: 36px;
+                width: 30px;
+                height: 30px;
             }
             .node {
-                width: 118px;
-                height: 30px;
-                padding: 0 7px;
-                gap: 5px;
+                width: 100px;
+                height: 28px;
+                padding: 0 6px;
+                gap: 4px;
             }
-            .node.branch:not(.platform-node) { width: 110px; }
-            .node.tz-node { width: 118px; }
+            .node.branch:not(.platform-node) { width: 94px; }
+            .node.tz-node { width: 100px; }
             .node.tz-node.filled,
-            .node.tz-node.null { width: 146px; }
-            .node.cc-node { width: 124px; }
+            .node.tz-node.null { width: 124px; }
+            .node.cc-node { width: 104px; }
             .node.cc-node.filled,
-            .node.cc-node.null { width: 148px; }
-            .node.email-node { width: 128px; }
+            .node.cc-node.null { width: 126px; }
+            .node.email-node { width: 108px; }
             .node[data-field="os"],
-            .node[data-field="phoneos"] { width: 128px; }
+            .node[data-field="phoneos"] { width: 108px; }
             .node.platform-node,
-            .node.branch.platform-node { width: 128px; }
+            .node.branch.platform-node { width: 108px; }
             .node.secret-node.platform-node,
-            .node.branch.secret-node.platform-node { width: 136px; }
-            .node-copy { gap: 4px; }
+            .node.branch.secret-node.platform-node { width: 114px; }
+            .node.image-node,
+            .node[data-field="image"] { width: 108px; }
+            .node.image-node .image-add {
+                height: 20px;
+                padding: 0 8px;
+                font-size: 10px;
+            }
+            .node-copy { gap: 3px; }
             .node-copy label {
-                max-width: 48px;
-                font-size: 11px;
+                max-width: 40px;
+                font-size: 10px;
             }
             .node input,
             .node-rename,
             .platform-trigger {
-                height: 26px;
-                font-size: 12px;
-                line-height: 26px;
+                height: 24px;
+                font-size: 11px;
+                line-height: 24px;
             }
             .node-more {
-                width: 14px;
-                height: 14px;
-                top: -5px;
-                right: -5px;
+                width: 12px;
+                height: 12px;
+                top: -4px;
+                right: -4px;
             }
             .peer-hub {
-                width: 72px;
-                height: 72px;
+                width: 56px;
+                height: 56px;
                 z-index: 8;
             }
             .peer-hub-name {

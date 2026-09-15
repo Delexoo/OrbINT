@@ -8016,8 +8016,8 @@
             const insets = orbitViewInsets();
             const innerW = Math.max(80, width - insets.left - insets.right);
             const innerH = Math.max(80, height - insets.top - insets.bottom);
-            const pad = phone ? 8 : 16;
-            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + (phone ? 4 : 6) : (phone ? 60 : 116);
+            const pad = phone ? 10 : 16;
+            const hubClear = hub ? Math.max(hub.offsetWidth, hub.offsetHeight) / 2 + (phone ? 16 : 6) : (phone ? 68 : 116);
 
             const visibleIds = new Set(nodes.map((node) => node.dataset.field));
 
@@ -8070,8 +8070,8 @@
                 const at = Math.min(ordered.length, Math.max(0, Math.round(idJitter(nameItem.node.dataset.field) * ordered.length)));
                 ordered.splice(at, 0, nameItem);
             }
-            const boxGap = (phone ? 8 : 12) + Math.min(6, Math.max(0, roots.length - 10) * 0.2);
-            let ovalRatio = phone ? 1.08 : 0.6;
+            const boxGap = (phone ? 6 : 12) + Math.min(6, Math.max(0, roots.length - 10) * 0.2);
+            let ovalRatio = phone ? 1.12 : 0.6;
 
             function ovalRy(rx) {
                 const lo = hubMinY + 10;
@@ -8139,10 +8139,10 @@
             });
 
             const crowd = Math.min(1, roots.length / 22);
-            let maxRx = phone ? viewMaxRx * 1.22 : viewMaxRx * 1.12;
-            let maxRy = phone ? viewMaxRy * 1.18 : viewMaxRy * 1.12;
+            let maxRx = phone ? viewMaxRx * 1.06 : viewMaxRx * 1.12;
+            let maxRy = phone ? viewMaxRy * 1.05 : viewMaxRy * 1.12;
             let ringRx = phone
-                ? Math.min(maxRx, Math.max(Math.min(hubMinX + 10, viewMaxRx), viewMaxRx * (0.86 + crowd * 0.08)))
+                ? Math.max(hubMinX + 12, Math.min(maxRx, viewMaxRx * 0.96))
                 : Math.min(maxRx, Math.max(hubMinX + 40, viewMaxRx * (0.78 + crowd * 0.14)));
             let ringRy = ovalRy(ringRx);
             packRoots(ringRx, ringRy);
@@ -8593,7 +8593,7 @@
             const availY = Math.max(phone ? 40 : 80, innerH / 2);
             const raw = Math.min(1, availX / Math.max(maxDx, 1), availY / Math.max(maxDy, 1));
             const fit = phone
-                ? clamp(Math.max(raw * 0.96, 0.78), 0.78, 1)
+                ? clamp(raw * 0.94, 0.84, 0.97)
                 : Math.max(0.86, 1 - (1 - raw) * 0.32);
             orbit.fitZoom = fit;
             if (!orbit.dragging && !orbit.userZoomed && !orbit.pinching) {
