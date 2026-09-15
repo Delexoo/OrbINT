@@ -1,7 +1,7 @@
 <div align="center">
 
 <img src="icons/app-512.png" width="128" height="128" alt="OrbINT logo">
-
+https://media.discordapp.net/attachments/1517064175619411968/1549560610562244708/OrbINT.gif?ex=6aab2447&is=6aa9d2c7&hm=a7f7333ad8028d4f9a7faefb2d84069846bbacc544d4c344e69daa510804de3f&=
 # OrbINT
 
 ### Open-source Reconnaissance Bureau of Intelligence
