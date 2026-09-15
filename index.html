@@ -2358,7 +2358,11 @@
         }
 
         .node.has-preview .node-preview,
-        .node.has-preview .media-thumb { display: block; }
+        .node.has-preview .media-thumb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .media-thumb[hidden] { display: none !important; }
         .media-viewer[hidden] { display: none !important; }
         .platform-menu[hidden] { display: none !important; }
@@ -3194,9 +3198,10 @@
 
         .image-add {
             appearance: none;
-            flex: 0 0 auto;
-            margin-left: auto;
-            margin-right: auto;
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: 72px;
+            margin: 0;
             height: 22px;
             padding: 0 10px;
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -3210,6 +3215,8 @@
             text-align: center;
             cursor: pointer;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .image-add:hover {
@@ -3616,43 +3623,75 @@
                 height: 30px;
             }
             .node {
-                width: 100px;
-                height: 28px;
-                padding: 0 6px;
+                width: 148px;
+                height: 32px;
+                padding: 0 8px;
+                gap: 4px;
+                overflow: visible;
+                contain: none;
+            }
+            .node.branch:not(.platform-node) { width: 138px; }
+            .node.tz-node { width: 148px; }
+            .node.tz-node.filled,
+            .node.tz-node.null { width: 168px; }
+            .node.cc-node { width: 148px; }
+            .node.cc-node.filled,
+            .node.cc-node.null { width: 168px; }
+            .node.email-node { width: 152px; }
+            .node[data-field="os"],
+            .node[data-field="phoneos"] { width: 152px; }
+            .node.platform-node,
+            .node.branch.platform-node { width: 152px; }
+            .node.secret-node.platform-node,
+            .node.branch.secret-node.platform-node { width: 158px; }
+            .node.image-node,
+            .node[data-field="image"] {
+                width: 118px;
+                overflow: hidden;
+            }
+            .node.image-node .node-copy {
+                overflow: hidden;
                 gap: 4px;
             }
-            .node.branch:not(.platform-node) { width: 94px; }
-            .node.tz-node { width: 100px; }
-            .node.tz-node.filled,
-            .node.tz-node.null { width: 124px; }
-            .node.cc-node { width: 104px; }
-            .node.cc-node.filled,
-            .node.cc-node.null { width: 126px; }
-            .node.email-node { width: 108px; }
-            .node[data-field="os"],
-            .node[data-field="phoneos"] { width: 108px; }
-            .node.platform-node,
-            .node.branch.platform-node { width: 108px; }
-            .node.secret-node.platform-node,
-            .node.branch.secret-node.platform-node { width: 114px; }
-            .node.image-node,
-            .node[data-field="image"] { width: 108px; }
+            .node.image-node .node-copy label { display: none; }
             .node.image-node .image-add {
+                flex: 1 1 auto;
+                max-width: none;
+                margin: 0;
                 height: 20px;
                 padding: 0 8px;
                 font-size: 10px;
+                letter-spacing: 0;
+                line-height: 18px;
             }
-            .node-copy { gap: 3px; }
+            .node.image-node .media-thumb {
+                width: 18px;
+                height: 18px;
+            }
+            .node.image-node .node-clear {
+                transition: none;
+            }
+            .node-copy { gap: 4px; overflow: hidden; }
             .node-copy label {
-                max-width: 40px;
+                max-width: 34px;
                 font-size: 10px;
             }
             .node input,
             .node-rename,
             .platform-trigger {
-                height: 24px;
-                font-size: 11px;
-                line-height: 24px;
+                min-width: 0;
+                height: 28px;
+                font-size: 16px;
+                line-height: 1.2;
+                overflow: visible;
+                text-overflow: clip;
+                -webkit-text-size-adjust: 100%;
+            }
+            .tz-abbr,
+            .cc-abbr,
+            .cc-name {
+                overflow: visible;
+                text-overflow: clip;
             }
             .node-more {
                 width: 12px;
@@ -3677,7 +3716,8 @@
             .peer-hub { pointer-events: auto; }
             .dock-add,
             .dock-portfolio,
-            .dock-more { display: grid; }
+            .dock-more,
+            #dockPlay { display: grid; }
             .dock-anchor {
                 position: fixed;
                 left: max(10px, var(--safe-l));
@@ -3736,7 +3776,6 @@
             .profile-head-row .icon-btn { margin-left: auto; }
             #dockHelp,
             #dockToolkit,
-            #dockPlay,
             #dockPlaytest,
             #dockInstall,
             #dockReset { display: none; }
@@ -5665,7 +5704,7 @@
                         <div><b>Help</b>This guide. On a phone, open it from More or Help.</div>
                         <div><b>Toolkit</b>The OSINT catalog from Free University Tools. Browse by category, or open more tools from a field search.</div>
                         <div><b>Recenter</b>Reset zoom and pan. Does not touch facts.</div>
-                        <div><b>Play</b>Replay the opening ease-in without reloading the page.</div>
+                        <div><b>Play</b>Replay the opening ease-in without reloading the page. On a phone it is in the toolbar.</div>
                         <div><b>Generate Identity</b>Fill every visible field with a random sample persona. Undo restores the previous case.</div>
                         <div><b>Undo / Redo</b>Step through filed changes. Ctrl+Z and Ctrl+Y. Unlimited in this session.</div>
                         <div><b>Export</b>Download the current profile as .json.</div>

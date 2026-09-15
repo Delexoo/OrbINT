@@ -8593,7 +8593,7 @@
             const availY = Math.max(phone ? 40 : 80, innerH / 2);
             const raw = Math.min(1, availX / Math.max(maxDx, 1), availY / Math.max(maxDy, 1));
             const fit = phone
-                ? clamp(raw * 0.94, 0.84, 0.97)
+                ? clamp(raw * 0.96, 0.8, 0.98)
                 : Math.max(0.86, 1 - (1 - raw) * 0.32);
             orbit.fitZoom = fit;
             if (!orbit.dragging && !orbit.userZoomed && !orbit.pinching) {
