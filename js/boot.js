@@ -13,7 +13,7 @@
         view.addEventListener('mousedown', stopMiddleAutoscroll, true);
         view.addEventListener('auxclick', stopMiddleAutoscroll);
         view.addEventListener('pointerdown', function (event) {
-            if (event.target.closest('#timelineMenu, #timelineIsland, #timelineTips, #calPop, #timePop, #tlInfoPop')) return;
+            if (event.target.closest('#timelineMenu, #timelineIsland, #calPop, #timePop, #tlInfoPop')) return;
             hideTimelineMenu();
             if (event.target.closest('.board-bar, .work-ghost')) return;
             if (!event.target.closest('[data-tl-rs]')) {
@@ -237,7 +237,7 @@
             reader.readAsDataURL(file);
         });
         view.addEventListener('contextmenu', function (event) {
-            if (event.target.closest('#timelineMenu, #timelineIsland, #timelineTips, .board-bar')) return;
+            if (event.target.closest('#timelineMenu, #timelineIsland, .board-bar')) return;
             event.preventDefault();
             const node = event.target.closest('.tl-node');
             if (node) showTimelineCardMenu(event.clientX, event.clientY, node.getAttribute('data-event'));
@@ -401,16 +401,6 @@
             connectFrom = '';
             applyTimelineCam();
             renderTimeline();
-            return;
-        }
-        if (event.target.closest('#timelineTipsClose') || (event.target.closest('#timelineTipsBtn') && $('timelineTips') && $('timelineTips').classList.contains('is-open'))) {
-            event.preventDefault();
-            setTimelineTips(false);
-            return;
-        }
-        if (event.target.closest('#timelineTipsBtn, #timelineTips')) {
-            event.preventDefault();
-            setTimelineTips(true);
             return;
         }
         if (event.target.closest('#timelineConnectBtn, [data-tl-connect]')) {
@@ -960,11 +950,6 @@
             closeTlInfoPop();
             return;
         }
-        if (event.key === 'Escape' && $('timelineTips') && $('timelineTips').classList.contains('is-open')) {
-            event.preventDefault();
-            setTimelineTips(false);
-            return;
-        }
         if (event.key === 'Escape' && document.querySelector('#boardStage [data-wb-text].is-edit')) {
             event.preventDefault();
             commitBoardTextEdit();
@@ -1226,7 +1211,6 @@
         document.addEventListener('change', onFile, true);
         bindBoardPointers();
         bindTimelinePointers();
-        setTimelineTips(timelineTipsWanted());
         document.addEventListener('pointermove', function (event) {
             if (event.pointerType === 'touch') return;
             setBoardDrift(event.clientX, event.clientY);

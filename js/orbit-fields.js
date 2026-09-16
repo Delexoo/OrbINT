@@ -1846,7 +1846,7 @@
             if (window.__orbintToolkitWait) return window.__orbintToolkitWait;
             window.__orbintToolkitWait = new Promise(function (resolve) {
                 const s = document.createElement('script');
-                s.src = 'osint-tools.js?v=161';
+                s.src = 'osint-tools.js?v=166';
                 s.onload = function () {
                     try { window.dispatchEvent(new Event('orbint-toolkit-ready')); } catch (error) {}
                     resolve(window.OSINT_TOOLKIT || null);

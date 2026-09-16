@@ -23,30 +23,14 @@
                 <div class="tl-follow" id="timelineFollow" hidden></div>
             </div>
             <div class="board-add-menu" id="timelineMenu" hidden></div>
-            <div class="tl-island" id="timelineIsland" hidden role="status" aria-live="polite" aria-hidden="true">
-                <span class="tl-island-ico" aria-hidden="true">
+            <div class="tl-island" id="timelineIsland" role="status" aria-live="polite">
+                <span class="tl-island-ico tl-island-ico-hint" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M8 12v-3M16 12v-3"/><circle cx="12" cy="12" r="2"/></svg>
+                </span>
+                <span class="tl-island-ico tl-island-ico-link" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><circle cx="6.5" cy="12" r="2.4"/><circle cx="17.5" cy="12" r="2.4"/><path d="M9 12h6"/></svg>
                 </span>
-                <span class="tl-island-text" id="timelineIslandText"></span>
-            </div>
-            <div class="tl-tips" id="timelineTips">
-                <button type="button" class="tl-tips-fab" id="timelineTipsBtn" aria-controls="timelineTipsCard" aria-expanded="false" aria-label="Show timeline tips">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
-                    Tips
-                </button>
-                <div class="tl-tips-card" id="timelineTipsCard" hidden role="region" aria-label="Timeline tips">
-                    <div class="tl-tips-head">
-                        <b>Tips</b>
-                        <button type="button" class="tl-tips-x" id="timelineTipsClose" aria-label="Hide tips">×</button>
-                    </div>
-                    <ul>
-                        <li>Click the number line to add a card</li>
-                        <li>Drag a card from its top bar</li>
-                        <li>Pull an edge or corner to resize</li>
-                        <li>Use + Add information for extra fields</li>
-                        <li>Right-click empty space for more</li>
-                    </ul>
-                </div>
+                <span class="tl-island-text" id="timelineIslandText">Click the number line to add a card</span>
             </div>
         </div>
         <input id="timelineImageFile" type="file" accept="image/*" hidden>

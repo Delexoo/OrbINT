@@ -2562,7 +2562,7 @@
     const TL_CARD_MAX_H = 2400;
     const TL_GAP = 280;
     const TL_STEM = 64;
-    const TL_AXIS_CLEAR = TL_STEM;
+    const TL_AXIS_CLEAR = 42;
     const TL_MIN_DX = TL_CARD_W + 40;
     const TL_CTRL = 'button, input, textarea, [contenteditable="true"], [data-tl-info], [data-tl-cal], [data-tl-time], [data-tl-mini], [data-tl-fold], [data-tl-drop], [data-del-event], [data-connect-event], [data-tl-photo], [data-tl-add], [data-tl-expand], .tl-acts, .tl-attach, .tl-media, .tl-thumb, .tl-bit-btn';
     let tlAimX = 220;
@@ -2806,7 +2806,7 @@
             const el = list.querySelector('[data-event="' + ev.id + '"]');
             if (!el || el.classList.contains('is-out') || el.classList.contains('is-moving') || el.classList.contains('is-resizing')) return null;
             const card = el.querySelector('.tl-card');
-            const h = Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+            const h = (card && card.offsetHeight) || el.offsetHeight || 168;
             const w = el.offsetWidth || tlCardW(ev);
             const left = parseFloat(el.style.left);
             const top = parseFloat(el.style.top);
@@ -3882,9 +3882,6 @@
                 '<button type="button" class="tl-ico" data-tl-time="' + esc(ev.id) + '" title="Time" aria-label="Choose time" aria-haspopup="dialog" aria-expanded="false">' +
                 '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg>' +
                 '</button>' +
-                '<button type="button" class="tl-ico' + (connectFrom === ev.id ? ' is-on' : '') + '" data-connect-event="' + esc(ev.id) + '" title="' + (connectFrom === ev.id ? 'Pick second card' : 'Connect cards') + '" aria-label="' + (connectFrom === ev.id ? 'Pick second card' : 'Connect cards') + '" aria-pressed="' + (connectFrom === ev.id ? 'true' : 'false') + '">' +
-                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5a3.8 3.8 0 0 0 5.4.4l1.6-1.6a3.8 3.8 0 1 0-5.4-5.4l-.9.9"/><path d="M14 10.5a3.8 3.8 0 0 0-5.4-.4L7 11.7a3.8 3.8 0 0 0 5.4 5.4l.9-.9"/></svg>' +
-                '</button>' +
                 '<button type="button" class="tl-ico" data-tl-mini="' + esc(ev.id) + '" title="' + (ev.mini ? 'Expand' : 'Minimize') + '" aria-label="' + (ev.mini ? 'Expand' : 'Minimize') + '" aria-expanded="' + (ev.mini ? 'false' : 'true') + '">' +
                 '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/><path class="tl-mini-v" d="M12 6v12"/></svg>' +
                 '</button>' +
@@ -3900,6 +3897,7 @@
                 media +
                 '<div class="tl-acts">' +
                 '<button type="button" class="tl-add-info" data-tl-info="' + esc(ev.id) + '" aria-haspopup="dialog" aria-expanded="false">+ Add information</button>' +
+                '<button type="button" data-connect-event="' + esc(ev.id) + '">' + (connectFrom === ev.id ? 'Pick…' : 'Connect cards') + '</button>' +
                 '</div></div></div></div>' +
                 '<div class="tl-rs" aria-hidden="true">' +
                 '<i data-tl-rs="n"></i><i data-tl-rs="s"></i><i data-tl-rs="e"></i><i data-tl-rs="w"></i>' +
@@ -4037,7 +4035,7 @@
         const left = el ? (parseFloat(el.style.left) || el.offsetLeft || 0) : ((Number(ev.pinX) || 0) - w / 2);
         const top = el ? (parseFloat(el.style.top) || el.offsetTop || 0) : (Number(ev.pinY) || 0);
         const card = el && el.querySelector('.tl-card');
-        const h = Math.max((card && card.offsetHeight) || 0, (el && el.offsetHeight) || 0, tlCardH(ev) || 0, 86);
+        const h = (card && card.offsetHeight) || (el && el.offsetHeight) || tlCardH(ev) || 120;
         const pin = left + w / 2;
         const side = (ev.side === 1 || ev.side === -1) ? ev.side : ((top + h / 2) >= TL_AXIS_Y ? 1 : -1);
         return { id: ev.id, side: side, pin: pin, left: left, right: left + w, top: top, bottom: top + h };
@@ -4172,8 +4170,10 @@
             if (box) {
                 const axisY = box.side === 1 ? y + 22 : y - 22;
                 const cardY = box.side === 1 ? box.top : box.bottom;
-                const d = tlOrthoPath(tlStemPoints(pin, axisY, cardY, ev.id, boxes), 10);
-                if (d) parts.push('<path d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>');
+                if ((box.side === 1 && cardY > axisY + 1) || (box.side === -1 && cardY < axisY - 1)) {
+                    const d = tlOrthoPath(tlStemPoints(pin, axisY, cardY, ev.id, boxes), 10);
+                    parts.push('<path d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>');
+                }
             }
             if (ev.date) {
                 parts.push('<text x="' + pin + '" y="' + (y - 40) + '" text-anchor="middle" fill="#a1a1aa" font-size="11">' + esc(formatDayLabel(ev.date)) + '</text>');
@@ -4360,14 +4360,14 @@
         if (node && node.classList.contains('is-out')) return;
         rememberTimeline();
         function commit() {
-            data.timeline = (data.timeline || []).filter(function (item) { return item.id !== id; });
-            data.timeline.forEach(function (item) {
-                item.links = (item.links || []).filter(function (link) { return link.to !== id; });
-            });
-            if (selectedEvent === id) selectedEvent = '';
-            if (connectFrom === id) connectFrom = '';
-            renderTimeline();
-            schedulePersist();
+        data.timeline = (data.timeline || []).filter(function (item) { return item.id !== id; });
+        data.timeline.forEach(function (item) {
+            item.links = (item.links || []).filter(function (link) { return link.to !== id; });
+        });
+        if (selectedEvent === id) selectedEvent = '';
+        if (connectFrom === id) connectFrom = '';
+        renderTimeline();
+        schedulePersist();
         }
         if (node && !reduceMotion()) {
             node.classList.add('is-out');
@@ -7256,8 +7256,8 @@
             if (!cover && !record) {
                 var run = pdfSafe(subject);
                 if (run) {
-                    var w = measurePdf(run, 9);
-                    page.ops.push('0.35 0.35 0.35 rg BT /F3 9 Tf 0 Tc 0 Tw ' + ((612 - w) / 2).toFixed(2) + ' 748 Td (' + pdfEscape(run) + ') Tj ET');
+                var w = measurePdf(run, 9);
+                page.ops.push('0.35 0.35 0.35 rg BT /F3 9 Tf 0 Tc 0 Tw ' + ((612 - w) / 2).toFixed(2) + ' 748 Td (' + pdfEscape(run) + ') Tj ET');
                 }
             }
             return page;
@@ -7732,8 +7732,8 @@
                 if (timelineConnectOn) {
                     event.preventDefault();
                     toggleConnect(id);
-                    return;
-                }
+                        return;
+                    }
                 selectedEvent = id;
                 stage.querySelectorAll('.tl-node').forEach(function (el) {
                     el.classList.toggle('is-on', el.getAttribute('data-event') === id);
@@ -7829,7 +7829,7 @@
                     if (live) live.classList.add('is-resizing');
                 }
                 const rec = (data.timeline || []).find(function (n) { return n.id === drag.id; });
-                if (!rec) return;
+            if (!rec) return;
                 applyTlResize(rec, drag, (event.clientX - drag.x) / z, (event.clientY - drag.y) / z);
                 const el = stage.querySelector('[data-event="' + drag.id + '"]');
                 if (el) {
@@ -7890,7 +7890,7 @@
         view.addEventListener('wheel', function (event) {
             event.preventDefault();
             const cam = timelineCam();
-            const rect = view.getBoundingClientRect();
+                const rect = view.getBoundingClientRect();
             const prev = cam.z || 1;
             const next = Math.min(3.2, Math.max(0.2, prev * (event.deltaY > 0 ? 0.92 : 1.08)));
             const px = event.clientX - rect.left;

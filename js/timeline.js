@@ -26,7 +26,7 @@
         for (let i = 0; i < stack.length; i++) {
             const el = stack[i];
             if (!el || !el.closest) continue;
-            if (el.closest('.tl-rs, .cal-pop, #timelineMenu, #timelineIsland, #timelineTips')) {
+            if (el.closest('.tl-rs, .cal-pop, #timelineMenu, #timelineIsland')) {
                 if (el.closest('.cal-pop')) {
                     const hit = el.closest(sel);
                     if (hit) return hit;
@@ -49,6 +49,30 @@
         const n = Number(ev && ev.h);
         if (n >= TL_CARD_MIN_H) return Math.min(TL_CARD_MAX_H, n);
         return 0;
+    }
+
+    function tlNodeH(el, ev) {
+        const card = el && el.querySelector('.tl-card');
+        return Math.max(
+            (card && card.offsetHeight) || 0,
+            (el && el.offsetHeight) || 0,
+            tlCardH(ev) || 0,
+            86
+        );
+    }
+
+    function tlFacingSide(top, h, stored) {
+        const bottom = top + h;
+        if (top >= TL_AXIS_Y - 8) return 1;
+        if (bottom <= TL_AXIS_Y + 8) return -1;
+        if (stored === 1 || stored === -1) return stored;
+        return (top + h / 2) >= TL_AXIS_Y ? 1 : -1;
+    }
+
+    function tlPlantTop(side, h, freeTop, free) {
+        const natural = side === 1 ? TL_AXIS_Y + TL_STEM : TL_AXIS_Y - TL_STEM - h;
+        if (!free || !isFinite(freeTop)) return natural;
+        return tlKeepClearOfAxis(side, freeTop, h);
     }
 
     function placeTlCard(el, rec) {
@@ -137,51 +161,24 @@
         const island = $('timelineIsland');
         const label = $('timelineIslandText');
         const hint = $('timelineHint');
-        if (island) {
-            if (timelineConnectOn) {
-                clearTimeout(tlIslandHide);
-                if (label) label.textContent = connectFrom ? 'Click the second card to connect them.' : 'Click two cards to connect them.';
-                island.hidden = false;
-                island.setAttribute('aria-hidden', 'false');
-                requestAnimationFrame(function () {
-                    island.classList.add('is-on');
-                    island.classList.remove('is-out');
-                });
-            } else if (island.classList.contains('is-on')) {
-                island.classList.remove('is-on');
-                island.classList.add('is-out');
-                island.setAttribute('aria-hidden', 'true');
-                clearTimeout(tlIslandHide);
-                tlIslandHide = setTimeout(function () {
-                    if (timelineConnectOn) return;
-                    island.hidden = true;
-                    island.classList.remove('is-out');
-                    if (label) label.textContent = '';
-                }, 340);
-            }
-        }
         if (hint) {
             hint.hidden = true;
             hint.textContent = '';
         }
-    }
-
-    function timelineTipsWanted() {
-        try { return localStorage.getItem('orbint-tl-tips') !== 'off'; } catch (error) { return true; }
-    }
-
-    function setTimelineTips(open) {
-        const widget = $('timelineTips');
-        const btn = $('timelineTipsBtn');
-        const card = $('timelineTipsCard');
-        if (!widget) return;
-        widget.classList.toggle('is-open', !!open);
-        if (btn) {
-            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            btn.setAttribute('aria-label', open ? 'Hide timeline tips' : 'Show timeline tips');
-        }
-        if (card) card.hidden = !open;
-        try { localStorage.setItem('orbint-tl-tips', open ? 'on' : 'off'); } catch (error) {}
+        if (!island) return;
+        const connecting = !!timelineConnectOn;
+        const text = connecting
+            ? (connectFrom ? 'Click the second card to connect them.' : 'Click two cards to connect them.')
+            : 'Click the number line to add a card';
+        if (label && label.textContent !== text) label.textContent = text;
+        island.classList.toggle('is-connect', connecting);
+        island.hidden = false;
+        island.setAttribute('aria-hidden', 'false');
+        clearTimeout(tlIslandHide);
+        requestAnimationFrame(function () {
+            island.classList.add('is-on');
+            island.classList.remove('is-out');
+        });
     }
 
     function relatedIds(ev) {
@@ -255,8 +252,7 @@
         const items = (data.timeline || []).map(function (ev) {
             const el = list.querySelector('[data-event="' + ev.id + '"]');
             if (!el || el.classList.contains('is-out') || el.classList.contains('is-moving') || el.classList.contains('is-resizing')) return null;
-            const card = el.querySelector('.tl-card');
-            const h = Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+            const h = tlNodeH(el, ev);
             const w = el.offsetWidth || tlCardW(ev);
             const left = parseFloat(el.style.left);
             const top = parseFloat(el.style.top);
@@ -270,9 +266,7 @@
             };
         }).filter(Boolean);
         items.forEach(function (item) {
-            item.side = (item.ev.side === 1 || item.ev.side === -1)
-                ? item.ev.side
-                : ((item.top0 + item.h / 2) >= TL_AXIS_Y ? 1 : -1);
+            item.side = tlFacingSide(item.top0, item.h, item.ev.side);
         });
         [-1, 1].forEach(function (side) {
             const group = items.filter(function (item) { return item.side === side; }).sort(function (a, b) {
@@ -287,8 +281,9 @@
             });
             const placed = [];
             group.forEach(function (item) {
-                const natural = side === 1 ? TL_AXIS_Y + TL_STEM : TL_AXIS_Y - TL_STEM - item.h;
-                let top = item.ev.free && isFinite(item.top0) ? item.top0 : natural;
+                let top = item.ev.locked && isFinite(item.top0)
+                    ? item.top0
+                    : tlPlantTop(side, item.h, item.top0, !!(item.ev.free && isFinite(item.top0)));
                 if (!item.ev.locked) top = tlKeepClearOfAxis(side, top, item.h);
                 if (!item.ev.locked) {
                     let guard = 0;
@@ -366,7 +361,7 @@
     }
 
     function cardTop(ev, height) {
-        if (ev && ev.free && ev.pinY != null && isFinite(Number(ev.pinY))) return Number(ev.pinY);
+        if (ev && ev.pinY != null && isFinite(Number(ev.pinY))) return Number(ev.pinY);
         const h = height || 168;
         return ev.side === 1 ? TL_AXIS_Y + TL_STEM : TL_AXIS_Y - TL_STEM - h;
     }
@@ -1360,7 +1355,7 @@
             list.querySelectorAll('.tl-node').forEach(function (el) {
                 const rec = (data.timeline || []).find(function (item) { return item.id === el.getAttribute('data-event'); });
                 if (!rec) return;
-                if (!(rec.free && rec.pinY != null && isFinite(Number(rec.pinY)))) rec.pinY = cardTop(rec, el.offsetHeight);
+                if (!(rec.pinY != null && isFinite(Number(rec.pinY)))) rec.pinY = cardTop(rec, tlNodeH(el, rec));
                 placeTlCard(el, rec);
             });
             stackTimelineStems();
@@ -1486,10 +1481,9 @@
         const w = (el && el.offsetWidth) || tlCardW(ev);
         const left = el ? (parseFloat(el.style.left) || el.offsetLeft || 0) : ((Number(ev.pinX) || 0) - w / 2);
         const top = el ? (parseFloat(el.style.top) || el.offsetTop || 0) : (Number(ev.pinY) || 0);
-        const card = el && el.querySelector('.tl-card');
-        const h = Math.max((card && card.offsetHeight) || 0, (el && el.offsetHeight) || 0, tlCardH(ev) || 0, 86);
+        const h = tlNodeH(el, ev);
         const pin = left + w / 2;
-        const side = (ev.side === 1 || ev.side === -1) ? ev.side : ((top + h / 2) >= TL_AXIS_Y ? 1 : -1);
+        const side = tlFacingSide(top, h, ev.side);
         return { id: ev.id, side: side, pin: pin, left: left, right: left + w, top: top, bottom: top + h };
     }
 
@@ -1618,15 +1612,20 @@
             const el = nodes[ev.id];
             const box = el ? tlCardBox(ev, el) : null;
             const pin = box ? box.pin : (Number(ev.pinX) || x0 + 80);
-            parts.push('<line x1="' + pin + '" y1="' + (y - 22) + '" x2="' + pin + '" y2="' + (y + 22) + '" stroke="#fafafa" stroke-width="1.6"/>');
+            const leaving = !!(el && el.classList.contains('is-out'));
+            const outClass = leaving ? ' is-out' : '';
+            parts.push('<line class="tl-pin' + outClass + '" data-tl-pin="' + esc(ev.id) + '" pathLength="1" x1="' + pin + '" y1="' + (y - 22) + '" x2="' + pin + '" y2="' + (y + 22) + '" stroke="#fafafa" stroke-width="1.6"/>');
             if (box) {
-                const axisY = box.side === 1 ? y + 22 : y - 22;
-                const cardY = box.side === 1 ? box.top : box.bottom;
-                const d = tlOrthoPath(tlStemPoints(pin, axisY, cardY, ev.id, boxes), 10);
-                if (d) parts.push('<path d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>');
+                const toTop = Math.abs(box.top - y) <= Math.abs(box.bottom - y);
+                const cardY = toTop ? box.top : box.bottom;
+                const axisY = cardY >= y ? y + 22 : y - 22;
+                const pts = tlStemPoints(pin, axisY, cardY, ev.id, boxes);
+                pts.reverse();
+                const d = tlOrthoPath(pts, 10);
+                if (d) parts.push('<path class="tl-stem' + outClass + '" data-tl-stem="' + esc(ev.id) + '" pathLength="1" d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>');
             }
             if (ev.date) {
-                parts.push('<text x="' + pin + '" y="' + (y - 40) + '" text-anchor="middle" fill="#a1a1aa" font-size="11">' + esc(formatDayLabel(ev.date)) + '</text>');
+                parts.push('<text class="tl-pin-date' + outClass + '" data-tl-pin-date="' + esc(ev.id) + '" x="' + pin + '" y="' + (y - 40) + '" text-anchor="middle" fill="#a1a1aa" font-size="11">' + esc(formatDayLabel(ev.date)) + '</text>');
             }
         });
         (data.timeline || []).forEach(function (ev) {
@@ -1638,7 +1637,10 @@
                 if (!boxA || !boxB) return;
                 const d = tlCardLinkPath(boxA, boxB);
                 if (!d) return;
-                parts.push('<path d="' + d + '" fill="none" stroke="#73737a" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" opacity="0.88" marker-end="url(#tl-card-arrow)"/>');
+                const elA = nodes[ev.id];
+                const elB = nodes[b.id];
+                const leaving = !!(elA && elA.classList.contains('is-out')) || !!(elB && elB.classList.contains('is-out'));
+                parts.push('<path class="tl-card-link' + (leaving ? ' is-out' : '') + '" data-tl-link-a="' + esc(ev.id) + '" data-tl-link-b="' + esc(b.id) + '" pathLength="1" d="' + d + '" fill="none" stroke="#73737a" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" opacity="0.88" marker-end="url(#tl-card-arrow)"/>');
             });
         });
         svg.innerHTML = parts.join('');
@@ -1805,6 +1807,13 @@
         schedulePersist();
     }
 
+    function markTimelineStemOut(id) {
+        const svg = $('timelineAxis');
+        if (!svg || !id) return;
+        const sel = '[data-tl-stem="' + id + '"], [data-tl-pin="' + id + '"], [data-tl-pin-date="' + id + '"], [data-tl-link-a="' + id + '"], [data-tl-link-b="' + id + '"]';
+        svg.querySelectorAll(sel).forEach(function (el) { el.classList.add('is-out'); });
+    }
+
     function deleteEvent(id) {
         const node = document.querySelector('#timelineList [data-event="' + id + '"]');
         if (node && node.classList.contains('is-out')) return;
@@ -1821,6 +1830,7 @@
         }
         if (node && !reduceMotion()) {
             node.classList.add('is-out');
+            markTimelineStemOut(id);
             afterEase(node, commit);
             return;
         }

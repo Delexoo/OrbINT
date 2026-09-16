@@ -60,7 +60,6 @@ def main() -> None:
         "tlInfoPop",
         "dock",
         "boardInspect",
-        "timelineTips",
     ]
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     missing = [i for i in ids if f'id="{i}"' not in html]

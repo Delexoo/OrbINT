@@ -39,11 +39,14 @@
 
 
 .tl-island.is-on {
-    pointer-events: auto;
+    pointer-events: none;
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) scale(1);
 }
+
+
+.tl-island.is-connect.is-on { pointer-events: auto; }
 
 
 .tl-island.is-out {
@@ -58,7 +61,7 @@
 
 
 .tl-island-ico {
-    display: grid;
+    display: none;
     place-items: center;
     width: 22px;
     height: 22px;
@@ -69,7 +72,16 @@
 }
 
 
-.tl-island.is-on .tl-island-ico {
+.tl-island.is-on .tl-island-ico-hint { display: grid; }
+
+
+.tl-island.is-connect .tl-island-ico-hint { display: none; }
+
+
+.tl-island.is-connect .tl-island-ico-link { display: grid; }
+
+
+.tl-island.is-connect.is-on .tl-island-ico {
     animation: tl-island-pulse 1.8s ease-in-out infinite;
 }
 
@@ -116,141 +128,6 @@ html.reduce-motion .tl-island-text {
 
 
 html.reduce-motion .tl-island.is-on .tl-island-ico { animation: none; }
-
-
-.tl-tips {
-    position: absolute;
-    z-index: 18;
-    left: 14px;
-    bottom: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    pointer-events: none;
-}
-
-
-.tl-tips-fab,
-.tl-tips-x {
-    appearance: none;
-    pointer-events: auto;
-    border: 1px solid #27272a;
-    background: #111113;
-    color: #a1a1aa;
-    cursor: pointer;
-}
-
-
-.tl-tips-fab {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    height: 36px;
-    padding: 0 12px 0 10px;
-    border-radius: 999px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 550;
-    letter-spacing: -0.01em;
-}
-
-
-.tl-tips-fab svg {
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-
-.tl-tips-fab:hover { color: #fafafa; border-color: #3f3f46; }
-
-
-.tl-tips.is-open .tl-tips-fab { display: none; }
-
-
-.tl-tips-card {
-    pointer-events: auto;
-    width: min(260px, calc(100vw - 28px));
-    padding: 12px 12px 10px;
-    border: 1px solid #27272a;
-    border-radius: 14px;
-    background: #111113;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
-    color: #e4e4e7;
-    transform-origin: bottom left;
-    animation: setPickIn 0.18s ease;
-}
-
-
-.tl-tips-card[hidden] { display: none !important; }
-
-
-.tl-tips-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin: 0 0 8px;
-}
-
-
-.tl-tips-head b {
-    font-size: 13px;
-    font-weight: 650;
-    letter-spacing: -0.03em;
-}
-
-
-.tl-tips-x {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border-radius: 7px;
-    font-size: 16px;
-    line-height: 1;
-}
-
-
-.tl-tips-x:hover { color: #fafafa; background: #1c1c20; }
-
-
-.tl-tips-card ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: 6px;
-}
-
-
-.tl-tips-card li {
-    color: #a1a1aa;
-    font-size: 12px;
-    line-height: 1.4;
-    padding-left: 12px;
-    position: relative;
-}
-
-
-.tl-tips-card li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 7px;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #3f3f46;
-}
-
-
-html.reduce-motion .tl-tips-card { animation: none; }
 
 
 
@@ -308,7 +185,7 @@ html.reduce-motion .tl-tips-card { animation: none; }
     position: absolute;
     left: 0;
     top: 0;
-    z-index: 5;
+    z-index: 8;
     overflow: visible;
     pointer-events: none;
 }
@@ -391,6 +268,43 @@ html.reduce-motion .tl-node.is-spawn { animation: none; }
 .tl-node.is-out {
     pointer-events: none;
     animation: tl-shrink 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+
+.tl-stem,
+.tl-card-link,
+.tl-pin {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+}
+
+
+.tl-stem.is-out,
+.tl-card-link.is-out,
+.tl-pin.is-out,
+.tl-pin-date.is-out {
+    animation: tl-stem-shrink 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+
+@keyframes tl-stem-shrink {
+    from { stroke-dashoffset: 0; opacity: 1; }
+    to { stroke-dashoffset: 1; opacity: 0; }
+}
+
+
+.tl-pin-date.is-out {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+}
+
+
+html.reduce-motion .tl-stem.is-out,
+html.reduce-motion .tl-card-link.is-out,
+html.reduce-motion .tl-pin.is-out,
+html.reduce-motion .tl-pin-date.is-out {
+    animation: none;
+    opacity: 0;
 }
 
 

@@ -367,7 +367,7 @@
         const WIDTH = 612 - LEFT - 72;
         const NARROW = 420;
         const BOTTOM = 64;
-        const BODY = 11;
+        const BODY = 12;
         const LEAD = 15.4;
 
         function newPage(kind) {
@@ -379,8 +379,8 @@
             if (!cover && !record) {
                 var run = pdfSafe(subject);
                 if (run) {
-                    var w = measurePdf(run, 9);
-                    page.ops.push('0.35 0.35 0.35 rg BT /F3 9 Tf 0 Tc 0 Tw ' + ((612 - w) / 2).toFixed(2) + ' 748 Td (' + pdfEscape(run) + ') Tj ET');
+                    var w = measurePdf(run, 10);
+                    page.ops.push('0.35 0.35 0.35 rg BT /F3 10 Tf 0 Tc 0 Tw ' + ((612 - w) / 2).toFixed(2) + ' 748 Td (' + pdfEscape(run) + ') Tj ET');
                 }
             }
             return page;
@@ -480,14 +480,14 @@
         function heading(page, text) {
             page = ensure(page, 28);
             page.y -= 8;
-            paint(page, '/F2', 12, LEFT, page.y, text, '0 0 0');
-            page.y -= 18;
+            paint(page, '/F2', 13, LEFT, page.y, text, '0 0 0');
+            page.y -= 19;
             return page;
         }
 
         function runIn(page, label, value) {
             var size = BODY;
-            var rowLead = 17;
+            var rowLead = 18;
             var labelText = pdfSafe(label);
             var right = LEFT + WIDTH;
             var labelW = measurePdf(labelText, size);
@@ -548,19 +548,19 @@
         pageObj = center(pageObj, REPORT_HEAD, REPORT_HEAD_SIZE, '/F2', 8, '0 0 0', 0);
         pageObj.y -= 28;
         doc.notice.forEach(function (para, i) {
-            pageObj = flowRich(pageObj, para, { size: 11, lead: 16, after: i === doc.notice.length - 1 ? 14 : 11 });
+            pageObj = flowRich(pageObj, para, { size: 12, lead: 17.5, after: i === doc.notice.length - 1 ? 14 : 12 });
         });
-        wrapPdf(doc.banner, NARROW, 9).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 9, '/F2', 4, '0 0 0', 0.4);
+        wrapPdf(doc.banner, NARROW, 10).forEach(function (ln) {
+            pageObj = center(pageObj, ln, 10, '/F2', 4, '0 0 0', 0.4);
         });
         pages.push(pageObj);
         pageObj = newPage('record');
-        wrapPdf(String(subject || 'UNKNOWN').toUpperCase(), NARROW, 16).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 16, '/F2', 6, '0 0 0', 0.7);
+        wrapPdf(String(subject || 'UNKNOWN').toUpperCase(), NARROW, 17).forEach(function (ln) {
+            pageObj = center(pageObj, ln, 17, '/F2', 6, '0 0 0', 0.7);
         });
         pageObj.y -= 6;
         if (portrait) pageObj = placePhoto(pageObj, portrait.jpeg, 168, 210);
-        pageObj = center(pageObj, dateLong, 11, '/F3', 14, '0.2 0.2 0.2');
+        pageObj = center(pageObj, dateLong, 12, '/F3', 14, '0.2 0.2 0.2');
         pageObj = rule(pageObj);
 
         if (!rows.length && !notes.length && !portrait) {
@@ -576,7 +576,7 @@
             morePhotos.forEach(function (item) {
                 pageObj = placePhoto(pageObj, item.jpeg, 220, 200);
                 if (item.caption) {
-                    pageObj = flow(pageObj, item.caption, { center: true, size: 9, font: '/F3', width: NARROW, after: 12, gray: '0.25 0.25 0.25' });
+                    pageObj = flow(pageObj, item.caption, { center: true, size: 10, font: '/F3', width: NARROW, after: 12, gray: '0.25 0.25 0.25' });
                 }
             });
         } else if (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption)) {
@@ -594,10 +594,10 @@
         pageObj.y -= 8;
         pageObj = rule(pageObj);
         doc.close.forEach(function (para, i) {
-            pageObj = flowRich(pageObj, para, { size: 10.5, lead: 15.4, after: i === doc.close.length - 1 ? 12 : 10 });
+            pageObj = flowRich(pageObj, para, { size: 11.5, lead: 16.5, after: i === doc.close.length - 1 ? 12 : 10 });
         });
-        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 9, '/F2', 4, '0 0 0', 0.4);
+        wrapPdf(doc.banner, WIDTH, 10).forEach(function (ln) {
+            pageObj = center(pageObj, ln, 10, '/F2', 4, '0 0 0', 0.4);
         });
 
         pages.push(pageObj);
@@ -651,9 +651,9 @@
         }
 
         function kv(label, value) {
-            var lines = wrapPdf(value, 250, 11);
+            var lines = wrapPdf(value, 250, 12);
             if (!lines.length) lines = [''];
-            var h = 20 + Math.max(0, lines.length - 1) * 17;
+            var h = 21 + Math.max(0, lines.length - 1) * 18;
             var html = '<div class="ds-kv"><span class="ds-k">' + esc(label) + '</span><span class="ds-leader" aria-hidden="true"></span><span class="ds-v">' + esc(lines[0]) + '</span></div>';
             for (var i = 1; i < lines.length; i++) {
                 html += '<div class="ds-kv is-cont"><span class="ds-v">' + esc(lines[i]) + '</span></div>';
@@ -670,16 +670,16 @@
         add('<div class="ds-after-head"></div>', 28);
         doc.notice.forEach(function (para, i) {
             var last = i === doc.notice.length - 1;
-            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 11).length * 16 + (last ? 14 : 11);
+            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 12).length * 17.5 + (last ? 14 : 12);
             add('<p class="ds-p' + (last ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>', h);
         });
-        wrapPdf(doc.banner, NARROW, 9).forEach(function (ln) {
-            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 13);
+        wrapPdf(doc.banner, NARROW, 10).forEach(function (ln) {
+            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 14);
         });
         lockCover = false;
         flush();
-        wrapPdf(subject, NARROW, 16).forEach(function (ln) {
-            add('<div class="ds-c ds-subject">' + esc(ln) + '</div>', 22);
+        wrapPdf(subject, NARROW, 17).forEach(function (ln) {
+            add('<div class="ds-c ds-subject">' + esc(ln) + '</div>', 23);
         });
         add('<div class="ds-gap"></div>', 6);
         if (portrait && portrait.src) photoFig(portrait.src, false);
@@ -696,8 +696,8 @@
             morePhotos.forEach(function (item) {
                 photoFig(item.src, true);
                 if (item.caption) {
-                    wrapPdf(item.caption, NARROW, 9).forEach(function (ln) {
-                        add('<div class="ds-cap">' + esc(ln) + '</div>', 13);
+                    wrapPdf(item.caption, NARROW, 10).forEach(function (ln) {
+                        add('<div class="ds-cap">' + esc(ln) + '</div>', 14);
                     });
                 }
             });
@@ -713,11 +713,11 @@
         add('<hr class="ds-rule">', 24);
         doc.close.forEach(function (para, i) {
             var last = i === doc.close.length - 1;
-            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 10.5).length * 15.4 + (last ? 12 : 10);
+            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 11.5).length * 16.5 + (last ? 12 : 10);
             add('<p class="ds-p is-close' + (last ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>', h);
         });
-        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
-            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 13);
+        wrapPdf(doc.banner, WIDTH, 10).forEach(function (ln) {
+            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 14);
         });
         flush();
 
@@ -770,8 +770,8 @@
             }).join(' ');
             var res = '/Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>' + (xobj ? ' /XObject << ' + xobj + ' >>' : '');
             var label = String(idx + 1);
-            var numW = measurePdf(label, 9);
-            var pageNo = '0.35 0.35 0.35 rg BT /F1 9 Tf 0 Tc 0 Tw ' + ((612 - numW) / 2).toFixed(2) + ' 46 Td (' + label + ') Tj ET';
+            var numW = measurePdf(label, 10);
+            var pageNo = '0.35 0.35 0.35 rg BT /F1 10 Tf 0 Tc 0 Tw ' + ((612 - numW) / 2).toFixed(2) + ' 46 Td (' + label + ') Tj ET';
             var streamBytes = latin1Pdf(pageObj.ops.join('\n').replace(/__PAGE_NO__/g, pageNo));
             objects[pageDictIds[idx] - 1] = '<< /Type /Page /Parent 2 0 R /Resources << ' + res + ' >> /Contents ' + contentIds[idx] + ' 0 R >>';
             objects[contentIds[idx] - 1] = { dict: '<< /Length ' + streamBytes.length + ' >>', stream: streamBytes };

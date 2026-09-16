@@ -141,10 +141,10 @@ def parse_top_chunks(src: str) -> list[str]:
 
 
 TIMELINE_RE = re.compile(
-    r"page-timeline|\.tl-|#timeline|tl-island|tl-tips|tl-view|tl-node|tl-card|"
+    r"page-timeline|\.tl-|#timeline|tl-island|tl-view|tl-node|tl-card|"
     r"tl-bar|tl-stage|cal-pop|#calPop|#timePop|#tlInfo|time-pop|tl-info|"
     r"\.ev-card|\.ev-date|\.ev-grid|\.ev-|\.tl-acts|data-page=\"timeline\"|"
-    r"timelineIsland|timelineTips|timelineMenu|timelineView",
+    r"timelineIsland|timelineMenu|timelineView",
     re.I,
 )
 WHITEBOARD_RE = re.compile(

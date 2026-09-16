@@ -1,17 +1,42 @@
+<div align="center">
+
+<img src="icons/app-512.png" width="96" height="96" alt="OrbINT">
+
 # OrbINT
 
-Local OSINT desk. File facts on a subject, search from those fields, keep a timeline and a whiteboard. Nothing is uploaded.
+**Open-source Reconnaissance Bureau of Intelligence**
 
-**[Open the app](https://delexoo.github.io/OrbINT/)**
+A local desk for collecting, organizing, and managing open-source reconnaissance.
 
-## Use it
+[Open OrbINT](https://delexoo.github.io/OrbINT/)
 
-1. Open the live app, or clone this repo and open `index.html`.
+<img src="media/orbint.gif" alt="OrbINT in use" width="720">
+
+</div>
+
+## What it is
+
+OrbINT is case and investigative management software for publicly available information. One subject sits at the center of a case: a dossier of facts, a chronology, a whiteboard, and a printable record.
+
+It runs entirely in the browser. There is no account, no remote database, and no upload. Cases stay on this device.
+
+## What it has
+
+- **Orbit** — the subject at the hub, with fields for identity, contact, place, vehicles, infrastructure, and media
+- **Timeline** — a pan-and-zoom chronology of dated events
+- **Whiteboard** — sketches, sticky notes, and diagrams for the same case
+- **Datasheet** — a letter-style PDF of the particulars
+- **Toolkit** — searches that open from a filed value
+
+## How it works
+
+1. Open the [live app](https://delexoo.github.io/OrbINT/), or clone this repository and open `index.html`.
 2. Name the subject in the hub.
-3. Click a field, type a value, use the magnifying glass to search.
-4. Timeline and whiteboard sit in the same case. Export JSON when you need a copy.
+3. Click a field, enter a value, and use the magnifying glass to search from it.
+4. Keep a timeline and a whiteboard as the case develops.
+5. Export JSON, or generate the datasheet, when you need a copy off the desk.
 
-Cases live in this browser. Clear site data and they are gone.
+Cases are stored in this browser. Clear site data and they are gone.
 
 ```bash
 git clone https://github.com/Delexoo/OrbINT.git

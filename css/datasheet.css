@@ -62,7 +62,7 @@
     right: 72px;
     color: #595959;
     font-family: 'Times New Roman', Times, serif;
-    font-size: 9px;
+    font-size: 10px;
     font-style: italic;
     letter-spacing: 0.02em;
     text-align: center;
@@ -78,7 +78,7 @@
     right: 0;
     bottom: 38px;
     color: #595959;
-    font-size: 9px;
+    font-size: 10px;
     text-align: center;
     font-variant-numeric: tabular-nums;
 }
@@ -102,16 +102,16 @@
 
 
 .ds-subject {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
     letter-spacing: 0.07em;
-    line-height: 22px;
+    line-height: 23px;
     margin: 0 0 6px;
 }
 
 
 .ds-date {
-    font-size: 11px;
+    font-size: 12px;
     font-style: italic;
     color: #333;
     letter-spacing: 0.01em;
@@ -121,9 +121,9 @@
 
 
 .ds-p {
-    margin: 0 0 11px;
-    font-size: 11px;
-    line-height: 16px;
+    margin: 0 0 12px;
+    font-size: 12px;
+    line-height: 17.5px;
     text-align: justify;
     color: #1f1f1f;
 }
@@ -136,10 +136,10 @@
 
 
 .ds-foot {
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.04em;
-    line-height: 13px;
+    line-height: 14px;
     text-align: center;
     margin: 0 0 4px;
     color: #000;
@@ -153,7 +153,7 @@
 
 .ds-h {
     margin: 16px 0 10px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0;
     color: #000;
@@ -166,8 +166,8 @@
     width: 100%;
     gap: 3px;
     margin: 0 0 6px;
-    font-size: 11px;
-    line-height: 17px;
+    font-size: 12px;
+    line-height: 18px;
 }
 
 
@@ -234,16 +234,16 @@
 
 .ds-cap {
     margin: -8px 0 12px;
-    font-size: 9px;
+    font-size: 10px;
     font-style: italic;
     color: #404040;
     text-align: center;
-    line-height: 13px;
+    line-height: 14px;
 }
 
 
 .ds-p.is-close {
-    font-size: 10.5px;
-    line-height: 15.4px;
+    font-size: 11.5px;
+    line-height: 16.5px;
     margin-bottom: 10px;
 }
