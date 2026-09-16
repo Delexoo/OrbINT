@@ -1,0 +1,249 @@
+/* Datasheet page — PDF letter preview */
+
+.page-datasheet { background: #09090b; }
+
+
+.ds-view {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 28px 24px 120px;
+}
+
+
+.ds-fit {
+    display: flex;
+    justify-content: center;
+}
+
+
+.ds-stage {
+    width: 612px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    transform: scale(var(--ds-scale, 1));
+    transform-origin: top center;
+}
+
+
+.ds-page {
+    position: relative;
+    box-sizing: border-box;
+    width: 612px;
+    height: 792px;
+    padding: 72px 72px 64px;
+    background: #f4f0e6;
+    color: #1f1f1f;
+    font-family: 'Times New Roman', Times, serif;
+    box-shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+
+.ds-page.is-first { padding-top: 56px; }
+
+.ds-page.is-record { padding-top: 72px; }
+
+
+.ds-rule {
+    height: 0;
+    margin: 0 0 16px;
+    border: 0;
+    border-top: 0.55px solid #595959;
+}
+
+
+.ds-runhead {
+    position: absolute;
+    top: 36px;
+    left: 72px;
+    right: 72px;
+    color: #595959;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 9px;
+    font-style: italic;
+    letter-spacing: 0.02em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+.ds-pageno {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 38px;
+    color: #595959;
+    font-size: 9px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+
+.ds-c {
+    text-align: center;
+    color: #000;
+}
+
+
+.ds-banner {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 20px;
+    margin: 0 auto 2px;
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+
+.ds-subject {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    line-height: 22px;
+    margin: 0 0 6px;
+}
+
+
+.ds-date {
+    font-size: 11px;
+    font-style: italic;
+    color: #333;
+    letter-spacing: 0.01em;
+    line-height: 25px;
+    margin: 0 0 14px;
+}
+
+
+.ds-p {
+    margin: 0 0 11px;
+    font-size: 11px;
+    line-height: 16px;
+    text-align: justify;
+    color: #1f1f1f;
+}
+
+
+.ds-p b { font-weight: 700; }
+
+
+.ds-p.is-last { margin-bottom: 14px; }
+
+
+.ds-foot {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 13px;
+    text-align: center;
+    margin: 0 0 4px;
+    color: #000;
+}
+
+
+.ds-gap { height: 8px; }
+
+.ds-after-head { height: 28px; }
+
+
+.ds-h {
+    margin: 16px 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: #000;
+}
+
+
+.ds-kv {
+    display: flex;
+    align-items: baseline;
+    width: 100%;
+    gap: 3px;
+    margin: 0 0 6px;
+    font-size: 11px;
+    line-height: 17px;
+}
+
+
+.ds-kv.is-cont {
+    justify-content: flex-end;
+}
+
+
+.ds-kv .ds-k {
+    flex: none;
+    color: #1a1a1a;
+    white-space: nowrap;
+}
+
+
+.ds-leader {
+    flex: 1 1 0;
+    min-width: 8px;
+    overflow: hidden;
+    color: #8a8a8a;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    word-spacing: 0;
+}
+
+
+.ds-leader::before {
+    content: '..............................................................................................................................................................................';
+}
+
+
+.ds-kv .ds-v {
+    flex: 0 0 auto;
+    color: #1a1a1a;
+    text-align: right;
+    white-space: nowrap;
+}
+
+
+.ds-fig {
+    display: block;
+    width: 168px;
+    max-width: 100%;
+    margin: 4px auto 14px;
+}
+
+
+.ds-fig.is-wide { width: 220px; }
+
+
+.ds-fig img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 210px;
+    object-fit: contain;
+    object-position: center;
+    background: #d7d4cc;
+    filter: grayscale(1) contrast(0.9) brightness(1.06);
+    box-shadow: inset 0 0 0 999px rgba(118, 118, 118, 0.22);
+    outline: 0.6px solid #6b6b6b;
+}
+
+
+.ds-cap {
+    margin: -8px 0 12px;
+    font-size: 9px;
+    font-style: italic;
+    color: #404040;
+    text-align: center;
+    line-height: 13px;
+}
+
+
+.ds-p.is-close {
+    font-size: 10.5px;
+    line-height: 15.4px;
+    margin-bottom: 10px;
+}

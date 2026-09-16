@@ -2,7 +2,7 @@
   "id": "./",
   "name": "OrbINT",
   "short_name": "OrbINT",
-  "description": "An organized intelligence unit dedicated to collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources.",
+  "description": "Collect, organize, analyze, and manage open-source reconnaissance. Local case files on this device — not cloud-based.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

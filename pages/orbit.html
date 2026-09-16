@@ -1,0 +1,231 @@
+    <main class="map" id="mapStage">
+        <div class="map-grid" id="mapGrid" aria-hidden="true">
+            <div class="map-grid-paper"></div>
+            <div class="map-grid-spot"></div>
+        </div>
+        <button class="btn map-toggle" id="profileToggle" type="button" aria-expanded="false" aria-controls="profilePanel">Casebook</button>
+        <svg class="links" id="linkLayer"></svg>
+        <svg class="links peer-links" id="peerLinkLayer"></svg>
+        <div class="map-canvas" id="mapCanvas">
+            <div class="peer-hubs" id="peerHubs"></div>
+            <div class="hub" id="hub">
+                <svg class="hub-ring" viewBox="0 0 100 100" aria-hidden="true">
+                    <circle class="hub-ring-track" cx="50" cy="50" r="46"></circle>
+                    <circle class="hub-ring-fill" id="hubRingFill" cx="50" cy="50" r="46"></circle>
+                    <circle class="hub-ring-null" id="hubRingNull" cx="50" cy="50" r="46"></circle>
+                </svg>
+                <img class="hub-face" id="hubFace" alt="" hidden>
+                <div class="hub-title" id="hubTitle">OrbINT</div>
+                <button class="hub-add" id="hubAdd" type="button" aria-label="Add field">
+                    <svg class="hub-add-ring" viewBox="0 0 40 40" aria-hidden="true">
+                        <circle class="hub-add-ring-track" cx="20" cy="20" r="17.5"></circle>
+                        <circle class="hub-add-ring-fill" cx="20" cy="20" r="17.5"></circle>
+                    </svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+            </div>
+            <div class="node" data-field="phone" style="left: calc(50% + 0px - 93px); top: calc(50% + -170px - 17px);">
+                <div class="node-copy">
+                    <label for="field-phone">Phone</label>
+                    <input id="field-phone" type="text" inputmode="tel" placeholder="(555) 123-4567" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="phone" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="phone" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="name" style="left: calc(50% + 68px - 93px); top: calc(50% + -163px - 17px);">
+                <div class="node-copy">
+                    <label for="field-name">Name</label>
+                    <input id="field-name" type="text" inputmode="text" placeholder="Full name" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="name" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="name" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node email-node" data-field="email" style="left: calc(50% + 130px - 93px); top: calc(50% + -143px - 17px);">
+                <span class="platform-icon" hidden></span>
+                <div class="node-copy">
+                    <label for="field-email">Email</label>
+                    <input id="field-email" type="text" inputmode="text" placeholder="name@domain.com" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="email" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="email" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node image-node" data-field="image" style="left: calc(50% + 181px - 93px); top: calc(50% + -111px - 17px);">
+                <button class="media-thumb" type="button" data-open-media="image" hidden aria-label="Open Image"></button>
+                <div class="node-copy">
+                    <label>Image</label>
+                    <button class="image-add" type="button" data-photos-open aria-label="Add photos">Add</button>
+                    <input id="field-image" type="hidden" value="">
+                    <button class="search-btn" type="button" data-search="image" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="image" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node platform-node" data-field="username" style="left: calc(50% + 218px - 93px); top: calc(50% + -71px - 17px);">
+                <span class="platform-icon" hidden></span>
+                <div class="node-copy">
+                    <label>Username</label>
+                    <button class="platform-trigger" type="button">Select site</button>
+                    <input id="field-username" type="text" placeholder="@username" spellcheck="false" autocomplete="off" hidden>
+                    <button class="search-btn" type="button" data-search="username" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="username" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node platform-node" data-field="password" style="left: calc(50% + 228px - 93px); top: calc(50% + 24px - 17px);">
+                <span class="platform-icon" hidden></span>
+                <div class="node-copy">
+                    <label>Password</label>
+                    <button class="platform-trigger" type="button">Select site</button>
+                    <input id="field-password" type="password" placeholder="Password" spellcheck="false" autocomplete="off" hidden>
+                    <button class="search-btn" type="button" data-search="password" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="password" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="address" style="left: calc(50% + 238px - 93px); top: calc(50% + -24px - 17px);">
+                <button class="media-thumb" type="button" data-open-media="address" hidden aria-label="Open in Google Maps" title="Google Maps"></button>
+                <div class="node-copy">
+                    <label for="field-address">Address</label>
+                    <input id="field-address" type="text" inputmode="text" placeholder="Street, city" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="address" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="address" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="age" style="left: calc(50% + 218px - 93px); top: calc(50% + 71px - 17px);">
+                <div class="node-copy">
+                    <label for="field-age">Age</label>
+                    <input id="field-age" type="text" inputmode="numeric" placeholder="Age" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="age" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="age" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="dob" style="left: calc(50% + 181px - 93px); top: calc(50% + 111px - 17px);">
+                <div class="node-copy">
+                    <label for="field-dob">Birthday</label>
+                    <input id="field-dob" type="text" inputmode="text" placeholder="Date of birth" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="dob" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="dob" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="ip" style="left: calc(50% + 130px - 93px); top: calc(50% + 143px - 17px);">
+                <button class="media-thumb" type="button" data-open-media="ip" hidden aria-label="Open IP"></button>
+                <div class="node-copy">
+                    <label for="field-ip">IP</label>
+                    <input id="field-ip" type="text" inputmode="text" placeholder="1.2.3.4" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="ip" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="ip" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="plate" style="left: calc(50% + 68px - 93px); top: calc(50% + 163px - 17px);">
+                <div class="node-copy">
+                    <label for="field-plate">Plate</label>
+                    <input id="field-plate" type="text" inputmode="text" placeholder="Plate text" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="plate" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="plate" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="vehicle" style="left: calc(50% + 0px - 93px); top: calc(50% + 170px - 17px);">
+                <div class="node-copy">
+                    <label for="field-vehicle">Vehicle</label>
+                    <input id="field-vehicle" type="text" inputmode="text" placeholder="Make and model" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="vehicle" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="vehicle" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="domain" style="left: calc(50% + -68px - 93px); top: calc(50% + 163px - 17px);">
+                <div class="node-copy">
+                    <label for="field-domain">Website</label>
+                    <input id="field-domain" type="text" inputmode="text" placeholder="example.com" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="domain" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="domain" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="timezone" style="left: calc(50% + -130px - 93px); top: calc(50% + 143px - 17px);">
+                <div class="node-copy">
+                    <label>Timezone</label>
+                    <span class="tz-pick empty"><span class="tz-abbr">Zone</span><button class="tz-trigger" type="button" aria-label="Choose timezone" aria-haspopup="listbox"></button></span>
+                    <input id="field-timezone" type="hidden" value="">
+                    <span class="tz-clock" data-tz-clock="timezone" hidden></span>
+                    <button class="search-btn" type="button" data-search="timezone" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="timezone" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="crypto" style="left: calc(50% + -181px - 93px); top: calc(50% + 111px - 17px);">
+                <div class="node-copy">
+                    <label for="field-crypto">Wallet</label>
+                    <input id="field-crypto" type="text" inputmode="text" placeholder="Address" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="crypto" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="crypto" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="notes" style="left: calc(50% + -238px - 93px); top: calc(50% + -24px - 17px);">
+                <div class="node-copy">
+                    <label for="field-notes">Notes</label>
+                    <input id="field-notes" type="text" inputmode="text" placeholder="Case note" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="notes" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="notes" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="company" style="left: calc(50% + -218px - 93px); top: calc(50% + -71px - 17px);">
+                <div class="node-copy">
+                    <label for="field-company">Company</label>
+                    <input id="field-company" type="text" inputmode="text" placeholder="Employer or workplace" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="company" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="company" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="occupation" style="left: calc(50% + -238px - 93px); top: calc(50% + 24px - 17px);">
+                <div class="node-copy">
+                    <label for="field-occupation">Occupation</label>
+                    <input id="field-occupation" type="text" inputmode="text" placeholder="Job title or trade" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="occupation" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="occupation" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node cc-node" data-field="countrycode" style="left: calc(50% + 68px - 93px); top: calc(50% + -163px - 17px);">
+                <div class="node-copy">
+                    <label>Country code</label>
+                    <span class="cc-pick empty"><span class="cc-flag" hidden></span><span class="cc-abbr">Code</span><button class="cc-trigger" type="button" aria-label="Choose country code" aria-haspopup="listbox"></button></span>
+                    <input id="field-countrycode" type="hidden" value="">
+                    <span class="cc-name" hidden></span>
+                    <button class="search-btn" type="button" data-search="countrycode" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="countrycode" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="phoneos" style="left: calc(50% + 130px - 93px); top: calc(50% + -143px - 17px);">
+                <div class="node-copy">
+                    <label for="field-phoneos">Phone OS</label>
+                    <input id="field-phoneos" type="text" inputmode="text" placeholder="iOS 18, Android 15…" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="phoneos" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="phoneos" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="os" style="left: calc(50% + 181px - 93px); top: calc(50% + -111px - 17px);">
+                <div class="node-copy">
+                    <label for="field-os">Computer OS</label>
+                    <input id="field-os" type="text" inputmode="text" placeholder="Windows 11, macOS…" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="os" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="os" aria-label="Remove">×</button>
+                </div>
+            </div>
+            <div class="node" data-field="vin" style="left: calc(50% + -130px - 93px); top: calc(50% + -143px - 17px);">
+                <div class="node-copy">
+                    <label for="field-vin">VIN</label>
+                    <input id="field-vin" type="text" inputmode="text" placeholder="17-character VIN" spellcheck="false" autocomplete="off">
+                    <button class="search-btn" type="button" data-search="vin" aria-label="How to find this"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg></button>
+                    <button class="node-clear" type="button" data-clear="vin" aria-label="Remove">×</button>
+                </div>
+            </div>
+        </div>
+        <div class="platform-menu" id="platformMenu" hidden></div>
+        <div class="tz-menu" id="tzMenu" hidden></div>
+        <div class="tz-menu" id="ccMenu" hidden></div>
+        <div class="search-menu" id="searchMenu" hidden></div>
+        <div class="field-menu" id="fieldMenu" hidden></div>
+        <div class="media-viewer" id="mediaViewer" hidden>
+            <button class="media-close" id="mediaClose" type="button" aria-label="Close">×</button>
+            <img class="media-image" id="mediaImage" alt="Image preview" hidden>
+            <div class="media-audio-card" id="mediaAudioCard" hidden>
+                <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor" aria-hidden="true"><path d="M9 18V6.3c0-.7.4-1.2 1-1.4l9-3c.8-.3 1.6.3 1.6 1.1V15c0 .6-.4 1-1 1.2l-8 2.4V18c0 2-2 3.5-4.3 3.5S3 20 3 18s2-3.5 4.3-3.5c.6 0 1.1.1 1.7.3zm1.6-3.4 8-2.4V4.8l-8 2.7v7.1zM7.3 20C8.8 20 10 19.2 10 18s-1.2-2-2.7-2S4.6 16.8 4.6 18 5.8 20 7.3 20z"/></svg>
+                <strong id="mediaAudioName">Audio</strong>
+                <audio id="mediaAudio" controls></audio>
+            </div>
+        </div>
+    </main>

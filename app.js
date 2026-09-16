@@ -1,3 +1,6 @@
+/* Assembled from js/orbit-settings.js, orbit-fields.js, orbit-library.js, orbit-map.js
+   Edit those files, then run: python tools/bundle.py */
+
         const GROUPS = [
             { id: 'identity', label: 'Identity', fields: ['name', 'image'] },
             { id: 'person', label: 'Person', fields: [] },
@@ -17,6 +20,436 @@
 
         function isPhone() {
             return window.matchMedia('(max-width: 820px)').matches;
+        }
+
+        const SETTINGS_KEY = 'orbint-settings';
+        const SETTINGS_DEFAULTS = {
+            logicBomb: false,
+            logicBombPeriod: '6m',
+            lastSeen: 0,
+            curtain: false,
+            confirmOutbound: false,
+            clipClear: 'off',
+            reduceMotion: false,
+            hideTips: false,
+            startPage: 'orbit',
+            rememberPage: true,
+            hideBackground: false,
+            idleLock: 'off',
+            exportNoPhotos: false,
+            stealthTab: false,
+            largeType: false
+        };
+        const BOMB_DAYS = { '1d': 1, '3d': 3, '1w': 7, '2w': 14, '1m': 30, '3m': 90, '6m': 180, '12m': 365, '24m': 730 };
+        const STEALTH_TITLE = 'Notes';
+        const LIVE_TITLE = document.title;
+        let appSettings = Object.assign({}, SETTINGS_DEFAULTS);
+        let idleLockTimer = 0;
+        let clipClearTimer = 0;
+        let bombPrevPeriod = '6m';
+        const nativeOpen = window.open.bind(window);
+        const nativeWriteText = (navigator.clipboard && navigator.clipboard.writeText)
+            ? navigator.clipboard.writeText.bind(navigator.clipboard)
+            : null;
+
+        function readSettings() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '');
+                if (saved && typeof saved === 'object') {
+                    const next = Object.assign({}, SETTINGS_DEFAULTS, saved);
+                    if (saved.hideBackground == null && saved.boardGrid === false) next.hideBackground = true;
+                    if (next.logicBombPeriod === '4w') next.logicBombPeriod = '1m';
+                    if (next.logicBombPeriod === '18m') next.logicBombPeriod = '12m';
+                    return next;
+                }
+            } catch (error) {}
+            return Object.assign({}, SETTINGS_DEFAULTS);
+        }
+
+        function writeSettings(next) {
+            appSettings = Object.assign({}, SETTINGS_DEFAULTS, next || {});
+            try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings)); } catch (error) {}
+            return appSettings;
+        }
+
+        function patchSettings(partial) {
+            return writeSettings(Object.assign({}, appSettings, partial));
+        }
+
+        function reduceMotionOn() {
+            return document.documentElement.classList.contains('reduce-motion') ||
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        }
+
+        function shouldConfirmOpen(url) {
+            const href = String(url || '');
+            if (!/^https?:/i.test(href)) return false;
+            try {
+                return new URL(href, location.href).origin !== location.origin;
+            } catch (error) {
+                return true;
+            }
+        }
+
+        let bombPulseLow = false;
+        let lastSeenWrite = 0;
+
+        function markSeen() {
+            if (appSettings.logicBombPeriod === 'now') return;
+            const now = Date.now();
+            lastSeenWrite = now;
+            patchSettings({ lastSeen: now });
+        }
+
+        function touchSeen(force) {
+            if (appSettings.logicBombPeriod === 'now') return;
+            const now = Date.now();
+            if (!force && now - lastSeenWrite < 8000) return;
+            markSeen();
+        }
+
+        function pad2(n) {
+            return (n < 10 ? '0' : '') + n;
+        }
+
+        function bombPeriodMs() {
+            if (!appSettings.logicBombPeriod || appSettings.logicBombPeriod === 'now') return 0;
+            return (BOMB_DAYS[appSettings.logicBombPeriod] || 180) * 86400000;
+        }
+
+        function bombDisplayMs() {
+            const period = bombPeriodMs();
+            if (!period) return 0;
+            if (!document.hidden) {
+                return bombPulseLow && period > 1000 ? period - 1000 : period;
+            }
+            const last = Number(appSettings.lastSeen) || Date.now();
+            return Math.max(0, last + period - Date.now());
+        }
+
+        function formatBombCountdown(ms) {
+            if (ms <= 0) return '00:00:00';
+            const total = Math.floor(ms / 1000);
+            const hours = Math.floor(total / 3600);
+            const mins = Math.floor((total % 3600) / 60);
+            const secs = total % 60;
+            return pad2(hours) + ':' + pad2(mins) + ':' + pad2(secs);
+        }
+
+        function updateBombCountdown() {
+            const node = document.getElementById('setBombCount');
+            if (!node) return;
+            if (!appSettings.logicBomb) {
+                node.hidden = true;
+                node.textContent = '';
+                node.classList.remove('is-due');
+                bombPulseLow = false;
+                return;
+            }
+            if (appSettings.logicBombPeriod === 'now') {
+                node.hidden = false;
+                node.textContent = 'now';
+                node.classList.add('is-due');
+                return;
+            }
+            const left = bombDisplayMs();
+            node.hidden = false;
+            node.textContent = formatBombCountdown(left);
+            node.classList.toggle('is-due', left <= 0);
+        }
+
+        const SET_PICKS = {
+            bomb: {
+                labelId: 'setBombPeriodLabel',
+                value: function () { return appSettings.logicBombPeriod || '6m'; },
+                options: [
+                    { value: '1d', label: '1 day' },
+                    { value: '3d', label: '3 days' },
+                    { value: '1w', label: '1 week' },
+                    { value: '2w', label: '2 weeks' },
+                    { value: '1m', label: '1 month' },
+                    { value: '3m', label: '3 months' },
+                    { value: '6m', label: '6 months' },
+                    { value: '12m', label: '12 months' },
+                    { value: '24m', label: '24 months' },
+                    { value: 'now', label: 'Clear now', danger: true, sep: true }
+                ]
+            },
+            clip: {
+                labelId: 'setClipClearLabel',
+                value: function () { return appSettings.clipClear || 'off'; },
+                options: [
+                    { value: 'off', label: 'Off' },
+                    { value: '15', label: '15 seconds' },
+                    { value: '60', label: '60 seconds' }
+                ]
+            },
+            idle: {
+                labelId: 'setIdleLockLabel',
+                value: function () { return String(appSettings.idleLock || 'off'); },
+                options: [
+                    { value: 'off', label: 'Off' },
+                    { value: '1', label: '1 minute' },
+                    { value: '5', label: '5 minutes' },
+                    { value: '15', label: '15 minutes' }
+                ]
+            },
+            start: {
+                labelId: 'setStartPageLabel',
+                value: function () { return appSettings.startPage || 'orbit'; },
+                options: [
+                    { value: 'orbit', label: 'Orbit' },
+                    { value: 'timeline', label: 'Timeline' },
+                    { value: 'whiteboard', label: 'Whiteboard' },
+                    { value: 'datasheet', label: 'Datasheet' }
+                ]
+            }
+        };
+        let setPickOpen = '';
+
+        function pickLabel(id, value) {
+            const spec = SET_PICKS[id];
+            if (!spec) return '';
+            const hit = spec.options.filter(function (item) { return item.value === value; })[0];
+            return (hit && hit.label) || spec.options[0].label;
+        }
+
+        function syncSetPickLabels() {
+            Object.keys(SET_PICKS).forEach(function (id) {
+                const spec = SET_PICKS[id];
+                const node = document.getElementById(spec.labelId);
+                if (node) node.textContent = pickLabel(id, spec.value());
+            });
+        }
+
+        function closeSetPick() {
+            setPickOpen = '';
+            const menu = document.getElementById('setPickMenu');
+            if (menu) {
+                menu.hidden = true;
+                menu.innerHTML = '';
+                menu.classList.remove('is-up');
+            }
+            document.querySelectorAll('.set-pick.is-open').forEach(function (el) {
+                el.classList.remove('is-open');
+            });
+            document.querySelectorAll('.set-pick-btn').forEach(function (btn) {
+                btn.setAttribute('aria-expanded', 'false');
+            });
+        }
+
+        function applySetPick(id, value) {
+            if (id === 'bomb') {
+                if (value === 'now') {
+                    armLogicBombNow();
+                    return;
+                }
+                bombPrevPeriod = value;
+                patchSettings({ logicBombPeriod: value, lastSeen: Date.now() });
+                syncSettingsForm();
+                return;
+            }
+            if (id === 'clip') patchSettings({ clipClear: value || 'off' });
+            if (id === 'idle') {
+                patchSettings({ idleLock: value || 'off' });
+                applyAppSettings();
+            }
+            if (id === 'start') patchSettings({ startPage: value || 'orbit' });
+            syncSetPickLabels();
+        }
+
+        function openSetPick(id, btn) {
+            const spec = SET_PICKS[id];
+            const menu = document.getElementById('setPickMenu');
+            if (!spec || !menu || !btn) return;
+            if (setPickOpen === id) {
+                closeSetPick();
+                return;
+            }
+            closeSetPick();
+            const current = spec.value();
+            const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+            menu.innerHTML = spec.options.map(function (item) {
+                const sep = item.sep ? '<div class="set-pick-sep"></div>' : '';
+                const cls = [
+                    item.value === current ? 'is-active' : '',
+                    item.danger ? 'is-danger' : ''
+                ].filter(Boolean).join(' ');
+                return sep + '<button type="button" role="option" data-set-value="' + item.value + '" class="' + cls + '"' +
+                    (item.value === current ? ' aria-selected="true"' : '') + '>' +
+                    '<span>' + item.label + '</span>' + check + '</button>';
+            }).join('');
+            menu.hidden = false;
+            const wrap = btn.closest('.set-pick');
+            if (wrap) wrap.classList.add('is-open');
+            btn.setAttribute('aria-expanded', 'true');
+            setPickOpen = id;
+            const rect = btn.getBoundingClientRect();
+            const width = Math.max(rect.width, 188);
+            menu.style.minWidth = width + 'px';
+            menu.style.left = Math.min(rect.left, window.innerWidth - width - 12) + 'px';
+            menu.style.top = (rect.bottom + 6) + 'px';
+            const spaceBelow = window.innerHeight - rect.bottom - 16;
+            const spaceAbove = rect.top - 16;
+            if (menu.offsetHeight > spaceBelow && spaceAbove > spaceBelow) {
+                menu.classList.add('is-up');
+                menu.style.top = Math.max(12, rect.top - 6 - menu.offsetHeight) + 'px';
+            } else {
+                menu.classList.remove('is-up');
+            }
+        }
+
+        function stripExportMedia(bundle) {
+            const next = bundle && typeof bundle === 'object' ? JSON.parse(JSON.stringify(bundle)) : {};
+            next.facts = next.facts || {};
+            next.facts.image = [];
+            Object.keys(next.facts).forEach(function (id) {
+                (next.facts[id] || []).forEach(function (item) {
+                    if (!item || typeof item !== 'object') return;
+                    delete item.media;
+                    delete item.preview;
+                    delete item.src;
+                    delete item.thumb;
+                });
+            });
+            return next;
+        }
+
+        function applyStealthTitle() {
+            if (!appSettings.stealthTab) {
+                document.title = LIVE_TITLE;
+                return;
+            }
+            document.title = document.hidden ? STEALTH_TITLE : LIVE_TITLE;
+        }
+
+        function coverWorkspace(on) {
+            const curtain = document.getElementById('lockCurtain');
+            if (!curtain) return;
+            curtain.hidden = !on;
+        }
+
+        function bumpIdleLock() {
+            clearTimeout(idleLockTimer);
+            idleLockTimer = 0;
+            const mins = Number(appSettings.idleLock);
+            if (!mins) {
+                coverWorkspace(false);
+                return;
+            }
+            idleLockTimer = setTimeout(function () {
+                coverWorkspace(true);
+            }, mins * 60000);
+        }
+
+        function applyAppSettings(fromUser) {
+            const root = document.documentElement;
+            const body = document.body;
+            if (body) {
+                body.classList.toggle('is-curtain', !!appSettings.curtain);
+                body.classList.toggle('hide-tips', !!appSettings.hideTips);
+                body.classList.toggle('no-bg', !!appSettings.hideBackground);
+            }
+            root.classList.toggle('reduce-motion', !!appSettings.reduceMotion);
+            root.classList.toggle('large-type', !!appSettings.largeType);
+            applyStealthTitle();
+            bumpIdleLock();
+            try { reduceMotion = reduceMotionOn(); } catch (error) {}
+            try {
+                if (orbit) {
+                    if (reduceMotionOn()) {
+                        orbit.targetParallaxX = 0;
+                        orbit.targetParallaxY = 0;
+                        orbit.parallaxX = 0;
+                        orbit.parallaxY = 0;
+                    }
+                    if (typeof kickOrbit === 'function') kickOrbit();
+                }
+            } catch (error) {}
+            try {
+                window.dispatchEvent(new CustomEvent('orbint-motion', { detail: { reduceMotion: reduceMotionOn() } }));
+            } catch (error) {}
+            if (fromUser) {
+                try {
+                    window.dispatchEvent(new CustomEvent('orbint-settings', { detail: Object.assign({}, appSettings) }));
+                } catch (error) {}
+            }
+            syncBombTag();
+        }
+
+        function syncBombTag() {
+            const tag = document.getElementById('bombTag');
+            if (!tag) return;
+            tag.hidden = !appSettings.logicBomb;
+        }
+
+        function syncSettingsForm() {
+            bombPulseLow = false;
+            const bomb = document.getElementById('setLogicBomb');
+            const box = document.getElementById('setBombBox');
+            const map = {
+                setCurtain: 'curtain',
+                setConfirmOut: 'confirmOutbound',
+                setStealth: 'stealthTab',
+                setReduceMotion: 'reduceMotion',
+                setHideTips: 'hideTips',
+                setLargeType: 'largeType',
+                setRememberPage: 'rememberPage',
+                setHideBg: 'hideBackground',
+                setExportNoPhotos: 'exportNoPhotos'
+            };
+            if (bomb) bomb.checked = !!appSettings.logicBomb;
+            bombPrevPeriod = appSettings.logicBombPeriod === 'now' ? '6m' : (appSettings.logicBombPeriod || '6m');
+            if (box) box.classList.toggle('is-open', !!appSettings.logicBomb);
+            Object.keys(map).forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.checked = !!appSettings[map[id]];
+            });
+            updateBombCountdown();
+            syncSetPickLabels();
+        }
+
+        window.OrbINTSettings = {
+            get: function (key) {
+                return key ? appSettings[key] : Object.assign({}, appSettings);
+            },
+            set: function (partial) {
+                const next = patchSettings(partial);
+                applyAppSettings(true);
+                return next;
+            }
+        };
+
+        appSettings = readSettings();
+        if (!appSettings.lastSeen) markSeen();
+        try {
+            const root = document.documentElement;
+            const body = document.body;
+            if (body) {
+                body.classList.toggle('is-curtain', !!appSettings.curtain);
+                body.classList.toggle('hide-tips', !!appSettings.hideTips);
+                body.classList.toggle('no-bg', !!appSettings.hideBackground);
+            }
+            root.classList.toggle('reduce-motion', !!appSettings.reduceMotion);
+            root.classList.toggle('large-type', !!appSettings.largeType);
+        } catch (error) {}
+        window.open = function (url, name, specs) {
+            if (appSettings.confirmOutbound && shouldConfirmOpen(url)) {
+                if (!window.confirm('Open this site?\n\n' + url)) return null;
+            }
+            return nativeOpen(url, name, specs);
+        };
+        if (nativeWriteText && navigator.clipboard) {
+            navigator.clipboard.writeText = function (text) {
+                return nativeWriteText(text).then(function () {
+                    clearTimeout(clipClearTimer);
+                    const wait = Number(appSettings.clipClear);
+                    if (!wait) return;
+                    clipClearTimer = setTimeout(function () {
+                        nativeWriteText('').catch(function () {});
+                    }, wait * 1000);
+                });
+            };
         }
 
         function platformSearch(label) {
@@ -546,9 +979,11 @@
                 label: 'Website',
                 placeholder: 'example.com',
                 leads: (v) => [
+                    ['Live Domain Intel', 'DNS, RDAP, certs, subdomains, archives, stack', 'orbint:intel'],
                     ['WHOIS', 'Registrant and history clues', 'https://whois.net/' + encodeURIComponent(v.replace(/^https?:\/\//, '').split('/')[0])],
                     ['crt.sh', 'Certificates and linked emails', 'https://crt.sh/?q=' + encodeURIComponent(v)],
                     ['Wayback', 'Historical site content', 'https://web.archive.org/web/*/' + encodeURIComponent(v)],
+                    ['BuiltWith', 'Technology fingerprints', 'https://builtwith.com/' + encodeURIComponent(v.replace(/^https?:\/\//, '').split('/')[0])],
                     ['DNS', 'Hosting and mail records', 'https://dns.google/query?name=' + encodeURIComponent(v.replace(/^https?:\/\//, '').split('/')[0])]
                 ]
             },
@@ -741,14 +1176,18 @@
                 ['News', 'Reporting around a filing', 'https://news.google.com/']
             ],
             domain: () => [
+                ['Live Domain Intel', 'DNS, RDAP, certs, subdomains, archives, stack', 'orbint:intel'],
                 ['WHOIS', 'Registration clues', 'https://who.is/'],
+                ['RDAP', 'Registration data', 'https://rdap.org/'],
                 ['Domain Dossier', 'WHOIS, DNS, and network', 'https://centralops.net/co/DomainDossier.aspx'],
                 ['crt.sh', 'Certificate transparency', 'https://crt.sh/'],
                 ['SecurityTrails', 'Historical DNS', 'https://securitytrails.com/'],
                 ['ViewDNS', 'DNS and reverse records', 'https://viewdns.info/'],
                 ['DNSdumpster', 'Host map', 'https://dnsdumpster.com/'],
                 ['urlscan', 'Public URL scans', 'https://urlscan.io/'],
-                ['BuiltWith', 'Tech stack', 'https://builtwith.com/']
+                ['Wayback', 'Historical URLs', 'https://web.archive.org/'],
+                ['BuiltWith', 'Tech stack', 'https://builtwith.com/'],
+                ['Wappalyzer', 'Technology fingerprints', 'https://www.wappalyzer.com/']
             ],
             timezone: () => [
                 ['Time and Date', 'World clock and offsets', 'https://www.timeanddate.com/worldclock/'],
@@ -983,7 +1422,9 @@
             domain: (v) => {
                 const host = v.replace(/^https?:\/\//, '').split('/')[0];
                 return [
+                    ['Live Domain Intel', 'DNS, RDAP, certs, subdomains, archives, stack', 'orbint:intel'],
                     ['WHOIS', 'Registrant clues', 'https://who.is/whois/' + encodeURIComponent(host)],
+                    ['RDAP', 'Registration data', 'https://rdap.org/domain/' + encodeURIComponent(host)],
                     ['Domain Dossier', 'WHOIS, DNS, network', 'https://centralops.net/co/DomainDossier.aspx?addr=' + encodeURIComponent(host) + '&dom_whois=true&dom_dns=true'],
                     ['crt.sh', 'Certs and emails', 'https://crt.sh/?q=' + encodeURIComponent(host)],
                     ['SecurityTrails', 'Historical DNS', 'https://securitytrails.com/domain/' + encodeURIComponent(host) + '/dns'],
@@ -992,6 +1433,7 @@
                     ['urlscan', 'Public scans', 'https://urlscan.io/domain/' + encodeURIComponent(host)],
                     ['Wayback', 'Old site content', 'https://web.archive.org/web/*/' + encodeURIComponent(host)],
                     ['BuiltWith', 'Tech stack', 'https://builtwith.com/' + encodeURIComponent(host)],
+                    ['Wappalyzer', 'Technology fingerprints', 'https://www.wappalyzer.com/lookup/' + encodeURIComponent(host)],
                     ['VirusTotal', 'Related samples / resolutions', 'https://www.virustotal.com/gui/domain/' + encodeURIComponent(host)],
                     ...engineSet(host)
                 ];
@@ -1851,6 +2293,22 @@
             return window.OSINT_TOOLKIT || null;
         }
 
+        function ensureToolkitCatalog() {
+            if (window.OSINT_TOOLKIT) return Promise.resolve(window.OSINT_TOOLKIT);
+            if (window.__orbintToolkitWait) return window.__orbintToolkitWait;
+            window.__orbintToolkitWait = new Promise(function (resolve) {
+                const s = document.createElement('script');
+                s.src = 'osint-tools.js?v=161';
+                s.onload = function () {
+                    try { window.dispatchEvent(new Event('orbint-toolkit-ready')); } catch (error) {}
+                    resolve(window.OSINT_TOOLKIT || null);
+                };
+                s.onerror = function () { resolve(null); };
+                document.head.appendChild(s);
+            });
+            return window.__orbintToolkitWait;
+        }
+
         function leadHostKey(url) {
             try {
                 const parsed = new URL(url);
@@ -1872,7 +2330,10 @@
 
         function toolkitToolsForField(fieldId) {
             const catalog = toolkitCatalog();
-            if (!catalog || !catalog.byField) return [];
+            if (!catalog || !catalog.byField) {
+                ensureToolkitCatalog();
+                return [];
+            }
             return catalog.byField[fieldBase(fieldId)] || [];
         }
 
@@ -1959,6 +2420,9 @@
             });
             if (!isPhone() && typeof positionNodes === 'function') positionNodes();
             updateHubProgress();
+            if (typeof renderProfile === 'function') renderProfile(true);
+            const addSheet = document.getElementById('addSheet');
+            if (addSheet && !addSheet.hidden && typeof renderAddPanel === 'function') renderAddPanel();
         }
 
         function isDescendantOf(id, ancestor) {
@@ -2226,7 +2690,7 @@
 
         function showSheet(sheet) {
             if (!sheet) return;
-            const instant = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const instant = reduceMotionOn();
             sheet.hidden = false;
             if (instant || sheet.classList.contains('is-in')) {
                 sheet.classList.add('is-in');
@@ -2239,7 +2703,7 @@
 
         function hideSheet(sheet) {
             if (!sheet || sheet.hidden) return;
-            if (!sheet.classList.contains('is-in') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            if (!sheet.classList.contains('is-in') || reduceMotionOn()) {
                 sheet.classList.remove('is-in');
                 sheet.hidden = true;
                 return;
@@ -2433,7 +2897,7 @@
             const focusLabel = document.getElementById('toolkitFocusLabel');
             if (!list) return;
             if (!catalog || !catalog.categories) {
-                list.innerHTML = '<p class="toolkit-empty">Toolkit catalog is not loaded.</p>';
+                list.innerHTML = '<p class="toolkit-empty">Loading tools…</p>';
                 if (meta) meta.textContent = '';
                 if (focusBar) focusBar.dataset.on = '0';
                 return;
@@ -2532,7 +2996,10 @@
             }
             renderToolkit();
             showSheet(document.getElementById('toolkitSheet'));
-            if (filter) filter.focus();
+            ensureToolkitCatalog().then(function () {
+                renderToolkit();
+                if (filter) filter.focus();
+            });
         }
 
         function toggleToolkit() {
@@ -2594,7 +3061,7 @@
                 '<button type="button" class="field-danger" data-field-act="null">' + (isNullField(fieldId) ? 'Unmark missing' : 'Missing') + '</button>' +
                 '<button type="button" data-field-act="clear" ' + (hasValue || isNullField(fieldId) ? '' : 'disabled') + '>Clear value</button>' +
                 '<button type="button" data-field-act="hide">Remove field</button>' +
-                (hiddenFields.size ? '<div class="field-sep"></div><button type="button" data-field-act="restore">Show hidden fields</button>' : '');
+                (hiddenFields.size ? '<div class="field-sep"></div><button type="button" data-field-act="restore">Show all fields</button>' : '');
             menu.dataset.field = fieldId;
             menu.hidden = false;
             const mapRect = stage.getBoundingClientRect();
@@ -2673,8 +3140,8 @@
             if (act === 'playtest') playtestFillVisibleFields();
             if (act === 'help') openHelp();
             if (act === 'toolkit') openToolkit();
-            if (act === 'undo') undoCase();
-            if (act === 'redo') redoCase();
+            if (act === 'undo') undoNow();
+            if (act === 'redo') redoNow();
             if (act === 'export') toggleExportMenu();
             if (act === 'share') openShare();
             if (act === 'install') openInstall();
@@ -2834,7 +3301,7 @@
                 '<button type="button" data-field-act="toolkit">OSINT toolkit</button>' +
                 '<div class="field-sep"></div>' +
                 (hiddenFields.size
-                    ? '<button type="button" data-field-act="restore">Show hidden fields</button>'
+                    ? '<button type="button" data-field-act="restore">Show all fields</button>'
                     : '<button type="button" disabled>No hidden fields</button>') +
                 '<button type="button" data-field-act="recenter">Recenter map</button>';
             menu.dataset.field = '';
@@ -2930,6 +3397,12 @@
         }
 
         function openLead(href, value, mode) {
+            if (href === 'orbint:intel') {
+                if (window.OrbINTCase && typeof OrbINTCase.openDomainIntel === 'function') {
+                    OrbINTCase.openDomainIntel(value);
+                }
+                return;
+            }
             if (mode === 'image') {
                 const media = mediaSource('image');
                 copyImageSource(media && media.src).finally(function () {
@@ -3364,7 +3837,8 @@
                 hidden: [],
                 layout: null,
                 peerHomes: {},
-                customPlatforms: []
+                customPlatforms: [],
+                investigation: null
             };
         }
 
@@ -3417,7 +3891,8 @@
                 hidden: entry.hidden,
                 layout: entry.layout,
                 peerHomes: entry.peerHomes,
-                customPlatforms: entry.customPlatforms
+                customPlatforms: entry.customPlatforms,
+                investigation: entry.investigation || null
             };
             writeStoredJson(profileDataKey(entry.id), slim);
         }
@@ -3642,7 +4117,10 @@
                 hidden: Array.from(hiddenFields),
                 layout: currentLayoutSnapshot(),
                 peerHomes: Object.assign({}, peerHomes),
-                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : []
+                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : [],
+                investigation: (window.OrbINTCase && typeof OrbINTCase.snapshot === 'function')
+                    ? OrbINTCase.snapshot()
+                    : ((prev && prev.investigation) || null)
             };
         }
 
@@ -3830,9 +4308,11 @@
             const panel = document.querySelector('.profile-panel');
             const dock = document.querySelector('.dock-anchor');
             const donate = document.getElementById('donate');
+            const pageSwitch = document.getElementById('pageSwitch');
             if (panel) panel.classList.remove('replay-boot');
             if (dock) dock.classList.remove('replay-boot');
             if (donate) donate.classList.remove('replay-boot');
+            if (pageSwitch) pageSwitch.classList.remove('replay-boot');
             const animate = !reduceMotion;
             if (typeof isPhone === 'function' && isPhone() && typeof setPanelOpen === 'function') setPanelOpen(false);
             const span = animate ? bloomOrbitFromHub() : 0;
@@ -3841,6 +4321,7 @@
                 replayCss(panel, 'replay-boot', 700);
                 replayCss(dock, 'replay-boot', 750);
                 replayCss(donate, 'replay-boot', 750);
+                replayCss(pageSwitch, 'replay-boot', 750);
                 if (animate && mapStage) {
                     void mapStage.offsetWidth;
                     mapStage.classList.add('boot-enter');
@@ -3901,6 +4382,9 @@
                 } catch (error) {}
 
                 applyOrbitLayout(entry.layout || null, keepCamera);
+                if (window.OrbINTCase && typeof OrbINTCase.load === 'function') {
+                    OrbINTCase.load(entry.investigation || null);
+                }
                 createNodes();
                 applyStoredFieldLabels();
                 applyHiddenFields();
@@ -3910,7 +4394,7 @@
                 orbit.snapLayout = true;
                 if (typeof positionNodes === 'function') positionNodes();
                 orbit.snapLayout = false;
-                if (fromHub && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                if (fromHub && !reduceMotionOn()) {
                     bloomOrbitFromHub();
                     if (typeof kickOrbit === 'function') kickOrbit();
                 }
@@ -4061,7 +4545,7 @@
         function openLinkedProfile(id, fromEl) {
             if (!profileLibrary || !id || id === profileLibrary.activeId) return;
             if (!profileLibrary.items[id]) return;
-            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            if (reduceMotionOn()) {
                 switchProfile(id);
                 return;
             }
@@ -4293,7 +4777,8 @@
                     : ((source.labels && typeof source.labels === 'object' && !Array.isArray(source.labels)) ? source.labels : {}),
                 hidden: Array.isArray(raw.hidden) ? raw.hidden : (Array.isArray(source.hidden) ? source.hidden : []),
                 layout: raw.layout || source.layout || null,
-                peerHomes: normalizePeerHomes(raw.peerHomes || source.peerHomes)
+                peerHomes: normalizePeerHomes(raw.peerHomes || source.peerHomes),
+                investigation: raw.investigation || source.investigation || null
             };
         }
 
@@ -4369,6 +4854,10 @@
                 profileLibrary.activeId = profileLibrary.items[index.activeId] ? index.activeId : profileLibrary.order[0];
                 profileLibrary.links = normalizeProfileLinks(index.links);
             }
+            const activeEntry = profileLibrary.items[profileLibrary.activeId];
+            if (activeEntry && window.OrbINTCase && typeof OrbINTCase.load === 'function') {
+                OrbINTCase.load(activeEntry.investigation || null);
+            }
             if (!profileLibrary.order.length) {
                 const id = newProfileId();
                 const seed = captureWorkspace(id, emptyLibraryEntry(id, factNameFrom(profile.facts), false));
@@ -4394,6 +4883,11 @@
         function updateHistoryButtons() {
             const undo = document.getElementById('dockUndo');
             const redo = document.getElementById('dockRedo');
+            const page = document.body.getAttribute('data-page');
+            if ((page === 'whiteboard' || page === 'timeline') && window.OrbINTCase && typeof OrbINTCase.syncBoardHistory === 'function') {
+                OrbINTCase.syncBoardHistory();
+                return;
+            }
             if (undo) undo.disabled = history.past.length < 2;
             if (redo) redo.disabled = !history.future.length;
         }
@@ -4443,6 +4937,32 @@
             history.applying = false;
             updateHistoryButtons();
             if (typeof hydrateActiveImages === 'function') hydrateActiveImages();
+        }
+
+        function undoNow() {
+            const page = document.body.getAttribute('data-page');
+            if (page === 'whiteboard' && window.OrbINTCase && typeof OrbINTCase.undoBoard === 'function') {
+                OrbINTCase.undoBoard();
+                return;
+            }
+            if (page === 'timeline' && window.OrbINTCase && typeof OrbINTCase.undoTimeline === 'function') {
+                OrbINTCase.undoTimeline();
+                return;
+            }
+            undoCase();
+        }
+
+        function redoNow() {
+            const page = document.body.getAttribute('data-page');
+            if (page === 'whiteboard' && window.OrbINTCase && typeof OrbINTCase.redoBoard === 'function') {
+                OrbINTCase.redoBoard();
+                return;
+            }
+            if (page === 'timeline' && window.OrbINTCase && typeof OrbINTCase.redoTimeline === 'function') {
+                OrbINTCase.redoTimeline();
+                return;
+            }
+            redoCase();
         }
 
         function undoCase() {
@@ -4556,6 +5076,7 @@
                 syncLinkedField(id, '');
                 updateHubProgress();
                 recordHistory(false);
+                if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
                 return;
             }
             if (isNullField(id)) setFieldNull(id, false, true);
@@ -4575,6 +5096,7 @@
             refreshProfileChrome();
             syncLinkedField(id, clean);
             recordHistory(false);
+            if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
         }
 
         function saveInputAsIs(input) {
@@ -5384,6 +5906,7 @@
             download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>',
             copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5h10"/></svg>',
             search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>',
+            meta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>',
             left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
             right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
             remove: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
@@ -5435,7 +5958,8 @@
                     photoActButton('open', 'Open', PHOTO_ACT_ICON.open) +
                     photoActButton('download', 'Download', PHOTO_ACT_ICON.download) +
                     photoActButton(entry.http ? 'copy' : 'copy-image', entry.http ? 'Copy URL' : 'Copy image', PHOTO_ACT_ICON.copy) +
-                    photoActButton('search', 'Search', PHOTO_ACT_ICON.search) +
+                    photoActButton('search', 'Reverse search', PHOTO_ACT_ICON.search) +
+                    photoActButton('meta', 'Metadata', PHOTO_ACT_ICON.meta) +
                     photoActButton('delete', 'Remove', PHOTO_ACT_ICON.remove, ' class="danger"');
                 article.appendChild(actions);
                 list.appendChild(article);
@@ -5601,7 +6125,6 @@
                 return '<div class="group">' + heading + fields.map(dossierFieldRowHtml).join('') + '</div>';
             }).join('');
             return body +
-                '<button type="button" class="dossier-add" data-dossier-add>+ Add information</button>' +
                 '<p class="site-updated" data-site-updated hidden></p>';
         }
 
@@ -5772,7 +6295,7 @@
             }
         }
 
-        function renderProfile() {
+        function renderProfile(forceSheet) {
             refreshProfileChrome();
 
             const factsSection = document.getElementById('factsSection');
@@ -5780,7 +6303,7 @@
             if (factsSection) factsSection.hidden = false;
             if (factsList) {
                 factsList.className = 'dossier';
-                if (profileSheetEditing() && factsList.querySelector('[data-sheet-field]')) {
+                if (!forceSheet && profileSheetEditing() && factsList.querySelector('[data-sheet-field]')) {
                     syncSheetInputs(document.activeElement);
                 } else {
                     factsList.innerHTML = dossierHtml();
@@ -5800,6 +6323,8 @@
             renderLeads(activeField);
             if (typeof renderProfileRail === 'function') renderProfileRail();
             renderPeerHubs();
+            if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
+            else if (window.OrbINTCase && typeof OrbINTCase.renderDatasheet === 'function') OrbINTCase.renderDatasheet();
         }
 
         function beginNameEdit() {
@@ -7734,7 +8259,7 @@
         }
 
         const mapStage = document.getElementById('mapStage');
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let reduceMotion = reduceMotionOn();
         const orbit = {
             dragX: 0,
             dragY: 0,
@@ -8355,6 +8880,7 @@
                 }
                 add(document.getElementById('dock'), 28);
                 add(document.getElementById('donate'), 22);
+                add(document.getElementById('pageSwitch'), 22);
                 add(document.querySelector('.map-toggle'), 16);
                 return boxes;
             }
@@ -9735,6 +10261,7 @@
             closeToolkit();
             closeProfileMenu();
             closeProfilePrompt();
+            closeSettings();
             showSheet(document.getElementById('helpGuide'));
         }
 
@@ -9748,13 +10275,52 @@
             const bundle = (profileLibrary && typeof exportProfileBundle === 'function')
                 ? exportProfileBundle(id)
                 : stampMissingFields(JSON.parse(JSON.stringify(profile || {})), profile && profile.nulls);
-            Promise.resolve(attachImagesToBundle(bundle, id)).then((full) => {
+            const skipMedia = !!(appSettings && appSettings.exportNoPhotos);
+            Promise.resolve(skipMedia ? stripExportMedia(bundle) : attachImagesToBundle(bundle, id)).then((full) => {
                 downloadBlob(caseFileName('json'), 'application/json', JSON.stringify(full, null, 2));
             });
         }
 
         function closeResetConfirm() {
             hideSheet(document.getElementById('resetConfirm'));
+        }
+
+        function closeBombConfirm() {
+            hideSheet(document.getElementById('bombConfirm'));
+        }
+
+        function closeSettings() {
+            closeSetPick();
+            hideSheet(document.getElementById('settingsSheet'));
+        }
+
+        function openSettings() {
+            closePlatformMenu();
+            closeSearchMenu();
+            closeExportMenu();
+            closeFieldMenu();
+            closeShare();
+            closeInstall();
+            closeAddField();
+            closeToolkit();
+            closeProfileMenu();
+            closeProfilePrompt();
+            closeHelp();
+            closeResetConfirm();
+            closeBombConfirm();
+            closePhoneMore();
+            bombPulseLow = false;
+            syncSettingsForm();
+            showSheet(document.getElementById('settingsSheet'));
+        }
+
+        function armLogicBombNow() {
+            const sheet = document.getElementById('bombConfirm');
+            if (!sheet) {
+                applyResetCase();
+                return;
+            }
+            showSheet(sheet);
         }
 
         function resetCase() {
@@ -9797,7 +10363,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=9', './osint-tools.js', './osint-tools.js?v=9', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=161', './osint-tools.js', './osint-tools.js?v=161', './investigation.js', './investigation.js?v=161', './css/base.css?v=161', './css/orbit.css?v=161', './css/timeline.css?v=161', './css/whiteboard.css?v=161', './css/datasheet.css?v=161', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));
@@ -9809,6 +10375,7 @@
         }
 
         function recenterOrbit() {
+            if (window.OrbINTCase && OrbINTCase.resetView && OrbINTCase.resetView()) return;
             orbit.dragX = 0;
             orbit.dragY = 0;
             orbit.gridPanX = 0;
@@ -9839,6 +10406,25 @@
 
         try { createNodes(); applyStoredFieldLabels(); applyHiddenFields(); } catch (error) { console.error(error); }
         try { document.body.classList.toggle('phone', isPhone()); if (isPhone()) setPanelOpen(false); } catch (error) {}
+        if (window.OrbINTCase && typeof OrbINTCase.init === 'function') {
+            OrbINTCase.init({
+                getProfile: function () { return profile; },
+                getFields: function () { return FIELDS; },
+                firstValue: firstValue,
+                fieldById: fieldById,
+                platformById: platformById,
+                imageGalleryItems: imageGalleryItems,
+                applyProfilePhotoFiles: applyProfilePhotoFiles,
+                applyProfilePhotoUrl: applyProfilePhotoUrl,
+                escapeHtml: escapeHtml,
+                srcToBlob: srcToBlob,
+                copyImageSource: copyImageSource,
+                save: function () {
+                    if (typeof saveProfile === 'function') saveProfile();
+                    if (typeof queueLibrarySync === 'function') queueLibrarySync();
+                }
+            });
+        }
         try { initProfileLibrary(); } catch (error) { console.error(error); }
         try { renderProfile(); } catch (error) { console.error(error); }
         try { renderNodes(); } catch (error) { console.error(error); }
@@ -10236,12 +10822,129 @@
         }
 
         document.getElementById('dockReset').addEventListener('click', resetCase);
+        const dockSettings = document.getElementById('dockSettings');
+        if (dockSettings) dockSettings.addEventListener('click', function () {
+            const sheet = document.getElementById('settingsSheet');
+            if (sheet && !sheet.hidden) closeSettings();
+            else openSettings();
+        });
+        const bombTag = document.getElementById('bombTag');
+        if (bombTag) bombTag.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            openSettings();
+        });
         const resetSheet = document.getElementById('resetConfirm');
         document.getElementById('resetCancel').addEventListener('click', closeResetConfirm);
         document.getElementById('resetConfirmBtn').addEventListener('click', applyResetCase);
         if (resetSheet) resetSheet.addEventListener('click', (event) => {
             if (event.target.id === 'resetConfirm') closeResetConfirm();
         });
+        const bombSheet = document.getElementById('bombConfirm');
+        const bombCancel = document.getElementById('bombCancel');
+        const bombGo = document.getElementById('bombConfirmBtn');
+        if (bombCancel) bombCancel.addEventListener('click', function () {
+            closeBombConfirm();
+            patchSettings({ logicBombPeriod: bombPrevPeriod || '6m' });
+            syncSettingsForm();
+        });
+        if (bombGo) bombGo.addEventListener('click', function () {
+            closeBombConfirm();
+            applyResetCase();
+        });
+        if (bombSheet) bombSheet.addEventListener('click', function (event) {
+            if (event.target.id !== 'bombConfirm') return;
+            closeBombConfirm();
+            patchSettings({ logicBombPeriod: bombPrevPeriod || '6m' });
+            syncSettingsForm();
+        });
+        const settingsSheet = document.getElementById('settingsSheet');
+        const settingsClose = document.getElementById('settingsClose');
+        if (settingsClose) settingsClose.addEventListener('click', closeSettings);
+        if (settingsSheet) settingsSheet.addEventListener('click', function (event) {
+            if (event.target.id === 'settingsSheet') closeSettings();
+        });
+        const lockUnlock = document.getElementById('lockUnlock');
+        if (lockUnlock) lockUnlock.addEventListener('click', function () {
+            coverWorkspace(false);
+            bumpIdleLock();
+        });
+        const settingToggles = {
+            setLogicBomb: 'logicBomb',
+            setCurtain: 'curtain',
+            setConfirmOut: 'confirmOutbound',
+            setStealth: 'stealthTab',
+            setReduceMotion: 'reduceMotion',
+            setHideTips: 'hideTips',
+            setLargeType: 'largeType',
+            setRememberPage: 'rememberPage',
+            setHideBg: 'hideBackground',
+            setExportNoPhotos: 'exportNoPhotos'
+        };
+        Object.keys(settingToggles).forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', function () {
+                const patch = {};
+                patch[settingToggles[id]] = !!el.checked;
+                if (settingToggles[id] === 'logicBomb') patch.lastSeen = Date.now();
+                patchSettings(patch);
+                applyAppSettings(true);
+                syncSettingsForm();
+            });
+        });
+        document.querySelectorAll('[data-set-pick]').forEach(function (wrap) {
+            const btn = wrap.querySelector('.set-pick-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                openSetPick(wrap.getAttribute('data-set-pick'), btn);
+            });
+        });
+        const setPickMenu = document.getElementById('setPickMenu');
+        if (setPickMenu) {
+            setPickMenu.addEventListener('click', function (event) {
+                const choice = event.target.closest('[data-set-value]');
+                if (!choice || !setPickOpen) return;
+                event.preventDefault();
+                const id = setPickOpen;
+                const value = choice.getAttribute('data-set-value');
+                closeSetPick();
+                applySetPick(id, value);
+            });
+        }
+        document.addEventListener('mousedown', function (event) {
+            if (!setPickOpen) return;
+            if (event.target.closest('.set-pick') || event.target.closest('#setPickMenu')) return;
+            closeSetPick();
+        });
+        const settingsBody = document.querySelector('.settings-body');
+        if (settingsBody) settingsBody.addEventListener('scroll', closeSetPick, { passive: true });
+        ['pointerdown', 'keydown', 'wheel'].forEach(function (name) {
+            document.addEventListener(name, function () {
+                if (document.getElementById('lockCurtain') && !document.getElementById('lockCurtain').hidden) return;
+                bumpIdleLock();
+            }, { passive: true });
+        });
+        document.addEventListener('visibilitychange', function () {
+            applyStealthTitle();
+            if (document.hidden) {
+                touchSeen(true);
+                bombPulseLow = false;
+                return;
+            }
+            markSeen();
+            bombPulseLow = false;
+            bumpIdleLock();
+            const settings = document.getElementById('settingsSheet');
+            if (settings && !settings.hidden) updateBombCountdown();
+        });
+        window.addEventListener('pagehide', function () {
+            touchSeen(true);
+        });
+        applyAppSettings();
+        syncSettingsForm();
         document.getElementById('dockRecenter').addEventListener('click', recenterOrbit);
         const dockPlay = document.getElementById('dockPlay');
         if (dockPlay) dockPlay.addEventListener('click', replayIntro);
@@ -10251,7 +10954,13 @@
             event.stopPropagation();
             closePhoneField();
             closePhoneMore();
+            if (window.OrbINTCase && typeof OrbINTCase.dockAdd === 'function' && OrbINTCase.dockAdd()) return;
             openAddField();
+        });
+        const dockConnect = document.getElementById('dockConnect');
+        if (dockConnect) dockConnect.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (window.OrbINTCase && typeof OrbINTCase.dockConnect === 'function') OrbINTCase.dockConnect();
         });
         document.getElementById('dockHelp').addEventListener('click', (event) => {
             event.stopPropagation();
@@ -10264,11 +10973,22 @@
             event.stopPropagation();
             toggleToolkit();
         });
-        document.getElementById('dockUndo').addEventListener('click', undoCase);
-        document.getElementById('dockRedo').addEventListener('click', redoCase);
+        document.getElementById('dockUndo').addEventListener('click', undoNow);
+        document.getElementById('dockRedo').addEventListener('click', redoNow);
+        window.addEventListener('orbint-history', updateHistoryButtons);
         document.getElementById('dockExport').addEventListener('click', (event) => {
             event.stopPropagation();
             toggleExportMenu();
+        });
+        const dockImport = document.getElementById('dockImport');
+        if (dockImport) dockImport.addEventListener('click', (event) => {
+            event.stopPropagation();
+            pickProfileUpload();
+        });
+        const dockReport = document.getElementById('dockReport');
+        if (dockReport) dockReport.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (window.OrbINTCase) OrbINTCase.downloadReport();
         });
         document.getElementById('dockShare').addEventListener('click', (event) => {
             event.stopPropagation();
@@ -10284,6 +11004,7 @@
         document.getElementById('phoneAdd').addEventListener('click', () => {
             closePhoneField();
             closePhoneMore();
+            if (window.OrbINTCase && typeof OrbINTCase.dockAdd === 'function' && OrbINTCase.dockAdd()) return;
             openAddField();
         });
         document.getElementById('phoneShare').addEventListener('click', () => {
@@ -10301,8 +11022,8 @@
         document.getElementById('phoneMore').addEventListener('click', (event) => {
             if (event.target.id === 'phoneMore') closePhoneMore();
         });
-        document.getElementById('phoneUndo').addEventListener('click', () => { closePhoneMore(); undoCase(); });
-        document.getElementById('phoneRedo').addEventListener('click', () => { closePhoneMore(); redoCase(); });
+        document.getElementById('phoneUndo').addEventListener('click', () => { closePhoneMore(); undoNow(); });
+        document.getElementById('phoneRedo').addEventListener('click', () => { closePhoneMore(); redoNow(); });
         const phonePlay = document.getElementById('phonePlay');
         if (phonePlay) phonePlay.addEventListener('click', () => { closePhoneMore(); replayIntro(); });
         const phonePlaytest = document.getElementById('phonePlaytest');
@@ -10310,8 +11031,17 @@
         const phoneToolkit = document.getElementById('phoneToolkit');
         if (phoneToolkit) phoneToolkit.addEventListener('click', () => { closePhoneMore(); openToolkit(); });
         document.getElementById('phoneExport').addEventListener('click', () => { closePhoneMore(); toggleExportMenu(); });
+        const phoneImport = document.getElementById('phoneImport');
+        if (phoneImport) phoneImport.addEventListener('click', () => { closePhoneMore(); pickProfileUpload(); });
+        const phoneReport = document.getElementById('phoneReport');
+        if (phoneReport) phoneReport.addEventListener('click', () => {
+            closePhoneMore();
+            if (window.OrbINTCase) OrbINTCase.downloadReport();
+        });
         const phoneInstall = document.getElementById('phoneInstall');
         if (phoneInstall) phoneInstall.addEventListener('click', () => { closePhoneMore(); openInstall(); });
+        const phoneSettings = document.getElementById('phoneSettings');
+        if (phoneSettings) phoneSettings.addEventListener('click', () => { closePhoneMore(); openSettings(); });
         document.getElementById('phoneReset').addEventListener('click', () => { closePhoneMore(); resetCase(); });
         document.getElementById('phoneFieldDone').addEventListener('click', () => {
             writePhoneField();
@@ -10421,6 +11151,14 @@
             event.stopPropagation();
             toggleAddField();
         });
+        const dossierAdd = document.getElementById('dossierAdd');
+        if (dossierAdd) {
+            dossierAdd.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleAddField();
+            });
+        }
         const peerHubs = document.getElementById('peerHubs');
         if (peerHubs) {
             peerHubs.addEventListener('pointerdown', (event) => {
@@ -10590,14 +11328,24 @@
             const key = (event.key || '').toLowerCase();
             const promptOpen = profilePromptSheet && !profilePromptSheet.hidden;
             if (promptOpen && (event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) return;
+            const typing = event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable="true"]');
+            const undoKey = (event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y');
+            if (typing) {
+                const pg = document.body.getAttribute('data-page');
+                if (!undoKey || (pg !== 'timeline' && pg !== 'whiteboard')) return;
+            }
+            if (event.code === 'Space' || event.key === ' ') {
+                event.preventDefault();
+                document.body.classList.add('is-space-pan');
+            }
             if ((event.ctrlKey || event.metaKey) && key === 'z' && !event.shiftKey) {
                 event.preventDefault();
-                undoCase();
+                undoNow();
                 return;
             }
             if ((event.ctrlKey || event.metaKey) && (key === 'y' || (key === 'z' && event.shiftKey))) {
                 event.preventDefault();
-                redoCase();
+                redoNow();
                 return;
             }
             if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !promptOpen) {
@@ -10628,6 +11376,28 @@
                     closePhoneMore();
                     return;
                 }
+                const lock = document.getElementById('lockCurtain');
+                if (lock && !lock.hidden) {
+                    coverWorkspace(false);
+                    bumpIdleLock();
+                    return;
+                }
+                const bomb = document.getElementById('bombConfirm');
+                if (bomb && !bomb.hidden) {
+                    closeBombConfirm();
+                    patchSettings({ logicBombPeriod: bombPrevPeriod || '6m' });
+                    syncSettingsForm();
+                    return;
+                }
+                if (setPickOpen) {
+                    closeSetPick();
+                    return;
+                }
+                const settings = document.getElementById('settingsSheet');
+                if (settings && !settings.hidden) {
+                    closeSettings();
+                    return;
+                }
                 const reset = document.getElementById('resetConfirm');
                 if (reset && !reset.hidden) {
                     closeResetConfirm();
@@ -10653,6 +11423,16 @@
                     closePhotosSheet();
                     return;
                 }
+                if (window.OrbINTCase && typeof OrbINTCase.closeOverlays === 'function') {
+                    const meta = document.getElementById('metaSheet');
+                    const intel = document.getElementById('intelSheet');
+                    const eventSheet = document.getElementById('eventSheet');
+                    const reverse = document.getElementById('reverseMenu');
+                    if ((meta && !meta.hidden) || (intel && !intel.hidden) || (eventSheet && !eventSheet.hidden) || (reverse && !reverse.hidden)) {
+                        OrbINTCase.closeOverlays();
+                        return;
+                    }
+                }
                 const add = document.getElementById('addSheet');
                 if (add && !add.hidden) {
                     closeAddField();
@@ -10675,6 +11455,22 @@
                 closeFieldMenu();
             }
         });
+
+        document.addEventListener('keyup', function (event) {
+            if (event.code === 'Space' || event.key === ' ') document.body.classList.remove('is-space-pan');
+        });
+        window.addEventListener('blur', function () {
+            document.body.classList.remove('is-space-pan');
+        });
+        document.addEventListener('dragstart', function (event) {
+            if (event.target && event.target.closest && event.target.closest('input, textarea, [contenteditable="true"]')) return;
+            event.preventDefault();
+        });
+        document.addEventListener('mousedown', function (event) {
+            if (event.button !== 1) return;
+            if (event.target && event.target.closest && event.target.closest('input, textarea, [contenteditable="true"]')) return;
+            event.preventDefault();
+        }, true);
 
         function onViewportChange() {
             const phone = isPhone();
@@ -10953,6 +11749,11 @@
                 return;
             }
             if (event.button !== 0) return;
+            if (document.body.classList.contains('is-space-pan')) {
+                event.preventDefault();
+                beginOrbitDrag(event, 'pan');
+                return;
+            }
             if (event.target.closest('#hubAdd')) return;
             const peerEl = event.target.closest('[data-peer]');
             if (peerEl) {
@@ -11047,10 +11848,17 @@
             if (!event || orbit.dragging) return;
             if (typeof isPhone === 'function' && isPhone()) return;
             if (event.pointerType === 'touch') return;
+            if (reduceMotionOn()) {
+                orbit.targetParallaxX = 0;
+                orbit.targetParallaxY = 0;
+                return;
+            }
             if (!canvasBox.width) syncCanvasBox();
-            const nx = (event.clientX - canvasBox.left) / Math.max(canvasBox.width, 1) - 0.5;
-            const ny = (event.clientY - canvasBox.top) / Math.max(canvasBox.height, 1) - 0.5;
-            const strength = reduceMotion ? 8 : 18;
+            const w = window.innerWidth || 1;
+            const h = window.innerHeight || 1;
+            const nx = event.clientX / w - 0.5;
+            const ny = event.clientY / h - 0.5;
+            const strength = 18;
             orbit.targetParallaxX = nx * strength;
             orbit.targetParallaxY = ny * strength;
             if (typeof kickOrbit === 'function') kickOrbit();
@@ -11226,7 +12034,17 @@
                 if (act === 'open') openPhotoInTab(item);
                 else if (act === 'download') downloadPhotoItem(item);
                 else if (act === 'copy' || act === 'copy-image') copyPhotoItem(item, btn);
-                else if (act === 'search') searchPhotoItem(item);
+                else if (act === 'search') {
+                    if (window.OrbINTCase && typeof OrbINTCase.reverseSearchPhoto === 'function') {
+                        OrbINTCase.reverseSearchPhoto(item, btn);
+                    } else {
+                        searchPhotoItem(item);
+                    }
+                } else if (act === 'meta') {
+                    if (window.OrbINTCase && typeof OrbINTCase.showPhotoMeta === 'function') {
+                        OrbINTCase.showPhotoMeta(item);
+                    }
+                }
                 else if (act === 'left') reorderPhotoItem(item.index, -1);
                 else if (act === 'right') reorderPhotoItem(item.index, 1);
                 else if (act === 'face') promotePhotoItem(item);
@@ -11542,6 +12360,12 @@
         setInterval(function () {
             if (document.hidden) return;
             updateTimezoneClocks();
+            touchSeen();
+            const settings = document.getElementById('settingsSheet');
+            if (settings && !settings.hidden && appSettings.logicBomb && appSettings.logicBombPeriod !== 'now') {
+                bombPulseLow = !bombPulseLow;
+                updateBombCountdown();
+            }
         }, 1000);
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) {
