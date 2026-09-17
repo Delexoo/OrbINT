@@ -2258,7 +2258,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=247', './osint-tools.js', './osint-tools.js?v=247', './investigation.js', './investigation.js?v=247', './css/base.css?v=247', './css/orbit.css?v=247', './css/timeline.css?v=247', './css/whiteboard.css?v=247', './css/harvester.css?v=247', './css/datasheet.css?v=247', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=255', './osint-tools.js', './osint-tools.js?v=255', './investigation.js', './investigation.js?v=255', './css/base.css?v=255', './css/orbit.css?v=255', './css/timeline.css?v=255', './css/whiteboard.css?v=255', './css/harvester.css?v=255', './css/datasheet.css?v=255', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));
@@ -2313,6 +2313,8 @@
                 applyProfilePhotoUrl: applyProfilePhotoUrl,
                 escapeHtml: escapeHtml,
                 addFact: addFact,
+                addFactSlot: addFactSlot,
+                flushFacts: flushFacts,
                 srcToBlob: srcToBlob,
                 copyImageSource: copyImageSource,
                 closeSheetPick: function () {
@@ -3508,7 +3510,8 @@
         const pageSwitchNav = document.getElementById('pageSwitch');
         if (pageSwitchNav) {
             pageSwitchNav.addEventListener('click', function (event) {
-                if (event.target.closest('[data-page]') && isPhone() && profilePanel.classList.contains('open')) {
+                const btn = event.target.closest('[data-page]');
+                if (btn && btn.getAttribute('data-page') !== 'casebook' && isPhone() && profilePanel.classList.contains('open')) {
                     setPanelOpen(false);
                 }
             });

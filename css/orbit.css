@@ -3350,7 +3350,7 @@ svg.links line {
 
         .profile-panel {
             position: fixed;
-            top: calc(96px + var(--safe-t));
+            top: calc(52px + var(--safe-t));
             left: 0;
             right: 0;
             bottom: 0;
@@ -3414,7 +3414,7 @@ svg.links line {
 
         .map {
             position: fixed !important;
-            top: calc(96px + var(--safe-t));
+            top: calc(52px + var(--safe-t));
             right: 0;
             bottom: calc(56px + var(--safe-b));
             left: 0;
@@ -3529,7 +3529,7 @@ svg.links line {
         .platform-trigger {
             min-width: 0;
             height: 28px;
-            font-size: 16px;
+            font-size: 13px;
             line-height: 1.2;
             overflow: visible;
             text-overflow: clip;

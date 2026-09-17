@@ -288,7 +288,14 @@
         if (!event.target.closest('#timelineMenu')) hideTimelineMenu();
         const pageBtn = event.target.closest('[data-page]');
         if (pageBtn && pageBtn.closest('#pageSwitch')) {
-            setPage(pageBtn.getAttribute('data-page'));
+            const id = pageBtn.getAttribute('data-page');
+            if (id === 'casebook') {
+                const panel = $('profilePanel');
+                const toggle = $('profileToggle');
+                if (panel && !panel.classList.contains('open') && toggle) toggle.click();
+                return;
+            }
+            setPage(id);
             return;
         }
         const uploadBtn = event.target.closest('[data-wb-upload]');
@@ -1242,7 +1249,7 @@
         setPage(saved);
         renderAll();
         window.addEventListener('resize', function () {
-            syncPageSwitchThumb(true);
+            renderPageSwitch({ instant: true });
             syncBoardToolThumb(true);
             if (calState) placeCalendar();
             if (timeState) placeTimePicker();
@@ -1310,6 +1317,7 @@
         },
         syncBoardHistory: syncBoardHistory,
         pages: PAGES,
+        renderPageSwitch: renderPageSwitch,
         renderDatasheet: renderDatasheet,
         scheduleDatasheet: scheduleDatasheet,
         ingestHarvesterFiles: ingestHarvesterFiles

@@ -1,0 +1,37 @@
+[
+  {
+    "type": "identity",
+    "key": "alias",
+    "value": "VelvetNode"
+  },
+  {
+    "type": "identity",
+    "key": "name",
+    "value": "Priya Sloan"
+  },
+  {
+    "type": "contact",
+    "key": "email",
+    "value": "velvetnode@example.net"
+  },
+  {
+    "type": "account",
+    "key": "github",
+    "value": "velvet-node"
+  },
+  {
+    "type": "account",
+    "key": "discord",
+    "value": "velvetnode"
+  },
+  {
+    "type": "metadata",
+    "key": "case_ref",
+    "value": "VN-26-118"
+  },
+  {
+    "type": "confidence",
+    "key": "identity",
+    "value": "medium"
+  }
+]

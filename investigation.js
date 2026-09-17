@@ -7,7 +7,7 @@
         { id: 'orbit', label: 'OrbINT', kicker: 'Workspace', blurb: 'Orbit-style profile for names, usernames, emails, phones, domains, companies, and other identifiers.' },
         { id: 'timeline', label: 'Timeline', kicker: 'Chronology', blurb: 'Events and discoveries in order — who, when, evidence, and source.' },
         { id: 'whiteboard', label: 'Whiteboard', kicker: 'Diagram', blurb: 'Flowchart shapes and case cards on one board, including investigation playbooks.' },
-        { id: 'harvester', label: 'Harvester', kicker: 'Processor', blurb: 'Upload messy files in any layout. The harvester keeps names, dates, usernames, accounts, passwords, and times — and cuts the rest.' },
+        { id: 'harvester', label: 'Harvester', kicker: 'Processor', blurb: 'Upload messy files. Keeps names, dates, accounts, passwords, times, age, and other key data — and cuts the rest.' },
         { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' }
     ];
 
@@ -2459,6 +2459,20 @@
         return false;
     }
 
+    function isCompactNav() {
+        try { return window.matchMedia('(max-width: 820px)').matches; } catch (error) { return false; }
+    }
+
+    function pageSwitchItems() {
+        if (!isCompactNav()) return PAGES;
+        return [{ id: 'casebook', label: 'Casebook' }].concat(PAGES);
+    }
+
+    function pageSwitchActive() {
+        if (isCompactNav() && document.body.classList.contains('panel-open')) return 'casebook';
+        return page;
+    }
+
     function syncPageSwitchThumb(instant) {
         const wrap = $('pageSwitch');
         if (!wrap) return;
@@ -2484,21 +2498,25 @@
         const wrap = $('pageSwitch');
         if (!wrap) return;
         opts = opts || {};
+        const items = pageSwitchItems();
+        const active = pageSwitchActive();
         const existing = wrap.querySelectorAll('[data-page]');
-        if (existing.length !== PAGES.length) {
-            wrap.innerHTML = '<span class="page-switch-thumb" aria-hidden="true"></span>' + PAGES.map(function (item) {
-            const on = item.id === page;
-            return '<button type="button" role="tab" data-page="' + item.id + '"' +
-                (on ? ' aria-current="page" aria-selected="true"' : ' aria-selected="false"') +
-                '>' + esc(item.label) + '</button>';
-        }).join('');
+        const have = Array.prototype.map.call(existing, function (el) { return el.getAttribute('data-page'); }).join(',');
+        const want = items.map(function (item) { return item.id; }).join(',');
+        if (have !== want) {
+            wrap.innerHTML = '<span class="page-switch-thumb" aria-hidden="true"></span>' + items.map(function (item) {
+                const on = item.id === active;
+                return '<button type="button" role="tab" data-page="' + item.id + '"' +
+                    (on ? ' aria-current="page" aria-selected="true"' : ' aria-selected="false"') +
+                    '>' + esc(item.label) + '</button>';
+            }).join('');
             requestAnimationFrame(function () { syncPageSwitchThumb(true); });
             return;
         }
-        PAGES.forEach(function (item) {
+        items.forEach(function (item) {
             const btn = wrap.querySelector('[data-page="' + item.id + '"]');
             if (!btn) return;
-            const on = item.id === page;
+            const on = item.id === active;
             if (on) {
                 btn.setAttribute('aria-current', 'page');
                 btn.setAttribute('aria-selected', 'true');
@@ -6817,7 +6835,7 @@
 
     const CP_MAX = 2 * 1024 * 1024;
     const CP_KINDS = {
-        txt: 1, md: 1, json: 1, html: 1, htm: 1, csv: 1, xml: 1
+        txt: 1, md: 1, json: 1, html: 1, htm: 1, csv: 1, tsv: 1, xml: 1
     };
     const CP_PLAT = {
         github: 'github', gh: 'github', gitlab: 'gitlab', bitbucket: 'bitbucket',
@@ -6825,11 +6843,11 @@
         reddit: 'reddit',
         instagram: 'instagram', ig: 'instagram', insta: 'instagram',
         steam: 'steam',
-        twitter: 'x', tweet: 'x',
+        twitter: 'x', tweet: 'x', x: 'x',
         tiktok: 'tiktok',
         facebook: 'facebook', fb: 'facebook',
         linkedin: 'linkedin',
-        telegram: 'telegram', tg: 'telegram',
+        telegram: 'telegram', tg: 'telegram', tme: 'telegram',
         snapchat: 'snapchat', snap: 'snapchat',
         twitch: 'twitch',
         youtube: 'youtube', yt: 'youtube',
@@ -6847,7 +6865,10 @@
         xbox: 'xbox',
         playstation: 'playstation', psn: 'playstation',
         roblox: 'roblox',
-        kick: 'kick'
+        kick: 'kick',
+        vk: 'vk', vkontakte: 'vk',
+        ok: 'ok', odnoklassniki: 'ok',
+        viber: 'viber'
     };
     const CP_KIND_LABEL = {
         name: 'Name',
@@ -6879,9 +6900,12 @@
         'address', 'id', 'company', 'occupation', 'os', 'ip', 'domain', 'url', 'crypto',
         'plate', 'vehicle', 'age', 'timezone', 'vin'
     ];
-    const CP_JUNK_VAL = /^(unknown|unverified|partial|null|none|n\/a|na|maybe|weak|strong|low|medium|high|true|false|yes|no|nulls?|tbd|todo|n\/a\.?|current city|username correlation|employment not confirmed)$/i;
-    const CP_SKIP_KEY = /^(notes?|misc|flags?|status|confidence|verified|type|output|record|handles|usernames|accounts|contact|observed|unresolved|random|digital|devices|identity match|location match|identity|links|ids|scratchpad|overlap|identifiers?)$/i;
-    const CP_NOISE = /^(identity|handles?|links?|ids?|scratchpad|profile|notes?|accounts?|contact|observed|identifiers?|unresolved|digital|devices?|flags?|misc|random|confidence|output|record|people|data|info|information|section|block|online|type|value|key|field|status|browser|laptop|desktop|windows|linux|firefox|unknown|possibly|maybe|high|low|medium)$/i;
+    const CP_JUNK_VAL = /^(unknown|unverified|partial|null|none|n\/a|na|maybe|weak|strong|low|medium|high|true|false|yes|no|nulls?|tbd|todo|n\/a\.?|current city|username correlation|employment not confirmed|ipv4|ipv6|scatter|true|false)$/i;
+    const CP_SKIP_KEY = /^(notes?|misc|flags?|status|confidence|verified|type|types|output|record|handles|usernames|accounts|contact|observed|unresolved|random|digital|devices|identity match|location match|identity|links|ids|scratchpad|overlap|identifiers?|reason|metadata|version|begin|end|query|services|visitor|pictures?|cards?|financial|decoy|skip|comment|raw data|label|labels|caption|hint|scatter|kind|category|class|column|header|property|prop|attr|attribute|item|items|entry|entries|value|values|key|keys|field|fields)$/i;
+    const CP_NOISE = /^(identity|handles?|links?|ids?|scratchpad|profile|notes?|accounts?|contact|observed|identifiers?|unresolved|digital|devices?|flags?|misc|random|confidence|output|record|people|data|info|information|section|block|online|type|value|key|field|status|browser|laptop|desktop|windows|linux|firefox|unknown|possibly|maybe|high|low|medium|flight|asn|ssid|ja3|isbn|doi|json|http|https|www|admin|root|test|user|baby|kiss|uwu|adorable|the|and|for|from|with|this|that|aliases|brother|dad|mom|sister|label|wife|husband|family)$/i;
+    const CP_WEAK_HANDLE = /^(ok|jpg|png|gif|com|net|org|edu|gov|html|http|https|www|null|true|false|unknown|admin|root|test|user|guest|none|nulls?|baby|kiss|uwu|ar|l|x|skip|decoy|label|value|type)$/i;
+    const CP_TYPE_LABEL = /^(android id|asset tag|cell tower|ham callsign|plus code|serial number|ssh fingerprint|wi-?fi bssid|user agent|tracking number|driver license|employee id|aircraft tail|what3words|ip address|mac address|phone number|full name|date of birth|advertising id|google ads? id|d-?u-?n-?s|pnr \/ booking|passport \(test\)|imei|imsi|idfa|uuid|mmsi|imo|doi|iban|isin|swift \/ bic)$/i;
+    const CP_NAME_STOP = /\b(information|profile|section|details|notes?|employment|record|device|browser|windows|linux|house|contact|account|password|username|android|asset|serial|tower|fingerprint|callsign|bssid|ssid|imei|imsi|uuid|iban|isin|swift|booking|competitor|comp[eé]titeur|licence|license|online ids?|person record|ballot|appointments?|election|basement|officials?|resources?|occupied|absentee|only|type|user)\b/i;
     const CP_MONTH = {
         jan: '01', january: '01', feb: '02', february: '02', mar: '03', march: '03',
         apr: '04', april: '04', may: '05', jun: '06', june: '06', jul: '07', july: '07',
@@ -6911,6 +6935,8 @@
 
     function cpKind(name, type) {
         const ext = String(name || '').split('.').pop().toLowerCase();
+        if (ext === 'tsv') return 'csv';
+        if (ext === 'vcf' || ext === 'vcard' || ext === 'eml' || ext === 'ics' || ext === 'ldif' || ext === 'yml' || ext === 'yaml') return 'txt';
         if (CP_KINDS[ext]) return ext === 'htm' ? 'html' : ext;
         const t = String(type || '').toLowerCase();
         if (t.indexOf('json') >= 0) return 'json';
@@ -6927,9 +6953,17 @@
         if (v.length > 240) return;
         if (CP_JUNK_VAL.test(v)) return;
         const plat = platform ? String(platform) : '';
+        if (kind === 'phone') {
+            const digits = v.replace(/\D/g, '');
+            hits._phone = hits._phone || {};
+            const seen = Object.keys(hits._phone);
+            if (seen.some(function (d) { return d === digits || d.endsWith(digits) || digits.endsWith(d); })) return;
+            hits._phone[digits] = 1;
+        }
         const key = kind + '\0' + v.toLowerCase() + '\0' + plat;
         if (hits._seen[key]) return;
         if (kind === 'date' && hits._seen['dob\0' + v.toLowerCase() + '\0']) return;
+        if (kind === 'dob') hits._seen['date\0' + v.toLowerCase() + '\0'] = 1;
         hits._seen[key] = 1;
         const hit = { kind: kind, value: v, note: note || '' };
         if (plat) hit.platform = plat;
@@ -6937,62 +6971,163 @@
     }
 
     function cpNormKey(key) {
-        return String(key || '')
-            .toLowerCase()
-            .replace(/[`"'*]+/g, '')
-            .replace(/[#\[\]]/g, ' ')
-            .replace(/[_.\/-]+/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
+        let s = String(key || '').split(';')[0];
+        s = s.replace(/\(.*?\)/g, ' ');
+        s = s.replace(/^[^\p{L}\p{N}@]+/u, '');
+        s = s.toLowerCase();
+        s = s.replace(/[`"'*_#\[\]{}<>]/g, ' ');
+        s = s.replace(/[_.\/\\-]+/g, ' ');
+        s = s.replace(/[^\p{L}\p{N} ]+/gu, ' ');
+        s = s.replace(/\s+/g, ' ').trim();
+        s = s.replace(/\s+\d+$/, '');
+        s = s.replace(/\s+(of )?(father|mother|mom|dad|brother|sister|parent|отца|мамы|маме|отцу|сестры)$/u, '');
+        return s;
     }
 
     function cpCleanValue(value) {
         let s = String(value == null ? '' : value).trim();
-        s = s.replace(/^[,;:.\-/|`"'*_]+/, '');
-        s = s.replace(/[,;:`"'*_]+$/, '');
+        s = s.replace(/<br\s*\/?>/gi, ', ');
+        s = s.replace(/<[^>]+>/g, ' ');
+        s = s.replace(/[█░▓▀▄■□╔╗╚╝║╠╣═┌┐└┘│┬┴┼]/g, ' ');
+        s = s.replace(/^[\s,;:.\-/|`"'*_]+/, '');
+        s = s.replace(/[\s,;:`"'*_]+$/, '');
         s = s.replace(/\*\*/g, '');
         s = s.replace(/[?]+$/, '');
         if (/\.$/.test(s) && !/\d\.$/.test(s)) s = s.replace(/\.+$/, '');
-        s = s.replace(/\s+\([^)]*(unverified|stale|maybe|copied)[^)]*\)\s*$/i, '');
+        s = s.replace(/\s+\([^)]*(unverified|stale|maybe|copied|already changed|mobile|home|work|cell)[^)]*\)\s*$/i, '');
         s = s.replace(/\s{2,}/g, ' ').trim();
         if (s.length > 1 && /^["'].*["']$/.test(s)) s = s.slice(1, -1).trim();
         return s;
     }
 
+    function cpLooksLikeTypeLabel(value) {
+        const s = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!s) return false;
+        if (CP_TYPE_LABEL.test(s)) return true;
+        if (CP_NAME_STOP.test(s) && s.split(' ').length <= 4) return true;
+        return false;
+    }
+
     function cpLooksLikePerson(value) {
-        const s = String(value || '').trim();
-        if (!/^[A-Z][a-z]+(?:[\s'-][A-Z][a-z]+){1,3}$/.test(s)) return false;
-        if (/\b(City|College|University|Polytechnic|Harbor|Heights|Northwest|State|Record|Profile|Card|Notes?|Device|Browser|Windows|Linux)\b/.test(s)) return false;
+        const s = String(value || '').replace(/\s+/g, ' ').trim();
+        if (s.length < 4 || s.length > 90) return false;
+        if (/[@:/\\]|https?/i.test(s)) return false;
+        if (/\d{3,}/.test(s)) return false;
+        if (cpLooksLikeTypeLabel(s)) return false;
+        if (/\b(shares the|unknown|unverified|possibly)\b/i.test(s)) return false;
+        const words = s.split(' ');
+        if (words.length < 2 || words.length > 4) return false;
+        if (words.some(function (w) { return w.replace(/[.'’\-]/g, '').length < 2; })) return false;
+        if (words.length === 2 && words.every(function (w) { return w.length < 4; })) return false;
+        if (!words.every(function (w) {
+            return /^[\p{L}][\p{L}'’. -]{0,38}[\p{L}.]?$/u.test(w);
+        })) return false;
+        if (/\b(City|College|University|Polytechnic|Harbor|Heights|Northwest|State|Record|Profile|Card|Notes?|Device|Browser|Windows|Linux|Street|Strasse|Address)\b/i.test(s) && words.length <= 2) return false;
         return true;
     }
 
-    function cpLooksLikeHandle(value) {
+    function cpLooksLikePersonLabeled(value) {
+        const s = String(value || '').replace(/\s+/g, ' ').trim();
+        if (cpLooksLikePerson(s)) return true;
+        if (s.length < 2 || s.length > 80) return false;
+        if (cpLooksLikeTypeLabel(s) || /[\d@:/\\]/.test(s)) return false;
+        const words = s.split(' ');
+        if (words.length < 1 || words.length > 4) return false;
+        return words.every(function (w) {
+            return /^[\p{L}][\p{L}'’. -]{1,58}[\p{L}.]?$/u.test(w) && w.replace(/[.'’\-]/g, '').length >= 2;
+        });
+    }
+
+    function cpLooksLikeHandle(value, loose) {
         const s = String(value || '').replace(/^@/, '').trim();
-        if (s.length < 3 || s.length > 40) return false;
-        if (/\s/.test(s)) return false;
-        if (/@/.test(s)) return false;
-        if (/^(http|https|www|null|true|false|unknown)$/i.test(s)) return false;
-        if (CP_NOISE.test(s)) return false;
+        if (s.length < (loose ? 2 : 3) || s.length > 40) return false;
+        if (/\s/.test(s) || /@/.test(s)) return false;
+        if (/\.(com|net|org|edu|gov|io|ru|me|co)$/i.test(s)) return false;
+        if (/\.(mp3|mp4|png|gif|html|exe|zip|pdf)$/i.test(s)) return false;
+        if (CP_NOISE.test(s) || CP_WEAK_HANDLE.test(s)) return false;
         if (/^[A-Z]{3,}$/.test(s)) return false;
+        if (/^\d+$/.test(s)) return false;
+        if (!loose && s.length < 4 && !/\d/.test(s)) return false;
         return /^[A-Za-z][A-Za-z0-9._-]{1,39}$/.test(s);
     }
 
+    function cpValidDay(y, m, d) {
+        const yy = Number(y), mm = Number(m), dd = Number(d);
+        if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return false;
+        if (yy < 1900 || yy > 2100) return false;
+        const dt = new Date(Date.UTC(yy, mm - 1, dd));
+        return dt.getUTCFullYear() === yy && dt.getUTCMonth() === mm - 1 && dt.getUTCDate() === dd;
+    }
+
     function cpLooksLikeDate(value) {
-        const s = String(value || '').trim();
-        if (/^(?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01])$/.test(s)) return true;
-        if (/^(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}$/i.test(s)) return true;
+        const s = String(value || '').trim().replace(/\s+\([^)]*\)\s*$/, '');
+        let m = s.match(/^((?:19|20)\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+        if (m) return cpValidDay(m[1], m[2], m[3]);
+        m = s.match(/^(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.]((?:19|20)\d{2})$/);
+        if (m) return cpValidDay(m[3], m[2], m[1]);
+        m = s.match(/^(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])[-/.]((?:19|20)\d{2})$/);
+        if (m) return cpValidDay(m[3], m[1], m[2]);
+        if (/^(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+(?:19|20)\d{2}$/i.test(s)) return true;
+        if (/^\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:19|20)\d{2}$/i.test(s)) return true;
         if (/^class of (?:19|20)\d{2}$/i.test(s)) return true;
         return false;
     }
 
     function cpLooksLikeTime(value) {
-        return /^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:\s?[APap][Mm])?$/.test(String(value || '').trim());
+        const s = String(value || '').trim();
+        if (/^00:00(?::00)?$/.test(s)) return false;
+        return /^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:\s?[APap][Mm])?$/.test(s);
+    }
+
+    function cpLooksLikeEmail(value) {
+        const s = String(value || '').trim();
+        if (/\*/.test(s)) return false;
+        return /^[A-Z0-9._%+\-]{2,}@[A-Z0-9.\-]+\.[A-Z]{2,24}$/i.test(s);
+    }
+
+    function cpLooksLikePhone(value, labeled) {
+        const s = String(value || '').trim();
+        const digits = s.replace(/\D/g, '');
+        if (digits.length < 10 || digits.length > 15) return false;
+        if (/^(\d)\1{8,}$/.test(digits)) return false;
+        if (/\*/.test(s)) return false;
+        if (/^(?:19|20)\d{8}$/.test(digits)) return false;
+        if (digits.length === 15 && !labeled) return false;
+        if (!labeled) {
+            if (!/[+\-().\s]/.test(s)) return false;
+            if (digits.length > 13 && !/^\+/.test(s)) return false;
+        }
+        return true;
+    }
+
+    function cpLooksLikeId(value) {
+        const s = String(value || '').trim();
+        if (s.length < 4 || s.length > 48) return false;
+        if (/^\d{4,24}$/.test(s)) return true;
+        if (/^\d{2,3}-\d{2,8}-\d{1,2}$/.test(s)) return true;
+        if (/^\d{3}-\d{2}-\d{4}$/.test(s)) return true;
+        if (/^[A-Z]{1,5}-[A-Z0-9-]{2,24}$/i.test(s)) return true;
+        if (/^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/i.test(s)) return true;
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return true;
+        if (/^[0-9a-f]{8,32}$/i.test(s)) return true;
+        return false;
+    }
+
+    function cpLooksLikeCrypto(value) {
+        const s = String(value || '').trim();
+        if (/^bc1[a-z0-9]{25,87}$/i.test(s)) return true;
+        if (/^0x[a-fA-F0-9]{40}$/.test(s)) return true;
+        return false;
     }
 
     function cpDateISO(value) {
-        const s = String(value || '').trim();
-        let m = s.match(/^((?:19|20)\d{2})[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])$/);
-        if (m) return m[1] + '-' + m[2] + '-' + m[3];
+        const s = String(value || '').trim().replace(/\s+\([^)]*\)\s*$/, '');
+        let m = s.match(/^((?:19|20)\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+        if (m && cpValidDay(m[1], m[2], m[3])) return m[1] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[3]).padStart(2, '0');
+        m = s.match(/^(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.]((?:19|20)\d{2})$/);
+        if (m && Number(m[1]) > 12 && cpValidDay(m[3], m[2], m[1])) return m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+        m = s.match(/^(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])[-/.]((?:19|20)\d{2})$/);
+        if (m && cpValidDay(m[3], m[1], m[2])) return m[3] + '-' + String(m[1]).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
         m = s.match(/^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})$/i);
         if (m) {
             const mm = CP_MONTH[m[1].toLowerCase()];
@@ -7007,75 +7142,198 @@
         let s = cpCleanValue(value);
         s = s.replace(/^\/?u\//i, '');
         s = s.replace(/^@/, '');
-        s = s.replace(/^https?:\/\/(www\.)?(reddit\.com\/user|github\.com|instagram\.com|x\.com|twitter\.com)\//i, '');
+        s = s.replace(/^https?:\/\/(www\.)?(reddit\.com\/(?:user|u)|github\.com|instagram\.com|x\.com|twitter\.com|tiktok\.com|t\.me|vk\.com)\//i, '');
         s = s.replace(/\/+$/, '');
         return s;
     }
 
     function cpClassifyKey(key) {
-        const k = cpNormKey(key);
+        let k = cpNormKey(key);
         if (!k || CP_SKIP_KEY.test(k)) return null;
         if (CP_PLAT[k]) return { kind: 'username', platform: CP_PLAT[k] };
-        if (/^(e ?mail|mail|secondary mail|alt mail)/.test(k) || /mail$/.test(k) && !/gmail/.test(k)) return { kind: 'email' };
-        if (/^(phone|tel|mobile|cell|telephone)/.test(k)) return { kind: 'phone' };
-        if (/^(password|passwd|pwd|passphrase|passcode|pass)\b/.test(k) || k === 'pass' || k === 'pwd') return { kind: 'password' };
-        if (/^(dob|born|birthday|birth date|date of birth|birth)$/.test(k)) return { kind: 'dob' };
-        if (/^(alias|aka|handle|handles|nickname|nick|subject|display name|main handle|old alias|other names?|other names seen|alternate handle|seen usernames)$/.test(k)) return { kind: 'alias' };
-        if (/^(name|full name|real name|person|possible name|legal name)$/.test(k) || /^name /.test(k) && /found|real|full|legal/.test(k)) return { kind: 'name' };
+        if (/\btiktok/.test(k)) return { kind: 'username', platform: 'tiktok' };
+        if (/\btelegram|\bтелеграм/.test(k)) return { kind: 'username', platform: 'telegram' };
+        if (/\binstagram|\binsta\b/.test(k)) return { kind: 'username', platform: 'instagram' };
+        if (/\bgithub\b/.test(k)) return { kind: 'username', platform: 'github' };
+        if (/\bdiscord\b/.test(k)) return { kind: 'username', platform: 'discord' };
+        if (/\breddit\b/.test(k)) return { kind: 'username', platform: 'reddit' };
+        if (/^(вк|vkontakte|одноклассники|телеграм+а?|вайбер|тик ток)$/u.test(k)) {
+            const map = { 'вк': 'vk', vkontakte: 'vk', 'одноклассники': 'ok', 'телеграм': 'telegram', 'телеграмма': 'telegram', 'вайбер': 'viber', 'тик ток': 'tiktok' };
+            return { kind: 'username', platform: map[k] || k };
+        }
+        if (/почт|e ?mails?|mails?|correo/.test(k) && !/gmail/.test(k)) return { kind: 'email' };
+        if (/\b(phone|tel|mobile|cell|telephone|номер|телефон)\b/.test(k)) return { kind: 'phone' };
+        if (/^(password|passwd|pwd|passphrase|passcode|pass|парол)/.test(k) || k === 'pwd') return { kind: 'password' };
+        if (/\b(dob|bday|born|birthday|birth date|date of birth|birth|рожден|naissance)\b/.test(k) || /дата рождения|fecha de nacimiento/.test(k)) return { kind: 'dob' };
+        if (/^(alias|aka|handle|nickname|nick|nicks|aliases|subject|display name|main handle|old alias|other names?|alternate handle|seen usernames|nickname)$/.test(k)) return { kind: 'alias' };
+        if (/^(fn|fio|фио|имя|nombre|nom|prenom|prénom|apellido|apellidos|cognome|nachname|vorname|фамилия|отчество|name|full name|real name|legal name|full legal name|person|possible name)$/u.test(k) || /\bfull legal\b/.test(k) || /^name /.test(k)) return { kind: 'name' };
         if (/^(username|user name|user|userid|user id|login|account)$/.test(k)) return { kind: 'username' };
-        if (/^(location|loc|city|state|region|address|place|country|area)$/.test(k)) return { kind: 'address' };
-        if (/^(school|university|college|education|uni|employer|company|workplace|org|organization|job)$/.test(k)) return { kind: 'company' };
-        if (/^(occupation|field|role|title|trade)$/.test(k)) return { kind: 'occupation' };
-        if (/^(os|os seen|laptop|desktop|computer os|operating system)$/.test(k) || /^os /.test(k)) return { kind: 'os' };
-        if (/^browser$/.test(k)) return { kind: 'os' };
-        if (/^(created|created account|last checked|timestamp|seen|date|time|when)$/.test(k)) return { kind: 'date' };
-        if (/^(id|profile id|case ref|case id|ref|reference)$/.test(k)) return { kind: 'id' };
-        if (/^(old|new|from|based)$/.test(k)) return { kind: 'address' };
-        if (/^(ip|ip address)$/.test(k)) return { kind: 'ip' };
-        if (/^(domain|website|site|url|web)$/.test(k)) return { kind: 'domain' };
+        if (/\b(location|address|street|city|state|region|place|country|area|addr|adr|adresse|город|адрес|проживан)\b/.test(k) || /address$/.test(k) || /^adresse/.test(k)) return { kind: 'address' };
+        if (/^(school|university|college|education|uni|employer|company|workplace|org|organization|job|школа)$/.test(k)) return { kind: 'company' };
+        if (/^(occupation|field|role|title|trade|employment|job title)$/.test(k)) return { kind: 'occupation' };
+        if (/^(os|os seen|laptop|desktop|computer os|operating system|user agent)$/.test(k) || /^os /.test(k) || k === 'browser') return { kind: 'os' };
+        if (/^(created|created account|last checked|signup date|created at|id issue|id expiry|date|when|дата)$/.test(k)) return { kind: 'date' };
+        if (/^(time|seen)$/.test(k)) return { kind: 'time' };
+        if (/^(id|profile id|case ref|case id|ref|reference|dni|ssn|social|cuit|inn|инн|passport|паспорт|snils|снилс|imei|imsi|iccid|mac|bssid|uuid|orcid|badge|employee id|asset|asset tag|serial|serial number|dl|driver license|licence|tracking|pnr|flight|callsign|ham callsign|asn|did|android id|androidid|idfa|mmsi|imo)$/.test(k)) return { kind: 'id' };
+        if (/банковск/.test(k)) return { kind: 'id' };
+        if (/^(ip|ip address|ipv4|ipv6)$/.test(k)) return { kind: 'ip' };
+        if (/^(url|website|site|web)$/.test(k)) return { kind: 'url' };
+        if (/^(domain)$/.test(k)) return { kind: 'domain' };
         if (/^(vin)$/.test(k)) return { kind: 'vin' };
-        if (/^(plate|license plate|licence plate)$/.test(k)) return { kind: 'plate' };
-        if (/^(vehicle|car|make|model)$/.test(k)) return { kind: 'vehicle' };
-        if (/^(age)$/.test(k)) return { kind: 'age' };
+        if (/^(plate|license plate|licence plate|dominio)$/.test(k)) return { kind: 'plate' };
+        if (/^(vehicle|car|make|model|brand|автомобил)/.test(k)) return { kind: 'vehicle' };
+        if (/^(age|yrs?|years? old|лет)$/.test(k) || /\b(age|лет)\b/.test(k)) return { kind: 'age' };
         if (/^(timezone|time zone|tz)$/.test(k)) return { kind: 'timezone' };
-        if (/^(ssn|social)$/.test(k)) return { kind: 'id' };
         if (/crypto|wallet|btc|eth/.test(k)) return { kind: 'crypto' };
+        if (/^(ssid)$/.test(k)) return { kind: 'id' };
+        if (/^(geo|coordinates|what3words|plus code)$/.test(k)) return { kind: 'address' };
+        if (/^(iban|swift|bic|lei|cusip|isin|ein|duns)$/.test(k)) return { kind: 'id' };
         return null;
+    }
+
+    function cpAccountFromUrl(url) {
+        try {
+            const u = new URL(url);
+            const host = u.hostname.replace(/^www\./, '').toLowerCase();
+            const path = u.pathname.replace(/\/+$/, '');
+            const last = path.split('/').filter(Boolean).pop() || '';
+            if (host === 'vk.com' || host === 'vk.ru') return { platform: 'vk', value: last || path.slice(1) };
+            if (host === 't.me' || host === 'telegram.me') {
+                const first = path.split('/').filter(Boolean)[0] || '';
+                if (/^\+/.test(first) || /^\d/.test(first) || /^joinchat$/i.test(first)) return null;
+                return { platform: 'telegram', value: first.replace(/^@/, '') };
+            }
+            if (host === 'tiktok.com') return { platform: 'tiktok', value: last.replace(/^@/, '') };
+            if (host === 'ok.ru') return { platform: 'ok', value: last };
+            if (host === 'instagram.com') return { platform: 'instagram', value: last.replace(/^@/, '') };
+            if (host === 'github.com') return { platform: 'github', value: last };
+            if (host === 'reddit.com' && /\/(u|user)\//i.test(path)) return { platform: 'reddit', value: last };
+        } catch (error) {}
+        return null;
+    }
+
+    function cpIsGenericKey(key) {
+        const raw = String(key || '');
+        const k = cpNormKey(raw);
+        if (!k || CP_SKIP_KEY.test(k)) return true;
+        if (/_(type|flag|status|count|index|ratio|season)$/i.test(raw)) return true;
+        return false;
+    }
+
+    function cpLooksLikeJunkUrl(url) {
+        try {
+            const u = new URL(url);
+            const h = u.hostname.replace(/^www\./, '').toLowerCase();
+            if (/\.(example|invalid|test|localhost)$/.test(h)) return true;
+            if (h === 'doxbin.com' || /\.doxbin\.com$/.test(h)) return true;
+            if (h === 'web.archive.org' || h === 'archive.org') return true;
+            if (h === 'calendar.google.com') return true;
+            if (/(^|\.)google\.(com|[a-z]{2}|co\.[a-z]{2})$/.test(h) && /\/(search|maps\/contrib|calendar|url)/.test(u.pathname + u.search)) return true;
+        } catch (error) {
+            return true;
+        }
+        return false;
     }
 
     function cpTakePair(hits, key, value, note) {
         const raw = cpCleanValue(value);
         if (!raw) return;
+        if (cpIsGenericKey(key)) return;
+        if (cpNormKey(key) === 'n' && /;/.test(raw)) {
+            const p = raw.split(';');
+            const assembled = [p[1], p[0]].map(function (x) { return String(x || '').trim(); }).filter(Boolean).join(' ');
+            if (cpLooksLikePerson(assembled)) cpPushHit(hits, 'name', assembled, note);
+            return;
+        }
         const cls = cpClassifyKey(key);
         if (!cls) {
+            if (raw.indexOf('|') >= 0 || /(?:github|plate|imei|discord|reddit)\s*=/i.test(raw)) {
+                String(raw).split(/\s*\|\s*/).forEach(function (part) {
+                    const inner = cpSplitPair(part);
+                    if (inner && inner.key !== key) cpTakePair(hits, inner.key, inner.value, note);
+                });
+            }
             if (cpLooksLikeDate(raw)) cpPushHit(hits, 'date', raw, note);
+            else if (cpLooksLikeEmail(raw)) cpPushHit(hits, 'email', raw, note);
+            else {
+                const keyHandle = cpStripUser(key);
+                if (!/_/.test(keyHandle) && cpLooksLikeHandle(keyHandle, true) && cpLooksLikePerson(raw)) {
+                    cpPushHit(hits, 'alias', keyHandle, note);
+                    cpPushHit(hits, 'name', raw, note);
+                }
+            }
             return;
         }
         let kind = cls.kind;
         let platform = cls.platform || '';
-        const values = (kind === 'username' || kind === 'alias' || kind === 'email' || kind === 'name') && /[,;]/.test(raw) && raw.length < 180
+        const values = (kind === 'username' || kind === 'alias' || kind === 'email' || kind === 'name') && /[,;]/.test(raw) && raw.length < 220
             ? raw.split(/[,;]/).map(function (p) { return cpCleanValue(p); }).filter(Boolean)
             : [raw];
         values.forEach(function (item) {
             let v = item;
             let k = kind;
             let plat = platform;
-            if (k === 'username' || k === 'alias') v = cpStripUser(v);
-            if (k === 'email' && !/@/.test(v)) return;
-            if (k === 'date') {
-                if (cpLooksLikeTime(v) && !cpLooksLikeDate(v)) k = 'time';
-                else if (!cpLooksLikeDate(v) && !cpDateISO(v)) {
-                    if (k === 'date') return;
+            if (/^https?:\/\//i.test(v) && (k === 'username' || k === 'alias' || k === 'url' || k === 'domain')) {
+                const cleanUrl = v.replace(/[),.;]+$/, '');
+                if (!cpLooksLikeJunkUrl(cleanUrl)) cpPushHit(hits, 'url', cleanUrl, note);
+                const acc = cpAccountFromUrl(v);
+                if (acc && acc.value) {
+                    k = 'username';
+                    plat = acc.platform;
+                    v = acc.value;
+                } else if (k === 'url' || k === 'domain') {
+                    return;
                 }
             }
-            if (k === 'dob' && !cpLooksLikeDate(v) && !/\d/.test(v)) return;
-            if (k === 'address' && /^(?:\d+(?:\.\d+)?)$/.test(v)) return;
-            if (k === 'name' && /\d/.test(v) && !cpLooksLikePerson(v)) {
-                if (cpLooksLikeHandle(v)) { k = 'alias'; }
+            if (k === 'username' || k === 'alias') v = cpStripUser(v);
+            if (k === 'email' && !cpLooksLikeEmail(v)) return;
+            if (k === 'phone' && !cpLooksLikePhone(v, true)) return;
+            if (k === 'date') {
+                if (cpLooksLikeTime(v) && !cpLooksLikeDate(v)) k = 'time';
+                else if (!cpLooksLikeDate(v) && !cpDateISO(v)) return;
+            }
+            if (k === 'time' && !cpLooksLikeTime(v)) return;
+            if (k === 'dob') {
+                v = v.replace(/\s+\([^)]*\)\s*$/, '');
+                if (!cpLooksLikeDate(v) && !/\d/.test(v)) return;
+            }
+            if (k === 'id') {
+                if (/\s/.test(v) && /^\d/.test(v)) v = v.split(/\s+/)[0];
+                if (!cpLooksLikeId(v) && !/^[A-Z0-9:+._-]{3,24}$/i.test(v) && !/^did:/i.test(v)) return;
+                if (/^(xfinitywifi|netgear|linksys|default|wifi|guest|androidap)$/i.test(v)) return;
+            }
+            if (k === 'address') {
+                if (/^(?:\d+(?:\.\d+)?)$/.test(v)) return;
+                if (/^(workplace|location|unknown|tbd|none|n\/a)$/i.test(v)) return;
+                if (/^[A-Za-z_]+\/[A-Za-z_]+$/.test(v)) k = 'timezone';
+            }
+            if (k === 'age') {
+                const n = v.match(/\d{1,3}/);
+                if (!n || Number(n[0]) < 1 || Number(n[0]) > 120) return;
+                v = n[0];
+            }
+            if (k === 'os' && /Mozilla\//i.test(v)) return;
+            if (k === 'name') {
+                if (cpLooksLikePerson(v) || cpLooksLikePersonLabeled(v)) {
+                    /* keep */
+                } else if (v.length >= 4 && !/\d/.test(v) && !/\s/.test(v) && cpLooksLikeHandle(v, true)) {
+                    k = 'alias';
+                } else {
+                    return;
+                }
+            }
+            if (k === 'alias' && !cpLooksLikeHandle(v, true) && !cpLooksLikePerson(v)) return;
+            if (k === 'username' && !cpLooksLikeHandle(v, true) && !/^\d{4,}$/.test(v) && plat !== 'vk') return;
+            if ((k === 'username' || k === 'alias') && CP_NOISE.test(v)) return;
+            if (k === 'crypto' && !cpLooksLikeCrypto(v) && !/^0x[a-fA-F0-9]{40,64}$/.test(v) && !/^bc1/i.test(v)) return;
+            if (k === 'domain') {
+                v = v.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+                if (!/\./.test(v)) return;
             }
             if ((k === 'username' || k === 'alias') && /@/.test(v) && /\./.test(v.split('@')[1] || '')) {
                 k = 'email';
                 plat = '';
+                if (!cpLooksLikeEmail(v)) return;
             }
             if (!v || CP_JUNK_VAL.test(v)) return;
             cpPushHit(hits, k, v, note, plat);
@@ -7084,12 +7342,17 @@
 
     function cpSplitPair(line) {
         let s = String(line || '').trim();
-        if (!s || s.length > 400) return null;
+        if (!s || s.length > 800) return null;
+        if (/^#\s*skip\b/i.test(s) || /^\/\/\s*seen\b/i.test(s)) return null;
         if (/^[=\-#*_/~]{3,}$/.test(s)) return null;
+        if (/[█░▓▀▄■□╔╗╚╝║╠╣═]/.test(s)) return null;
+        if (/^\[(?:\?|\+|-)\]/.test(s)) return null;
+        if (/^\[(?:user@|root@)/i.test(s) || /\$\s+cat\s+/i.test(s)) return null;
+        s = s.replace(/^[^\p{L}\p{N}@\/]+/u, '');
+        if (/^\/\//.test(s) || /^#\s*skip\b/i.test(s) || /^decoy\b/i.test(s)) return null;
         s = s.replace(/^[-*+>]+(?:\s+)/, '');
         s = s.replace(/^#{1,6}\s+/, '');
-        s = s.replace(/^\[(?:user@|root@)[^\]]+\]\s*\$\s*.*$/i, '');
-        if (/^\[(?:\?|\+|-)\]/.test(s)) return null;
+        if (/^(?:user@|root@)/i.test(s)) return null;
         if (/^\|?\s*-{2,}\s*\|/.test(s)) return null;
         if (/^\|/.test(s)) {
             const cells = s.split('|').map(function (c) { return c.trim(); }).filter(function (c) {
@@ -7100,116 +7363,266 @@
             }
             return null;
         }
-        let m = s.match(/^[*`"_]*([A-Za-z][\w .-]{0,40}?)[*`"_]*\s*\??\s*(?:\.{2,}\s*)?(?::{1,3}|={1,2}|-{1,2}>|→|=>|\s*\/(?!\/)\s*)\s*(.+)$/);
+        let m = s.match(/^([A-Za-z][\w .-]{0,48})(?:;[^=:\n]{0,80})?\s*:\s*(.+)$/);
+        if (m && !/^(BEGIN|END|VERSION)$/i.test(m[1])) return { key: m[1], value: m[2] };
+        m = s.match(/^[*`"_]*([\p{L}][\p{L}\p{N} ._/-]{0,48}?)[*`"_]*\s*\??\s*(?:\.{2,}\s*)?(?::{1,3}|={1,2}|-{1,2}>|→|=>)\s*(.+)$/u);
         if (m) return { key: m[1], value: m[2] };
-        m = s.match(/^([A-Za-z][\w-]{1,28})\?\s+(.+)$/);
-        if (m) return { key: m[1], value: m[2] };
-        m = s.match(/^([A-Za-z][\w-]{1,28})\s{2,}(\S.*)$/);
+        m = s.match(/^([\p{L}][\p{L}\p{N} ._/-]{0,40})\s{2,}(\S.*)$/u);
+        if (m && cpClassifyKey(m[1])) return { key: m[1], value: m[2] };
+        m = s.match(/^((?:[\p{L}][\p{L}'’.-]*\s+){0,2}[\p{L}][\p{L}'’.-]{1,32})\s+([^\s].{0,180})$/u);
+        if (m && cpClassifyKey(m[1]) && !/^[\/—–]/.test(m[2]) && !/^(is|was|were|are|the|a|an|to|of|and)\b/i.test(m[2]) && m[2].split(/\s+/).length <= 14) {
+            return { key: m[1], value: m[2] };
+        }
+        m = s.match(/^([\p{L}][\p{L}\p{N}._-]{1,32})\?\s+(.+)$/u);
+        if (m && cpClassifyKey(m[1])) return { key: m[1], value: m[2] };
+        m = s.match(/^([\p{L}][\p{L}\p{N}._-]{1,40})\s+\/\s+(.+)$/u);
         if (m) return { key: m[1], value: m[2] };
         m = s.match(/^([A-Za-z][A-Za-z0-9._-]{2,32})\s+[—–]\s+(?:possibly\s+)?(.+)$/i);
-        if (m) return { key: 'subject', value: m[1], extra: m[2] };
+        if (m) return { key: 'alias', value: m[1], extra: m[2] };
         return null;
     }
 
     function cpScanPairs(hits, text, note) {
-        String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').forEach(function (line) {
-            const li = line.match(/^\s*[-*+]\s+[`*_]*([A-Za-z][A-Za-z0-9._-]{2,32})[`*_]*\.?\s*$/);
-            if (li && cpLooksLikeHandle(li[1])) cpPushHit(hits, 'alias', li[1], note);
+        const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
             const pair = cpSplitPair(line);
-            if (!pair) return;
-            cpTakePair(hits, pair.key, pair.value, note);
-            if (pair.extra) {
-                const extra = cpCleanValue(String(pair.extra).replace(/^possibly\s+/i, ''));
-                if (cpLooksLikePerson(extra)) cpPushHit(hits, 'name', extra, note);
-                else if (cpLooksLikeHandle(cpStripUser(extra))) cpPushHit(hits, 'alias', cpStripUser(extra), note);
-            }
-            if (!cpClassifyKey(pair.key)) {
-                const keyHandle = cpStripUser(pair.key);
-                const valClean = cpCleanValue(String(pair.value).replace(/^["']|["']$/g, ''));
-                const valHandle = cpStripUser(valClean);
-                if (cpLooksLikeHandle(keyHandle) && cpLooksLikePerson(valClean)) {
-                    cpPushHit(hits, 'alias', keyHandle, note);
-                    cpPushHit(hits, 'name', valClean, note);
-                } else if (cpLooksLikeHandle(keyHandle) && cpLooksLikeHandle(valHandle)) {
-                    cpPushHit(hits, 'alias', keyHandle, note);
-                    cpPushHit(hits, 'alias', valHandle, note);
+            if (!pair) continue;
+            let val = pair.value;
+            const cls = cpClassifyKey(pair.key);
+            if (cls && cls.kind === 'address' && !String(val).trim()) {
+                const extra = [];
+                while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1]) && !cpSplitPair(lines[i + 1].trim())) {
+                    extra.push(lines[++i].trim());
                 }
+                val = extra.join(', ');
             }
-        });
+            cpTakePair(hits, pair.key, val, note);
+            if (pair.extra) {
+                const extra = cpCleanValue(String(pair.extra).replace(/^possibly\s+/i, '').replace(/\.+$/, ''));
+                if (cpLooksLikePerson(extra)) cpPushHit(hits, 'name', extra, note);
+            }
+        }
     }
 
     function cpScanPatterns(hits, text, note) {
         const src = String(text || '');
         if (!src) return;
-        const email = src.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/gi) || [];
-        email.forEach(function (v) { cpPushHit(hits, 'email', v, note); });
+        const email = src.match(/[A-Z0-9._%+\-]{2,}@[A-Z0-9.\-]+\.[A-Z]{2,24}/gi) || [];
+        email.forEach(function (v) {
+            if (cpLooksLikeEmail(v)) cpPushHit(hits, 'email', v, note);
+        });
         const url = src.match(/\bhttps?:\/\/[^\s<>"'`]+/gi) || [];
         url.forEach(function (v) {
             const clean = v.replace(/[),.;]+$/, '');
+            if (cpLooksLikeJunkUrl(clean)) return;
             cpPushHit(hits, 'url', clean, note);
-            try {
-                const host = new URL(clean).hostname.replace(/^www\./, '');
-                if (host && host.indexOf('.') > 0) cpPushHit(hits, 'domain', host, note);
-            } catch (error) {}
+            const acc = cpAccountFromUrl(clean);
+            if (acc && acc.value && (cpLooksLikeHandle(acc.value, true) || /^(id)?\d+$/i.test(acc.value))) {
+                cpPushHit(hits, 'username', acc.value, note, acc.platform);
+            }
+        });
+        const tme = src.match(/\bt\.me\/([A-Za-z][A-Za-z0-9_]{3,32})\b/gi) || [];
+        tme.forEach(function (v) {
+            const h = v.replace(/^t\.me\//i, '');
+            if (cpLooksLikeHandle(h, true)) cpPushHit(hits, 'username', h, note, 'telegram');
         });
         const ip = src.match(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g) || [];
         ip.forEach(function (v) {
-            if (/^0\.|^255\.|127\.0\.0\.1/.test(v)) return;
+            if (/^0\.|^255\.|127\.0\.0\.1|\.0\.0\.0$/.test(v)) return;
+            if (/^(192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(v)) return;
             cpPushHit(hits, 'ip', v, note);
         });
-        const phone = src.match(/(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g) || [];
+        const ipv6 = src.match(/\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f:.]+\b/gi) || [];
+        ipv6.forEach(function (v) {
+            if (/::/.test(v) && v.length >= 10) cpPushHit(hits, 'ip', v, note);
+        });
+        const phone = src.match(/\+\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b/g) || [];
         phone.forEach(function (v) {
-            const digits = v.replace(/\D/g, '');
-            if (digits.length < 10 || digits.length > 15) return;
-            if (/^(?:19|20)\d{8}$/.test(digits)) return;
-            cpPushHit(hits, 'phone', v, note);
+            if (cpLooksLikePhone(v, false)) cpPushHit(hits, 'phone', v, note);
+        });
+        const phoneUs = src.match(/\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4}\b|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g) || [];
+        phoneUs.forEach(function (v) {
+            if (cpLooksLikePhone(v, false)) cpPushHit(hits, 'phone', v, note);
         });
         const reddit = src.match(/\b\/?u\/[A-Za-z0-9_-]{3,32}\b/g) || [];
-        reddit.forEach(function (v) { cpPushHit(hits, 'username', cpStripUser(v), note, 'reddit'); });
-        const discord = src.match(/\b[A-Za-z][A-Za-z0-9._-]{1,31}#\d{4}\b/g) || [];
-        discord.forEach(function (v) { cpPushHit(hits, 'username', v, note, 'discord'); });
-        const at = src.match(/(^|[^\w])@([A-Za-z0-9._]{3,32})\b/g) || [];
-        at.forEach(function (v) {
-            const h = v.replace(/^[^@]+/, '');
-            if (/@/.test(h.slice(1)) || /\.(com|net|org|io|edu)$/i.test(h)) return;
-            cpPushHit(hits, 'username', cpStripUser(h), note);
+        reddit.forEach(function (v) {
+            if (/\b(?:GET|POST|PUT|HEAD|DELETE)\s+\//i.test(src) && new RegExp('\\b(?:GET|POST) /u/' + cpStripUser(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(src)) return;
+            cpPushHit(hits, 'username', cpStripUser(v), note, 'reddit');
         });
-        const iso = src.match(/\b(?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01])\b/g) || [];
-        iso.forEach(function (v) { cpPushHit(hits, 'date', v, note); });
-        const mmm = src.match(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:19|20)\d{2}\b/gi) || [];
-        mmm.forEach(function (v) { cpPushHit(hits, 'date', v, note); });
-        const times = src.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:\s?[APap][Mm])?\b/g) || [];
-        times.forEach(function (v) { cpPushHit(hits, 'time', v, note); });
-        const btc = src.match(/\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g) || [];
+        const discord = src.match(/\b[A-Za-z][A-Za-z0-9._-]{2,31}#\d{4}\b/g) || [];
+        discord.forEach(function (v) { cpPushHit(hits, 'username', v, note, 'discord'); });
+        const at = src.match(/(^|[^\w])@([A-Za-z][A-Za-z0-9._]{2,31})\b/g) || [];
+        at.forEach(function (v) {
+            const h = cpStripUser(v.replace(/^[^@]+/, ''));
+            if (!cpLooksLikeHandle(h)) return;
+            if (new RegExp('@' + h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':').test(src)) return;
+            cpPushHit(hits, 'username', h, note);
+        });
+        const seenT = src.match(/\bseen\s+((?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)/gi) || [];
+        seenT.forEach(function (v) {
+            const t = v.replace(/^seen\s+/i, '');
+            if (cpLooksLikeTime(t)) cpPushHit(hits, 'time', t, note);
+        });
+        const btc = src.match(/\bbc1[a-z0-9]{25,87}\b/gi) || [];
         btc.forEach(function (v) { cpPushHit(hits, 'crypto', v, note); });
         const eth = src.match(/\b0x[a-fA-F0-9]{40}\b/g) || [];
         eth.forEach(function (v) { cpPushHit(hits, 'crypto', v, note); });
-        const ids = src.match(/\b[A-Z]{1,5}-\d{2,8}(?:-\d{2,6})?\b/g) || [];
+        const ids = src.match(/\b(?:EMP|AST|SF|NT|VT|FI|VN|EL|ID)-[A-Z0-9]{2,10}\b/g) || [];
         ids.forEach(function (v) { cpPushHit(hits, 'id', v, note); });
-        const code = src.match(/`([A-Za-z][A-Za-z0-9._-]{2,32})`/g) || [];
-        code.forEach(function (v) {
-            const h = cpStripUser(v.replace(/`/g, ''));
-            if (cpLooksLikeHandle(h)) cpPushHit(hits, 'alias', h, note);
+        String(src).split('\n').forEach(function (line) {
+            const m = String(line).match(/^\s*(?:[-*+]|\d+[.)])?\s*[`*_]*((?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01])|(?:0?[1-9]|[12]\d|3[01])[./](?:0?[1-9]|1[0-2])[./](?:19|20)\d{2})\b/);
+            if (m && cpLooksLikeDate(m[1])) cpPushHit(hits, 'date', m[1], note);
         });
-        const bold = src.match(/\*\*([A-Za-z][A-Za-z0-9._-]{2,32})\*\*/g) || [];
-        bold.forEach(function (v) {
-            const h = v.replace(/\*/g, '');
-            if (cpLooksLikeHandle(h) && !/^(Name|Email|Person|Alias|GitHub|Discord|Reddit)$/i.test(h)) {
-                cpPushHit(hits, 'alias', h, note);
+        const ages = src.match(/\b(?:age\s*[:=]?\s*)?(\d{1,3})\s*(?:years?\s+old|yrs?\.?\s*old|лет)\b/gi) || [];
+        ages.forEach(function (v) {
+            const n = String(v).match(/\d{1,3}/);
+            if (n && Number(n[0]) >= 1 && Number(n[0]) <= 120) cpPushHit(hits, 'age', n[0], note);
+        });
+        const ageEq = src.match(/\bage\s*[:=]\s*(\d{1,3})\b/gi) || [];
+        ageEq.forEach(function (v) {
+            const n = String(v).match(/\d{1,3}/);
+            if (n && Number(n[0]) >= 1 && Number(n[0]) <= 120) cpPushHit(hits, 'age', n[0], note);
+        });
+    }
+
+    function cpScanEmbeddedJson(hits, text, note) {
+        const src = String(text || '');
+        if (src.indexOf('{') < 0) return;
+        let n = 0;
+        for (let i = 0; i < src.length && n < 12; i++) {
+            if (src.charAt(i) !== '{') continue;
+            let depth = 0;
+            let j = i;
+            let inStr = false;
+            let esc = false;
+            for (; j < src.length && j - i < 80000; j++) {
+                const c = src.charAt(j);
+                if (inStr) {
+                    if (esc) esc = false;
+                    else if (c === '\\') esc = true;
+                    else if (c === '"') inStr = false;
+                    continue;
+                }
+                if (c === '"') inStr = true;
+                else if (c === '{') depth += 1;
+                else if (c === '}') {
+                    depth -= 1;
+                    if (depth === 0) {
+                        try {
+                            cpWalkJson(hits, JSON.parse(src.slice(i, j + 1)), '');
+                            n += 1;
+                            i = j;
+                        } catch (error) {}
+                        break;
+                    }
+                }
             }
+        }
+    }
+
+    function cpLooksLikeLogLine(line) {
+        return /^(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9a-f:]+) \S+ \S+ \[[^\]]+\] "[A-Z]+ /i.test(String(line || '').trim());
+    }
+
+    function cpLooksLikeArtLine(line) {
+        const s = String(line || '');
+        const useful = (s.match(/[\p{L}\p{N}]/gu) || []).length;
+        if (useful >= 8) return false;
+        if (/[█░▓▀▄■□╔╗╚╝║╠╣═]/.test(s) && useful < 6) return true;
+        if (s.length >= 50) {
+            const noisy = (s.match(/[#%*=_\-|:+~.,;\\/<>]/g) || []).length;
+            if (useful < 10 && noisy / s.length > 0.42) return true;
+        }
+        return false;
+    }
+
+    function cpStripArt(line) {
+        return String(line || '')
+            .replace(/[█░▓▀▄■□╔╗╚╝║╠╣═┌┐└┘│┬┴┼]/g, ' ')
+            .replace(/[»↳]+/g, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+    }
+
+    function cpLooksLikeAddressLine(value) {
+        const s = String(value || '').replace(/\s+/g, ' ').trim();
+        if (s.length < 12 || s.length > 140) return false;
+        if (/https?:/i.test(s) || cpLooksLikeEmail(s)) return false;
+        if (!/\d/.test(s)) return false;
+        if (/(улиц|проспект|бульвар|переулок|\bдом\b|\bул\.|street|\bst\.|\bave\b|avenue|\broad\b|\brd\.|\bway\b|drive|\bdr\.|\blane|\bln\.|\bblvd\b|\brue\b|strasse|\bplaza\b|\bcourt\b|\bapt\b|\bsuite\b)/i.test(s)) return true;
+        if (/^\d{5,6}\s*,/.test(s)) return true;
+        return /\d{1,6}\s+[\p{L}].+\b(way|street|ave|road|drive|lane|blvd|court|улиц)/iu.test(s);
+    }
+
+    function cpPrepareText(text) {
+        const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        const logLines = [];
+        const kept = [];
+        lines.forEach(function (line) {
+            if (cpLooksLikeArtLine(line)) return;
+            if (cpLooksLikeLogLine(line)) {
+                logLines.push(line);
+                return;
+            }
+            kept.push(cpStripArt(line));
+        });
+        return {
+            signals: kept.join('\n'),
+            logLines: logLines,
+            dropLogs: logLines.length >= 12
+        };
+    }
+
+    function cpScanLogLines(hits, lines, note) {
+        if (!lines || !lines.length || lines.length >= 12) return;
+        lines.forEach(function (line) {
+            const m = String(line).trim().match(/^((?:\d{1,3}\.){3}\d{1,3}|[0-9a-f:]+) \S+ (\S+) \[/);
+            if (!m) return;
+            if (!/^0\.|^255\.|127\.0\.0\.1|\.0\.0\.0$/.test(m[1]) && !/^(192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(m[1])) {
+                cpPushHit(hits, 'ip', m[1], note);
+            }
+            if (m[2] && m[2] !== '-' && cpLooksLikeHandle(m[2], true)) cpPushHit(hits, 'username', m[2], note);
+        });
+    }
+
+    function cpScanStandalone(hits, text, note) {
+        String(text || '').split('\n').forEach(function (line) {
+            const s = String(line || '').trim();
+            if (!s || s.length > 140 || /^https?:/i.test(s) || cpSplitPair(s)) return;
+            if (cpLooksLikeDate(s)) {
+                const y = Number((s.match(/(?:19|20)\d{2}/) || [])[0]);
+                if (y >= 1920 && y <= 2018) cpPushHit(hits, 'dob', s, note);
+                else if (y >= 2019) cpPushHit(hits, 'date', s, note);
+                return;
+            }
+            const titled = s.split(/\s+/);
+            const nameCase = titled.length >= 2 && titled.every(function (w) {
+                const core = w.replace(/[.'’-]/g, '');
+                if (!core) return false;
+                return core === core.toUpperCase() || /^[\p{Lu}][\p{Ll}'’-]*$/u.test(w) || /^[\p{Lu}]+$/u.test(core);
+            });
+            if (nameCase && !/[.?!]$/.test(s) && !/^(no|the|a|an|this|that|not)\b/i.test(s) && cpLooksLikePerson(s)) {
+                cpPushHit(hits, 'name', s.replace(/\s+/g, ' '), note);
+            } else if (cpLooksLikeAddressLine(s)) cpPushHit(hits, 'address', s, note);
         });
     }
 
     function cpScanAll(hits, text, note) {
-        cpScanPairs(hits, text, note);
-        cpScanPatterns(hits, text, note);
+        const prepared = cpPrepareText(text);
+        cpScanEmbeddedJson(hits, prepared.signals, note);
+        cpScanPairs(hits, prepared.signals, note);
+        cpScanStandalone(hits, prepared.signals, note);
+        cpScanPatterns(hits, prepared.signals, note);
+        cpScanLogLines(hits, prepared.logLines, note);
     }
 
-    function cpParseCsv(text) {
+    function cpParseCsv(text, sep) {
         const rows = [];
         let row = [];
         let cell = '';
         let q = false;
+        const delim = sep || ',';
         const src = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         for (let i = 0; i < src.length; i++) {
             const ch = src[i];
@@ -7218,7 +7631,7 @@
                 else if (ch === '"') q = false;
                 else cell += ch;
             } else if (ch === '"') q = true;
-            else if (ch === ',') { row.push(cell); cell = ''; }
+            else if (ch === delim) { row.push(cell); cell = ''; }
             else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
             else cell += ch;
         }
@@ -7230,8 +7643,12 @@
         if (val == null) return;
         if (typeof val !== 'object') {
             const seg = String(path || '').split('.').pop().replace(/\[\d+\]/g, '');
+            if (/^(timestamp|type|version|metadata|label|scatter|kind|category)$/i.test(seg)) return;
+            if (/^Mozilla\//i.test(String(val))) return;
             cpTakePair(hits, seg, String(val), 'json');
-            cpScanPatterns(hits, String(val), 'json');
+            if (cpLooksLikeEmail(String(val)) || /^https?:\/\//i.test(String(val)) || /^\+?\d[\d\s().-]{8,}$/.test(String(val))) {
+                cpScanPatterns(hits, String(val), 'json');
+            }
             return;
         }
         if (Array.isArray(val)) {
@@ -7240,13 +7657,18 @@
             });
             return;
         }
-        if (val.key != null && val.value != null) {
-            cpTakePair(hits, String(val.key), String(val.value), 'json');
+        if ((val.prenom || val.firstname || val.first_name || val.given_name) && (val.nom || val.lastname || val.last_name || val.family_name || val.apellido)) {
+            const full = cpCleanValue(String(val.prenom || val.firstname || val.first_name || val.given_name) + ' ' + String(val.nom || val.lastname || val.last_name || val.family_name || val.apellido));
+            if (cpLooksLikePerson(full) || cpLooksLikePersonLabeled(full)) cpPushHit(hits, 'name', full, 'json');
+        }
+        if ((val.label != null || val.key != null) && val.value != null && typeof val.value !== 'object') {
+            cpTakePair(hits, String(val.key != null ? val.key : val.label), String(val.value), 'json');
         }
         if (val.service && (val.username || val.handle || val.user || val.id)) {
             cpTakePair(hits, String(val.service), String(val.username || val.handle || val.user || val.id), 'json');
         }
         Object.keys(val).forEach(function (k) {
+            if (/^(label|key|value|type|scatter)$/i.test(k) && val.value != null && (val.label != null || val.key != null)) return;
             cpWalkJson(hits, val[k], path ? path + '.' + k : k);
         });
     }
@@ -7340,7 +7762,9 @@
     }
 
     function cpCsv(raw, hits) {
-        const grid = cpParseCsv(raw);
+        const first = String(raw || '').split(/\r?\n/, 1)[0] || '';
+        const sep = first.split('\t').length > first.split(',').length ? '\t' : ',';
+        const grid = cpParseCsv(raw, sep);
         if (grid.length >= 2) {
             const head = grid[0].map(function (c) { return String(c).trim(); });
             grid.slice(1).forEach(function (row) {
@@ -7369,6 +7793,8 @@
             if (h.platform) plat[h.value.toLowerCase()] = 1;
         });
         const kept = hits.filter(function (h) {
+            if (h.kind === 'name' && (cpLooksLikeTypeLabel(h.value) || !cpLooksLikePerson(h.value) && !cpLooksLikePersonLabeled(h.value))) return false;
+            if (h.kind === 'url' && cpLooksLikeJunkUrl(h.value)) return false;
             if (h.platform || h.kind !== 'username') return true;
             return !plat[h.value.toLowerCase()];
         });
@@ -7395,6 +7821,7 @@
         else if (kind === 'csv') cpCsv(raw, hits);
         else cpTxt(raw, hits);
         delete hits._seen;
+        delete hits._phone;
         return {
             id: uid('cp'),
             name: file.name || 'untitled',
@@ -7414,6 +7841,7 @@
             });
         });
         delete hits._seen;
+        delete hits._phone;
         return cpFinishHits(hits);
     }
 
@@ -8022,7 +8450,7 @@
         const drop = $('harvesterDrop');
         if (drop) {
             const strong = drop.querySelector('strong');
-            if (strong) strong.textContent = 'Drop a file, or write one here. The harvester keeps names, dates, usernames, accounts, passwords, and times.';
+            if (strong) strong.textContent = 'Drop or write a file. Keeps names, dates, accounts, passwords, times, age, and other key data.';
         }
         renderHarvester();
         schedulePersist();
@@ -8238,42 +8666,21 @@
         if (!st.ready) return;
         const hits = st.hits || [];
         const names = (st.files || []).map(function (f) { return f.name; }).join(', ');
-        if (host && host.addFact) {
+        if (host && (host.addFactSlot || host.addFact)) {
+            const file = host.addFactSlot || host.addFact;
             hits.forEach(function (hit) {
                 if (hit.kind === 'date' || hit.kind === 'time' || hit.kind === 'id') return;
                 const field = CP_FIELD[hit.kind];
                 if (!field) return;
-                const extra = { source: 'harvester', method: 'file-harvest' };
+                const extra = { source: 'harvester', method: 'file-harvest', quiet: true };
                 if (hit.platform) extra.platform = hit.platform;
-                host.addFact(field, hit.value, extra);
+                file(field, hit.value, extra);
             });
             const ids = hits.filter(function (h) { return h.kind === 'id'; }).map(function (h) { return h.value; });
-            if (ids.length) host.addFact('notes', 'IDs: ' + ids.join(', '), { source: 'harvester', method: 'file-harvest' });
+            if (ids.length) file('notes', 'IDs: ' + ids.join(', '), { source: 'harvester', method: 'file-harvest', quiet: true });
             const note = 'Harvested ' + names + ' — ' + hits.length + ' fact' + (hits.length === 1 ? '' : 's') + ' kept.';
-            host.addFact('notes', note, { source: 'harvester', method: 'file-harvest' });
-        }
-        if (typeof addEventAt === 'function') {
-            const dated = hits.filter(function (h) { return h.kind === 'date' || h.kind === 'dob'; });
-            if (!dated.length) {
-                const ev = addEventAt(220, -1, false);
-                if (ev) {
-                    ev.title = 'Harvested ' + (names || 'file');
-                    ev.body = hits.slice(0, 12).map(function (h) { return cpHitLabel(h) + ': ' + h.value; }).join('\n');
-                    ev.source = names;
-                    ev.date = new Date().toISOString().slice(0, 10);
-                }
-            } else {
-                dated.forEach(function (hit, i) {
-                    const ev = addEventAt(180 + i * 56, i % 2 ? 1 : -1, false);
-                    if (!ev) return;
-                    ev.title = hit.kind === 'dob' ? 'Birthday' : 'Dated fact';
-                    ev.body = hit.value;
-                    ev.source = names;
-                    ev.date = cpDateISO(hit.value) || hit.value;
-                    const timeHit = hits.find(function (h) { return h.kind === 'time'; });
-                    if (timeHit && i === 0) ev.time = timeHit.value;
-                });
-            }
+            file('notes', note, { source: 'harvester', method: 'file-harvest', quiet: true });
+            if (host.flushFacts) host.flushFacts();
         }
         schedulePersist();
         setPage('orbit');
@@ -10193,7 +10600,14 @@
         if (!event.target.closest('#timelineMenu')) hideTimelineMenu();
         const pageBtn = event.target.closest('[data-page]');
         if (pageBtn && pageBtn.closest('#pageSwitch')) {
-            setPage(pageBtn.getAttribute('data-page'));
+            const id = pageBtn.getAttribute('data-page');
+            if (id === 'casebook') {
+                const panel = $('profilePanel');
+                const toggle = $('profileToggle');
+                if (panel && !panel.classList.contains('open') && toggle) toggle.click();
+                return;
+            }
+            setPage(id);
             return;
         }
         const uploadBtn = event.target.closest('[data-wb-upload]');
@@ -11147,7 +11561,7 @@
         setPage(saved);
         renderAll();
         window.addEventListener('resize', function () {
-            syncPageSwitchThumb(true);
+            renderPageSwitch({ instant: true });
             syncBoardToolThumb(true);
             if (calState) placeCalendar();
             if (timeState) placeTimePicker();
@@ -11215,6 +11629,7 @@
         },
         syncBoardHistory: syncBoardHistory,
         pages: PAGES,
+        renderPageSwitch: renderPageSwitch,
         renderDatasheet: renderDatasheet,
         scheduleDatasheet: scheduleDatasheet,
         ingestHarvesterFiles: ingestHarvesterFiles

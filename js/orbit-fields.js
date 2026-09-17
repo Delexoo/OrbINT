@@ -2120,7 +2120,8 @@
         function duplicateField(sourceId, opts) {
             const source = fieldById(sourceId);
             if (!source) return;
-            if (typeof recordHistory === 'function') recordHistory(true);
+            const quiet = !!(opts && opts.quiet);
+            if (!quiet && typeof recordHistory === 'function') recordHistory(true);
             const base = fieldBase(sourceId);
             const stock = fieldById(base);
             const id = uniqueDupId(base);
@@ -2138,13 +2139,15 @@
             const at = FIELDS.findIndex((field) => field.id === sourceId);
             FIELDS.splice(at < 0 ? FIELDS.length : at + 1, 0, buildAddedField(spec));
             saveAddedFields();
-            createNodes();
-            applyHiddenFields();
-            renderNodes();
-            if (typeof renderProfile === 'function') renderProfile(true);
-            updateHubProgress();
-            if (opts && opts.focus === 'sheet' && typeof focusSheetField === 'function') focusSheetField(id);
-            else focusOrbitField(id);
+            if (!quiet) {
+                createNodes();
+                applyHiddenFields();
+                renderNodes();
+                if (typeof renderProfile === 'function') renderProfile(true);
+                updateHubProgress();
+                if (opts && opts.focus === 'sheet' && typeof focusSheetField === 'function') focusSheetField(id);
+                else focusOrbitField(id);
+            }
             return id;
         }
 

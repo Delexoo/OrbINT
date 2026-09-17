@@ -598,6 +598,9 @@
             const dockPort = document.getElementById('dockPortfolio');
             if (dockPort) dockPort.setAttribute('aria-expanded', next ? 'true' : 'false');
             if (phone && !next && typeof kickOrbit === 'function') kickOrbit();
+            if (window.OrbINTCase && typeof OrbINTCase.renderPageSwitch === 'function') {
+                OrbINTCase.renderPageSwitch({ instant: true });
+            }
         }
 
         function latestFact(id) {
@@ -605,33 +608,126 @@
             return values[values.length - 1] || null;
         }
 
+        function factExtra(extra) {
+            if (!extra) return null;
+            const out = {};
+            Object.keys(extra).forEach((key) => {
+                if (key === 'quiet' || key === 'slot') return;
+                out[key] = extra[key];
+            });
+            return Object.keys(out).length ? out : null;
+        }
+
         function addFact(id, value, extra) {
             const clean = String(value || '').trim();
             if (!clean) return;
+            const meta = factExtra(extra);
+            const quiet = !!(extra && extra.quiet);
             profile.facts[id] = profile.facts[id] || [];
             const same = profile.facts[id].some((item) => {
                 if (item.value.toLowerCase() !== clean.toLowerCase()) return false;
-                if (extra && extra.platform) return item.platform === extra.platform;
+                if (meta && meta.platform) return item.platform === meta.platform;
                 return true;
             });
             if (same) {
-                if (extra) {
+                if (meta) {
                     const existing = profile.facts[id].find((item) => item.value.toLowerCase() === clean.toLowerCase());
-                    if (existing) Object.keys(extra).forEach((key) => { existing[key] = extra[key]; });
-                    saveProfile();
-                    renderProfile();
-                    renderNodes();
-                    recordHistory(true);
+                    if (existing) Object.keys(meta).forEach((key) => { existing[key] = meta[key]; });
+                    if (!quiet) {
+                        saveProfile();
+                        renderProfile();
+                        renderNodes();
+                        recordHistory(true);
+                    }
                 }
                 return;
             }
             const fact = { value: clean, addedAt: new Date().toISOString() };
-            if (extra) Object.keys(extra).forEach((key) => { fact[key] = extra[key]; });
+            if (meta) Object.keys(meta).forEach((key) => { fact[key] = meta[key]; });
             if (isNullField(id)) setFieldNull(id, false, true);
             profile.facts[id].push(fact);
+            if (quiet) return;
             saveProfile();
             renderProfile();
             renderNodes();
+            recordHistory(true);
+        }
+
+        function addFactSlot(baseId, value, extra) {
+            const clean = String(value || '').trim();
+            if (!clean) return;
+            extra = extra || {};
+            if (baseId === 'notes') {
+                const cur = latestFact('notes');
+                const prev = cur && String(cur.value || '').trim();
+                if (prev && prev.indexOf(clean) >= 0) return;
+                if (prev) {
+                    cur.value = prev + '\n' + clean;
+                    if (!extra.quiet) {
+                        saveProfile();
+                        renderProfile();
+                        renderNodes();
+                        recordHistory(true);
+                    }
+                    return;
+                }
+                addFact('notes', clean, extra);
+                return;
+            }
+            let base = baseId;
+            if (extra.platform && typeof fieldById === 'function' && fieldById(extra.platform)) {
+                base = extra.platform;
+            }
+            const ids = [];
+            function pushId(id) {
+                if (!id || ids.indexOf(id) >= 0) return;
+                if (typeof fieldById === 'function' && !fieldById(id)) return;
+                ids.push(id);
+            }
+            pushId(base);
+            if (base === 'email') pushId('email2');
+            if (base === 'phone') pushId('phone2');
+            if (typeof FIELDS !== 'undefined' && FIELDS && FIELDS.forEach) {
+                const root = typeof fieldBase === 'function' ? fieldBase(base) : base;
+                FIELDS.forEach((field) => {
+                    if (field && fieldBase(field.id) === root) pushId(field.id);
+                });
+            }
+            const lower = clean.toLowerCase();
+            for (let i = 0; i < ids.length; i++) {
+                const facts = (profile.facts && profile.facts[ids[i]]) || [];
+                if (facts.some((item) => item && String(item.value || '').toLowerCase() === lower)) {
+                    addFact(ids[i], clean, extra);
+                    return;
+                }
+            }
+            for (let i = 0; i < ids.length; i++) {
+                const cur = latestFact(ids[i]);
+                if (cur && String(cur.value || '').trim()) continue;
+                if (typeof showField === 'function') showField(ids[i]);
+                addFact(ids[i], clean, extra);
+                return;
+            }
+            if (ids.length >= 30) {
+                addFact(ids[ids.length - 1] || base, clean, extra);
+                return;
+            }
+            let newId = '';
+            if (typeof duplicateField === 'function') {
+                newId = duplicateField(ids[ids.length - 1] || base, { quiet: extra.quiet });
+            }
+            if (newId) addFact(newId, clean, extra);
+            else addFact(base, clean, extra);
+        }
+
+        function flushFacts() {
+            saveProfile();
+            if (typeof createNodes === 'function') createNodes();
+            if (typeof applyHiddenFields === 'function') applyHiddenFields();
+            if (typeof decorateNodes === 'function') decorateNodes();
+            renderProfile();
+            renderNodes();
+            if (typeof updateHubProgress === 'function') updateHubProgress();
             recordHistory(true);
         }
 

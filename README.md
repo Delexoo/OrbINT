@@ -25,7 +25,7 @@ It runs entirely in the browser. There is no account, no remote database, and no
 - **Orbit** — the subject at the hub, with fields for identity, contact, place, vehicles, infrastructure, and media
 - **Timeline** — a pan-and-zoom chronology of dated events
 - **Whiteboard** — sketches, sticky notes, and diagrams for the same case
-- **Harvester** — drop .txt, .md, .json, .html, .csv, or .xml; keep the tags and line the facts up for inspection
+- **Harvester** — drop a file or write one; keep names, dates, accounts, passwords, times, age, and other key data
 - **Case File** — a letter-style PDF of the particulars
 - **Toolkit** — searches that open from a filed value
 

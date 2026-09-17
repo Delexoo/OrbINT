@@ -4,7 +4,7 @@
         { id: 'orbit', label: 'OrbINT', kicker: 'Workspace', blurb: 'Orbit-style profile for names, usernames, emails, phones, domains, companies, and other identifiers.' },
         { id: 'timeline', label: 'Timeline', kicker: 'Chronology', blurb: 'Events and discoveries in order — who, when, evidence, and source.' },
         { id: 'whiteboard', label: 'Whiteboard', kicker: 'Diagram', blurb: 'Flowchart shapes and case cards on one board, including investigation playbooks.' },
-        { id: 'harvester', label: 'Harvester', kicker: 'Processor', blurb: 'Upload messy files in any layout. The harvester keeps names, dates, usernames, accounts, passwords, and times — and cuts the rest.' },
+        { id: 'harvester', label: 'Harvester', kicker: 'Processor', blurb: 'Upload messy files. Keeps names, dates, accounts, passwords, times, age, and other key data — and cuts the rest.' },
         { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' }
     ];
 
@@ -2456,6 +2456,20 @@
         return false;
     }
 
+    function isCompactNav() {
+        try { return window.matchMedia('(max-width: 820px)').matches; } catch (error) { return false; }
+    }
+
+    function pageSwitchItems() {
+        if (!isCompactNav()) return PAGES;
+        return [{ id: 'casebook', label: 'Casebook' }].concat(PAGES);
+    }
+
+    function pageSwitchActive() {
+        if (isCompactNav() && document.body.classList.contains('panel-open')) return 'casebook';
+        return page;
+    }
+
     function syncPageSwitchThumb(instant) {
         const wrap = $('pageSwitch');
         if (!wrap) return;
@@ -2481,21 +2495,25 @@
         const wrap = $('pageSwitch');
         if (!wrap) return;
         opts = opts || {};
+        const items = pageSwitchItems();
+        const active = pageSwitchActive();
         const existing = wrap.querySelectorAll('[data-page]');
-        if (existing.length !== PAGES.length) {
-            wrap.innerHTML = '<span class="page-switch-thumb" aria-hidden="true"></span>' + PAGES.map(function (item) {
-            const on = item.id === page;
-            return '<button type="button" role="tab" data-page="' + item.id + '"' +
-                (on ? ' aria-current="page" aria-selected="true"' : ' aria-selected="false"') +
-                '>' + esc(item.label) + '</button>';
-        }).join('');
+        const have = Array.prototype.map.call(existing, function (el) { return el.getAttribute('data-page'); }).join(',');
+        const want = items.map(function (item) { return item.id; }).join(',');
+        if (have !== want) {
+            wrap.innerHTML = '<span class="page-switch-thumb" aria-hidden="true"></span>' + items.map(function (item) {
+                const on = item.id === active;
+                return '<button type="button" role="tab" data-page="' + item.id + '"' +
+                    (on ? ' aria-current="page" aria-selected="true"' : ' aria-selected="false"') +
+                    '>' + esc(item.label) + '</button>';
+            }).join('');
             requestAnimationFrame(function () { syncPageSwitchThumb(true); });
             return;
         }
-        PAGES.forEach(function (item) {
+        items.forEach(function (item) {
             const btn = wrap.querySelector('[data-page="' + item.id + '"]');
             if (!btn) return;
-            const on = item.id === page;
+            const on = item.id === active;
             if (on) {
                 btn.setAttribute('aria-current', 'page');
                 btn.setAttribute('aria-selected', 'true');
