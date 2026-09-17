@@ -37,7 +37,10 @@
             idleLock: 'off',
             exportNoPhotos: false,
             stealthTab: false,
-            largeType: false
+            largeType: false,
+            investigatorMode: true,
+            shareApiUrl: 'http://127.0.0.1:8788',
+            collabWsUrl: 'http://127.0.0.1:8788'
         };
         const BOMB_DAYS = { '1d': 1, '3d': 3, '1w': 7, '2w': 14, '1m': 30, '3m': 90, '6m': 180, '12m': 365, '24m': 730 };
         const STEALTH_TITLE = 'Notes';
@@ -200,7 +203,8 @@
                     { value: 'orbit', label: 'Orbit' },
                     { value: 'timeline', label: 'Timeline' },
                     { value: 'whiteboard', label: 'Whiteboard' },
-                    { value: 'datasheet', label: 'Datasheet' }
+                    { value: 'compiler', label: 'Compiler' },
+                    { value: 'datasheet', label: 'Case File' }
                 ]
             }
         };
@@ -348,6 +352,7 @@
                 body.classList.toggle('is-curtain', !!appSettings.curtain);
                 body.classList.toggle('hide-tips', !!appSettings.hideTips);
                 body.classList.toggle('no-bg', !!appSettings.hideBackground);
+                body.classList.toggle('investigator-mode', appSettings.investigatorMode !== false);
             }
             root.classList.toggle('reduce-motion', !!appSettings.reduceMotion);
             root.classList.toggle('large-type', !!appSettings.largeType);
@@ -395,7 +400,8 @@
                 setLargeType: 'largeType',
                 setRememberPage: 'rememberPage',
                 setHideBg: 'hideBackground',
-                setExportNoPhotos: 'exportNoPhotos'
+                setExportNoPhotos: 'exportNoPhotos',
+                setInvestigator: 'investigatorMode'
             };
             if (bomb) bomb.checked = !!appSettings.logicBomb;
             bombPrevPeriod = appSettings.logicBombPeriod === 'now' ? '6m' : (appSettings.logicBombPeriod || '6m');
@@ -404,6 +410,10 @@
                 const el = document.getElementById(id);
                 if (el) el.checked = !!appSettings[map[id]];
             });
+            const api = document.getElementById('setShareApi');
+            const watch = document.getElementById('setCollabWs');
+            if (api && document.activeElement !== api) api.value = appSettings.shareApiUrl || '';
+            if (watch && document.activeElement !== watch) watch.value = appSettings.collabWsUrl || '';
             updateBombCountdown();
             syncSetPickLabels();
         }
@@ -428,6 +438,7 @@
                 body.classList.toggle('is-curtain', !!appSettings.curtain);
                 body.classList.toggle('hide-tips', !!appSettings.hideTips);
                 body.classList.toggle('no-bg', !!appSettings.hideBackground);
+                body.classList.toggle('investigator-mode', appSettings.investigatorMode !== false);
             }
             root.classList.toggle('reduce-motion', !!appSettings.reduceMotion);
             root.classList.toggle('large-type', !!appSettings.largeType);

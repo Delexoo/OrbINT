@@ -1502,6 +1502,7 @@
         const FIND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>';
         const DEEP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>';
         const MORE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';
+        const DUP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/><path d="M14.5 12.5v6M11.5 15.5h6"/></svg>';
 
         function fieldBase(id) {
             const field = fieldById(id);
@@ -1846,7 +1847,7 @@
             if (window.__orbintToolkitWait) return window.__orbintToolkitWait;
             window.__orbintToolkitWait = new Promise(function (resolve) {
                 const s = document.createElement('script');
-                s.src = 'osint-tools.js?v=166';
+                s.src = 'osint-tools.js?v=218';
                 s.onload = function () {
                     try { window.dispatchEvent(new Event('orbint-toolkit-ready')); } catch (error) {}
                     resolve(window.OSINT_TOOLKIT || null);
@@ -1985,6 +1986,7 @@
         }
 
         function hideField(id) {
+            if (typeof recordHistory === 'function') recordHistory(true);
             hiddenFields.add(id);
             FIELDS.forEach((field) => {
                 if (isDescendantOf(field.id, id)) hiddenFields.add(field.id);
@@ -2009,14 +2011,29 @@
             const groups = GROUPS.map((group) => ({
                 id: group.id,
                 label: group.label,
-                fields: group.fields.slice()
+                fields: []
             }));
+            const placed = {};
+            function place(gid, id) {
+                if (!id || placed[id]) return;
+                const group = groups.find((item) => item.id === gid) || groups.find((item) => item.id === 'custom');
+                if (!group) return;
+                group.fields.push(id);
+                placed[id] = true;
+            }
+            GROUPS.forEach((group) => {
+                group.fields.forEach((id) => {
+                    place(group.id, id);
+                    FIELDS.forEach((field) => {
+                        if (!field || placed[field.id]) return;
+                        if (field.id === id) return;
+                        if (fieldBase(field.id) === id) place(group.id, field.id);
+                    });
+                });
+            });
             FIELDS.forEach((field) => {
-                if (groups.some((group) => group.fields.indexOf(field.id) !== -1)) return;
-                const gid = fieldGroupId(field);
-                let group = groups.find((item) => item.id === gid);
-                if (!group) group = groups.find((item) => item.id === 'custom');
-                if (group) group.fields.push(field.id);
+                if (!field || placed[field.id]) return;
+                place(fieldGroupId(field), field.id);
             });
             return groups;
         }
@@ -2100,9 +2117,10 @@
             });
         }
 
-        function duplicateField(sourceId) {
+        function duplicateField(sourceId, opts) {
             const source = fieldById(sourceId);
             if (!source) return;
+            if (typeof recordHistory === 'function') recordHistory(true);
             const base = fieldBase(sourceId);
             const stock = fieldById(base);
             const id = uniqueDupId(base);
@@ -2123,9 +2141,11 @@
             createNodes();
             applyHiddenFields();
             renderNodes();
-            renderProfile();
+            if (typeof renderProfile === 'function') renderProfile(true);
             updateHubProgress();
-            focusOrbitField(id);
+            if (opts && opts.focus === 'sheet' && typeof focusSheetField === 'function') focusSheetField(id);
+            else focusOrbitField(id);
+            return id;
         }
 
         function installOrbitField(spec) {
@@ -2611,6 +2631,8 @@
                 '<button type="button" data-field-act="hide">Remove field</button>' +
                 (hiddenFields.size ? '<div class="field-sep"></div><button type="button" data-field-act="restore">Show all fields</button>' : '');
             menu.dataset.field = fieldId;
+            menu.dataset.peer = '';
+            menu.dataset.actLock = '';
             menu.hidden = false;
             const mapRect = stage.getBoundingClientRect();
             const left = event.clientX - mapRect.left;
@@ -2804,6 +2826,7 @@
                 '<button type="button" class="field-danger" data-field-act="reset">Reset</button>';
             menu.dataset.field = '';
             menu.dataset.peer = '';
+            menu.dataset.actLock = '';
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -2854,6 +2877,7 @@
                 '<button type="button" data-field-act="recenter">Recenter map</button>';
             menu.dataset.field = '';
             menu.dataset.peer = '';
+            menu.dataset.actLock = '';
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -2875,6 +2899,7 @@
                 '<button type="button" class="field-danger" data-field-act="delete-profile" data-link-id="' + escapeHtml(peerId) + '"' + (canDelete ? '' : ' disabled') + '>Delete</button>';
             menu.dataset.field = '';
             menu.dataset.peer = peerId;
+            menu.dataset.actLock = '';
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -3061,17 +3086,124 @@
                         analysis: saved.analysis || '',
                         facts,
                         nulls: missingFieldIds(saved),
-                        customPlatforms: Array.isArray(saved.customPlatforms) ? saved.customPlatforms : []
+                        customPlatforms: Array.isArray(saved.customPlatforms) ? saved.customPlatforms : [],
+                        case: Object.assign({}, emptyCaseMeta(), saved.case || {}),
+                        audit: Array.isArray(saved.audit) ? saved.audit.slice(-200) : []
                     };
                 }
             } catch (error) {}
-            return { facts: emptyFacts(), analysis: '', nulls: [], customPlatforms: [] };
+            return { facts: emptyFacts(), analysis: '', nulls: [], customPlatforms: [], case: emptyCaseMeta(), audit: [] };
+        }
+
+        function emptyCaseMeta() {
+            return { number: '', offense: '', status: 'open', investigator: '', openedAt: '' };
+        }
+
+        const SHEET_PICKS = {
+            confidence: [
+                { value: '', label: 'Unrated' },
+                { value: 'confirmed', label: 'Confirmed' },
+                { value: 'probable', label: 'Probable' },
+                { value: 'possible', label: 'Possible' },
+                { value: 'unconfirmed', label: 'Unconfirmed' }
+            ],
+            method: [
+                { value: '', label: 'Method' },
+                { value: 'open-web', label: 'Open web' },
+                { value: 'public-records', label: 'Public records' },
+                { value: 'subscriber-db', label: 'Subscriber DB' },
+                { value: 'interview', label: 'Interview' },
+                { value: 'legal-process', label: 'Legal process' }
+            ],
+            status: [
+                { value: 'open', label: 'Open' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'closed', label: 'Closed' }
+            ],
+            offense: [
+                { value: 'Background check', label: 'Background check', hint: 'Public history, records, and reputation of a person.' },
+                { value: 'Due diligence', label: 'Due diligence', hint: 'Verify facts about a person or company before a deal or hire.' },
+                { value: 'Person of interest', label: 'Person of interest', hint: 'Someone tied to the inquiry who has not been charged.' },
+                { value: 'Missing person', label: 'Missing person', hint: 'Find someone whose whereabouts are unknown.' },
+                { value: 'Open-source review', label: 'Open-source review', hint: 'Research from public sites, posts, and records only.' },
+                { value: 'Intellectual property', label: 'Intellectual property', hint: 'Misuse of trademarks, copyrights, patents, or trade secrets.' },
+                { value: 'Workplace inquiry', label: 'Workplace inquiry', hint: 'Internal review of an employee or workplace issue.' },
+                { sep: true },
+                { value: 'Murder', label: 'Murder', hint: 'Unlawful killing carried out with intent.' },
+                { value: 'Homicide', label: 'Homicide', hint: 'A killing of one person by another, including murder and manslaughter.' },
+                { value: 'Manslaughter', label: 'Manslaughter', hint: 'Unlawful killing without a prior intent to murder.' },
+                { value: 'Attempted murder', label: 'Attempted murder', hint: 'Trying to kill someone but not succeeding.' },
+                { value: 'Assault', label: 'Assault', hint: 'Unlawful threat or attempt to cause physical harm.' },
+                { value: 'Aggravated assault', label: 'Aggravated assault', hint: 'Assault with a weapon or that causes serious injury.' },
+                { value: 'Kidnapping', label: 'Kidnapping', hint: 'Taking or holding someone against their will.' },
+                { value: 'Robbery', label: 'Robbery', hint: 'Theft from a person using force or the threat of force.' },
+                { value: 'Sexual assault', label: 'Sexual assault', hint: 'Sexual contact without consent.' },
+                { value: 'Human trafficking', label: 'Human trafficking', hint: 'Exploiting people through force, fraud, or coercion.' },
+                { value: 'Domestic violence', label: 'Domestic violence', hint: 'Abuse by a current or former partner or family member.' },
+                { value: 'Terrorism', label: 'Terrorism', hint: 'Violence meant to intimidate a population or government.' },
+                { sep: true },
+                { value: 'Harassment', label: 'Harassment', hint: 'Repeated unwanted contact that causes distress.' },
+                { value: 'Stalking', label: 'Stalking', hint: 'Repeated following or watching that causes fear.' },
+                { value: 'Threats', label: 'Threats', hint: 'Words or acts meant to frighten someone with harm.' },
+                { value: 'Extortion', label: 'Extortion', hint: 'Forcing someone to pay or act by using threats.' },
+                { value: 'Theft', label: 'Theft', hint: 'Taking property without permission.' },
+                { value: 'Burglary', label: 'Burglary', hint: 'Entering a building to commit a crime, usually theft.' },
+                { value: 'Arson', label: 'Arson', hint: 'Deliberately setting fire to property.' },
+                { value: 'Fraud', label: 'Fraud', hint: 'Deceiving someone for money or other gain.' },
+                { value: 'Identity theft', label: 'Identity theft', hint: 'Using someone else\'s identity without permission.' },
+                { value: 'Impersonation', label: 'Impersonation', hint: 'Pretending to be another person.' },
+                { value: 'Forgery', label: 'Forgery', hint: 'Making or altering a document in order to deceive.' },
+                { value: 'Embezzlement', label: 'Embezzlement', hint: 'Stealing money or property you were trusted to handle.' },
+                { value: 'Money laundering', label: 'Money laundering', hint: 'Hiding the source of money from crime.' },
+                { value: 'Corruption', label: 'Corruption', hint: 'Abuse of power for private gain.' },
+                { value: 'Drug trafficking', label: 'Drug trafficking', hint: 'Selling, moving, or distributing illegal drugs.' },
+                { value: 'Weapons offense', label: 'Weapons offense', hint: 'Unlawful possession, sale, or use of a weapon.' },
+                { value: 'Cybercrime', label: 'Cybercrime', hint: 'Crime committed with computers, accounts, or networks.' },
+                { value: 'Conspiracy', label: 'Conspiracy', hint: 'An agreement between people to commit a crime.' },
+                { value: 'Organized crime', label: 'Organized crime', hint: 'Crime carried out by a structured group.' }
+            ]
+        };
+
+        function sheetPickLabel(kind, value) {
+            const list = SHEET_PICKS[kind] || [];
+            const hit = list.find(function (item) { return item.value === String(value || ''); });
+            if (hit) return hit.label;
+            return (list[0] && list[0].label) || '';
+        }
+
+        function investigatorModeOn() {
+            try {
+                if (typeof OrbINTSettings !== 'undefined' && OrbINTSettings.get) {
+                    return OrbINTSettings.get('investigatorMode') !== false;
+                }
+            } catch (error) {}
+            return true;
+        }
+
+        function investigatorHidesField(field) {
+            if (!investigatorModeOn() || !field) return false;
+            const base = fieldBase(field.id);
+            return /^(password|pin|seedphrase|privatekey|apikey|session)$/.test(base);
+        }
+
+        function appendCaseAudit(act, field, note) {
+            if (!profile) return;
+            if (!Array.isArray(profile.audit)) profile.audit = [];
+            profile.audit.push({
+                at: new Date().toISOString(),
+                act: String(act || ''),
+                field: String(field || ''),
+                note: String(note || '').slice(0, 180)
+            });
+            if (profile.audit.length > 200) profile.audit = profile.audit.slice(-200);
         }
 
         profile = loadProfile();
         if (!profile.facts) profile.facts = emptyFacts();
         if (!Array.isArray(profile.nulls)) profile.nulls = [];
         if (!Array.isArray(profile.customPlatforms)) profile.customPlatforms = [];
+        profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+        if (!Array.isArray(profile.audit)) profile.audit = [];
         restoreFilledOptionalPresets();
 
         const mediaStore = {};
@@ -3294,6 +3426,10 @@
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(slim)); } catch (retry) {}
             }
             if (typeof queueLibrarySync === 'function') queueLibrarySync();
+            if (window.OrbINTShare && typeof OrbINTShare.push === 'function' && !OrbINTShare.readonly()) {
+                clearTimeout(saveProfile.shareTimer);
+                saveProfile.shareTimer = setTimeout(function () { OrbINTShare.push(); }, 1100);
+            }
         }
 
         const history = { past: [], future: [], applying: false, timer: 0 };
@@ -3304,7 +3440,9 @@
                 facts: slimFactsForStorage(profile.facts || emptyFacts()),
                 nulls: Array.isArray(profile.nulls) ? profile.nulls.slice() : [],
                 missing: Array.isArray(profile.nulls) ? profile.nulls.slice() : [],
-                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : []
+                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : [],
+                case: Object.assign({}, emptyCaseMeta(), profile.case || {}),
+                audit: Array.isArray(profile.audit) ? profile.audit.slice(-200) : []
             };
         }
 
@@ -3386,6 +3524,8 @@
                 layout: null,
                 peerHomes: {},
                 customPlatforms: [],
+                case: emptyCaseMeta(),
+                audit: [],
                 investigation: null
             };
         }
@@ -3666,6 +3806,8 @@
                 layout: currentLayoutSnapshot(),
                 peerHomes: Object.assign({}, peerHomes),
                 customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : [],
+                case: Object.assign({}, emptyCaseMeta(), (profile && profile.case) || (prev && prev.case) || {}),
+                audit: Array.isArray(profile && profile.audit) ? profile.audit.slice(-200) : ((prev && prev.audit) || []),
                 investigation: (window.OrbINTCase && typeof OrbINTCase.snapshot === 'function')
                     ? OrbINTCase.snapshot()
                     : ((prev && prev.investigation) || null)
@@ -3920,6 +4062,8 @@
                 profile.analysis = entry.analysis || '';
                 profile.nulls = missingFieldIds(entry);
                 profile.customPlatforms = Array.isArray(entry.customPlatforms) ? entry.customPlatforms : [];
+                profile.case = Object.assign({}, emptyCaseMeta(), entry.case || {});
+                profile.audit = Array.isArray(entry.audit) ? entry.audit.slice(-200) : [];
                 restoreFilledOptionalPresets();
                 try {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.assign({}, profile, {

@@ -4,7 +4,8 @@
         { id: 'orbit', label: 'OrbINT', kicker: 'Workspace', blurb: 'Orbit-style profile for names, usernames, emails, phones, domains, companies, and other identifiers.' },
         { id: 'timeline', label: 'Timeline', kicker: 'Chronology', blurb: 'Events and discoveries in order — who, when, evidence, and source.' },
         { id: 'whiteboard', label: 'Whiteboard', kicker: 'Diagram', blurb: 'Flowchart shapes and case cards on one board, including investigation playbooks.' },
-        { id: 'datasheet', label: 'Datasheet', kicker: 'Record', blurb: 'Preview of the printed case record, as it appears in the PDF.' }
+        { id: 'compiler', label: 'Compiler', kicker: 'Processor', blurb: 'Upload messy files. Keep every tag and symbol — the compiler only rearranges them so the facts are easier to read.' },
+        { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' }
     ];
 
     const FLOW_PRESETS = [
@@ -306,6 +307,7 @@
             timelineView: { x: 48, y: 40, z: 1 },
             evidence: [],
             whiteboard: { x: 0, y: 0, z: 1, nodes: [], links: [], grid: true },
+            compiler: { files: [], hits: [], ready: false },
             flowchart: { preset: 'username', checks: {}, notes: {} },
             intel: { host: '' }
         };
@@ -2228,6 +2230,12 @@
                 next.flowchart.notes = raw.flowchart.notes && typeof raw.flowchart.notes === 'object' ? raw.flowchart.notes : {};
             }
             next.intel.host = (raw.intel && raw.intel.host) || '';
+            if (raw.compiler && typeof raw.compiler === 'object') {
+                next.compiler.files = Array.isArray(raw.compiler.files) ? raw.compiler.files : [];
+                next.compiler.hits = Array.isArray(raw.compiler.hits) ? raw.compiler.hits : [];
+                next.compiler.ready = !!raw.compiler.ready;
+                next.compiler.at = raw.compiler.at || '';
+            }
         }
         data = next;
         selectedEvent = '';
@@ -2346,8 +2354,12 @@
         if (map) map.setAttribute('aria-hidden', page === 'orbit' ? 'false' : 'true');
         renderPageSwitch({ instant: !slideTab });
         syncDock();
-        if (page === 'timeline') renderTimeline();
+        if (page === 'timeline') {
+            renderTimeline();
+            syncTimelineIsland();
+        }
         if (page === 'whiteboard') renderWhiteboard();
+        if (page === 'compiler') renderCompiler();
         if (page === 'datasheet') renderDatasheet();
         try {
             if (window.OrbINTSettings && OrbINTSettings.get('rememberPage') === false) {
@@ -2369,7 +2381,8 @@
         const labels = {
             orbit: 'Add field',
             timeline: 'Add event',
-            whiteboard: 'Add shape'
+            whiteboard: 'Add shape',
+            compiler: 'Upload file'
         };
         const label = labels[page] || labels.orbit;
         if (add) {
@@ -2382,6 +2395,7 @@
             connect.setAttribute('data-tip', 'Connect cards');
             connect.setAttribute('aria-label', 'Connect cards');
         }
+        if (typeof paintDatasheetSpoilers === 'function') paintDatasheetSpoilers();
         syncBoardHistory();
     }
 
@@ -2404,6 +2418,10 @@
                 x: ((w / 2) - board.x) / z - 74,
                 y: ((h / 2) - board.y) / z - 74
             });
+            return true;
+        }
+        if (page === 'compiler') {
+            openCompilerPicker();
             return true;
         }
         return false;
@@ -2490,7 +2508,11 @@
                     group: field.group || '',
                     value: String(item.value).trim(),
                     platform: item.platform || '',
-                    platformLabel: (platformById(item.platform) || {}).label || item.platformLabel || ''
+                    platformLabel: (platformById(item.platform) || {}).label || item.platformLabel || '',
+                    source: item.source || '',
+                    confidence: item.confidence || '',
+                    method: item.method || '',
+                    capturedAt: item.capturedAt || item.addedAt || ''
                 });
             });
         });
@@ -2516,6 +2538,7 @@
         renderPageSwitch();
         renderTimeline();
         renderWhiteboard();
+        renderCompiler();
         renderDatasheet();
     }
 

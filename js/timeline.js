@@ -18,6 +18,7 @@
     let tlAimX = 220;
     let tlNodeObs = null;
     let tlStemRedraw = 0;
+    let tlStemTrack = 0;
 
     function tlHitFromPoint(x, y, selector) {
         if (typeof document.elementsFromPoint !== 'function') return null;
@@ -59,6 +60,44 @@
             tlCardH(ev) || 0,
             86
         );
+    }
+
+    function tlNaturalH(el) {
+        if (!el) return 86;
+        const card = el.querySelector('.tl-card');
+        const sized = el.classList.contains('is-sized');
+        if (!sized) {
+            return Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+        }
+        const extra = el.querySelector('.tl-extra-inner');
+        const clipped = (extra && extra.scrollHeight > extra.clientHeight + 1) ||
+            (card && card.scrollHeight > card.clientHeight + 1);
+        if (!clipped) {
+            return Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+        }
+        const prev = el.style.height;
+        el.classList.remove('is-sized');
+        el.style.height = 'auto';
+        const h = Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+        el.style.height = prev;
+        el.classList.add('is-sized');
+        return h;
+    }
+
+    function tlFitNodeHeight(el, ev) {
+        if (!el || !ev || ev.mini) return tlNodeH(el, ev);
+        const natural = tlNaturalH(el);
+        const locked = tlCardH(ev);
+        if (locked) {
+            if (natural > locked + 1) {
+                ev.h = Math.min(TL_CARD_MAX_H, natural);
+                el.style.height = ev.h + 'px';
+                el.classList.add('is-sized');
+                return ev.h;
+            }
+            return Math.max(locked, tlNodeH(el, ev));
+        }
+        return natural;
     }
 
     function tlFacingSide(top, h, stored) {
@@ -157,6 +196,18 @@
         syncTimelineIsland();
     }
 
+    function hideTimelineIsland(instant) {
+        const island = $('timelineIsland');
+        if (!island) return;
+        const alreadyOut = island.classList.contains('is-out') && !island.classList.contains('is-on');
+        if (alreadyOut && !instant) return;
+        island.classList.remove('is-on', 'is-connect');
+        island.classList.add('is-out');
+        island.setAttribute('aria-hidden', 'true');
+        clearTimeout(tlIslandHide);
+        if (instant || reduceMotion()) return;
+    }
+
     function syncTimelineIsland() {
         const island = $('timelineIsland');
         const label = $('timelineIslandText');
@@ -167,17 +218,27 @@
         }
         if (!island) return;
         const connecting = !!timelineConnectOn;
+        const empty = !(data.timeline && data.timeline.length);
+        if (!connecting && !empty) {
+            hideTimelineIsland();
+            return;
+        }
+        clearTimeout(tlIslandHide);
         const text = connecting
             ? (connectFrom ? 'Click the second card to connect them.' : 'Click two cards to connect them.')
             : 'Click the number line to add a card';
-        if (label && label.textContent !== text) label.textContent = text;
+        if (label) label.textContent = text;
         island.classList.toggle('is-connect', connecting);
         island.hidden = false;
+        island.removeAttribute('hidden');
         island.setAttribute('aria-hidden', 'false');
-        clearTimeout(tlIslandHide);
+        if (island.classList.contains('is-on') && !island.classList.contains('is-out')) return;
+        island.classList.remove('is-on');
+        island.classList.add('is-out');
+        void island.offsetWidth;
         requestAnimationFrame(function () {
-            island.classList.add('is-on');
             island.classList.remove('is-out');
+            island.classList.add('is-on');
         });
     }
 
@@ -252,7 +313,7 @@
         const items = (data.timeline || []).map(function (ev) {
             const el = list.querySelector('[data-event="' + ev.id + '"]');
             if (!el || el.classList.contains('is-out') || el.classList.contains('is-moving') || el.classList.contains('is-resizing')) return null;
-            const h = tlNodeH(el, ev);
+            const h = tlFitNodeHeight(el, ev);
             const w = el.offsetWidth || tlCardW(ev);
             const left = parseFloat(el.style.left);
             const top = parseFloat(el.style.top);
@@ -388,6 +449,43 @@
         return { y: y, m: m, d: d };
     }
 
+    function parseCalAny(value) {
+        const exact = parseCalIso(value);
+        if (exact) return exact;
+        const d = new Date(value);
+        if (!Number.isFinite(d.getTime())) return null;
+        return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+    }
+
+    function stampFromIso(iso) {
+        const d = iso ? new Date(iso) : null;
+        if (!d || !Number.isFinite(d.getTime())) return null;
+        return {
+            date: calIso(d.getFullYear(), d.getMonth(), d.getDate()),
+            h: d.getHours(),
+            m: d.getMinutes()
+        };
+    }
+
+    function isoFromStamp(dateIso, h, m) {
+        const parsed = parseCalIso(dateIso);
+        if (!parsed) return '';
+        const dt = new Date(parsed.y, parsed.m, parsed.d, ((h % 24) + 24) % 24, ((m % 60) + 60) % 60, 0, 0);
+        return dt.toISOString();
+    }
+
+    function readFactStamp(factId) {
+        return (host && host.getFactCaptured && host.getFactCaptured(factId)) || '';
+    }
+
+    function writeFactStamp(factId, iso) {
+        if (host && host.setFactCaptured) host.setFactCaptured(factId, iso || '');
+    }
+
+    function factStampLocked() {
+        return !!(host && host.readonly && host.readonly());
+    }
+
     function calNavSvg(dir) {
         return dir === 'prev'
             ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 9 12l5.5 6"/></svg>'
@@ -515,22 +613,29 @@
             return;
         }
         const eventId = anchor.getAttribute('data-tl-cal') || '';
+        const factId = anchor.getAttribute('data-fact-cal') || '';
+        if (factId && factStampLocked()) return;
         let value = '';
-        if (eventId) {
+        if (factId) {
+            const stamp = stampFromIso(readFactStamp(factId));
+            value = stamp ? stamp.date : '';
+        } else if (eventId) {
             const rec = (data.timeline || []).find(function (item) { return item.id === eventId; });
             value = rec ? (rec.date || '') : '';
         } else {
             value = ($('eventDate') && $('eventDate').value) || '';
         }
-        const parsed = parseCalIso(value);
+        const parsed = parseCalAny(value);
         const now = new Date();
+        if (host && host.closeSheetPick) host.closeSheetPick();
         closeTimePicker();
         closeTlInfoPop();
         closeCalendar();
         calState = {
             anchor: anchor,
             eventId: eventId,
-            field: eventId ? '' : 'eventDate',
+            factId: factId,
+            field: eventId || factId ? '' : 'eventDate',
             value: value,
             y: parsed ? parsed.y : now.getFullYear(),
             m: parsed ? parsed.m : now.getMonth(),
@@ -556,8 +661,21 @@
     function applyCalValue(iso) {
         if (!calState) return;
         const eventId = calState.eventId;
+        const factId = calState.factId;
         const field = calState.field;
         closeCalendar();
+        if (factId) {
+            if (!iso) {
+                writeFactStamp(factId, '');
+                return;
+            }
+            const prev = stampFromIso(readFactStamp(factId));
+            const now = new Date();
+            const h = prev ? prev.h : now.getHours();
+            const m = prev ? prev.m : now.getMinutes();
+            writeFactStamp(factId, isoFromStamp(iso, h, m));
+            return;
+        }
         if (eventId) {
             const rec = (data.timeline || []).find(function (item) { return item.id === eventId; });
             if (rec) {
@@ -730,23 +848,30 @@
             return;
         }
         const eventId = anchor.getAttribute('data-tl-time') || '';
-        const rec = findTimelineEvent(eventId);
+        const factId = anchor.getAttribute('data-fact-time') || '';
+        if (factId && factStampLocked()) return;
+        const rec = factId ? null : findTimelineEvent(eventId);
         const field = anchor.getAttribute('data-tl-time-for') || 'time';
         const slotId = anchor.getAttribute('data-note-id') || '';
         let parsed = null;
-        if (field === 'moreTime' && rec) {
+        if (factId) {
+            const stamp = stampFromIso(readFactStamp(factId));
+            if (stamp) parsed = { h: stamp.h, m: stamp.m };
+        } else if (field === 'moreTime' && rec) {
             const slot = (rec.moreTimes || []).find(function (item) { return item.id === slotId; });
             parsed = parseTimeParts(slot && slot.value);
         } else {
             parsed = parseTimeParts(rec && rec[field]);
         }
         const now = new Date();
+        if (host && host.closeSheetPick) host.closeSheetPick();
         closeCalendar();
         closeTlInfoPop();
         closeTimePicker();
         timeState = {
             anchor: anchor,
             eventId: eventId,
+            factId: factId,
             field: field,
             slotId: slotId,
             h: parsed ? parsed.h : now.getHours(),
@@ -853,6 +978,18 @@
 
     function commitTimeValue(clear) {
         if (!timeState) return;
+        if (timeState.factId) {
+            const factId = timeState.factId;
+            const prev = stampFromIso(readFactStamp(factId));
+            const now = new Date();
+            const date = prev ? prev.date : calIso(now.getFullYear(), now.getMonth(), now.getDate());
+            if (clear) {
+                writeFactStamp(factId, isoFromStamp(date, 0, 0));
+                return;
+            }
+            writeFactStamp(factId, isoFromStamp(date, timeState.h, timeState.m));
+            return;
+        }
         const rec = findTimelineEvent(timeState.eventId);
         if (!rec) return;
         rememberTimeline('time:' + rec.id);
@@ -1233,7 +1370,7 @@
             tlFocusAfter = { id: id, field: kind };
         }
         renderTimeline();
-        tickTlLayout(22, id);
+        tickTlLayout(28, id);
         schedulePersist();
     }
 
@@ -1360,9 +1497,11 @@
             });
             stackTimelineStems();
             drawTimelineAxis();
+            trackTimelineStems();
             bindTimelineFieldSizes(list);
             bindTimelineNodeSizes(list);
             applyTlFocusAfter(list);
+            tickTlLayout(12);
         });
         scheduleDatasheet();
     }
@@ -1419,7 +1558,20 @@
             tlStemRedraw = 0;
             stackTimelineStems();
             drawTimelineAxis();
+            trackTimelineStems();
         });
+    }
+
+    function trackTimelineStems() {
+        if (tlStemTrack) return;
+        const tick = function () {
+            tlStemTrack = 0;
+            drawTimelineAxis();
+            if (document.querySelector('#timelineList .tl-node.is-spawn, #timelineList .tl-node.is-moving, #timelineList .tl-node.is-resizing')) {
+                tlStemTrack = requestAnimationFrame(tick);
+            }
+        };
+        tlStemTrack = requestAnimationFrame(tick);
     }
 
     function bindTimelineNodeSizes(list) {
@@ -1434,7 +1586,7 @@
             });
             if (dirty) scheduleStemRedraw();
         });
-        list.querySelectorAll('.tl-node').forEach(function (el) { tlNodeObs.observe(el); });
+        list.querySelectorAll('.tl-node, .tl-node .tl-card').forEach(function (el) { tlNodeObs.observe(el); });
     }
 
     function formatWhen(ev) {
@@ -1478,13 +1630,29 @@
     }
 
     function tlCardBox(ev, el) {
-        const w = (el && el.offsetWidth) || tlCardW(ev);
-        const left = el ? (parseFloat(el.style.left) || el.offsetLeft || 0) : ((Number(ev.pinX) || 0) - w / 2);
-        const top = el ? (parseFloat(el.style.top) || el.offsetTop || 0) : (Number(ev.pinY) || 0);
-        const h = tlNodeH(el, ev);
+        const card = el && el.querySelector('.tl-card');
+        const w = Math.max(1, (card && card.offsetWidth) || (el && el.offsetWidth) || tlCardW(ev));
+        const h = Math.max(86, (card && card.offsetHeight) || tlNodeH(el, ev));
+        const left = el
+            ? (parseFloat(el.style.left) || el.offsetLeft || ((Number(ev.pinX) || 0) - w / 2))
+            : ((Number(ev.pinX) || 0) - w / 2);
+        const top = el
+            ? (parseFloat(el.style.top) || el.offsetTop || Number(ev.pinY) || 0)
+            : (Number(ev.pinY) || 0);
         const pin = left + w / 2;
-        const side = tlFacingSide(top, h, ev.side);
+        const side = tlFacingSide(top, h, ev && ev.side);
         return { id: ev.id, side: side, pin: pin, left: left, right: left + w, top: top, bottom: top + h };
+    }
+
+    function tlStemEnds(box, axisY) {
+        const side = box.side === 1 ? 1 : -1;
+        const glue = 5;
+        return {
+            side: side,
+            pin: box.pin,
+            tickY: side === 1 ? axisY + 22 : axisY - 22,
+            cardY: side === 1 ? box.top + glue : box.bottom - glue
+        };
     }
 
     function mergeTlBoxes(list) {
@@ -1532,18 +1700,15 @@
 
     function tlStemPoints(pin, startY, endY, selfId, boxes) {
         const down = endY > startY;
-        const lo = Math.min(startY, endY);
-        const hi = Math.max(startY, endY);
-        const dest = boxes.find(function (b) { return b.id === selfId; });
         const hits = boxes.filter(function (b) {
             if (b.id === selfId) return false;
             if (pin < b.left - 1 || pin > b.right + 1) return false;
-            return b.bottom > lo + 6 && b.top < hi - 6;
+            if (down) return b.top < endY - 8 && b.bottom > startY + 8;
+            return b.bottom > endY + 8 && b.top < startY - 8;
         });
         const merged = mergeTlBoxes(hits);
-        const pad = 14;
+        const pad = 16;
         const pts = [{ x: pin, y: startY }];
-        let lastAround = pin;
         merged.forEach(function (obs) {
             let enter;
             let leave;
@@ -1561,19 +1726,19 @@
             const rightX = obs.right + pad;
             let around = Math.abs(pin - leftX) <= Math.abs(rightX - pin) ? leftX : rightX;
             if (around < TL_ORIGIN_X - 8) around = rightX;
-            lastAround = around;
             pts.push({ x: pin, y: enter });
             pts.push({ x: around, y: enter });
             pts.push({ x: around, y: leave });
             pts.push({ x: pin, y: leave });
         });
-        if (lastAround !== pin && dest && Math.abs((pts[pts.length - 1] || {}).y - endY) < 28) {
-            pts.pop();
-            pts.push({ x: lastAround, y: endY });
+        const last = pts[pts.length - 1];
+        if (!last || last.x !== pin) pts.push({ x: pin, y: last ? last.y : startY });
+        const tail = pts[pts.length - 1];
+        if (!tail || Math.abs(tail.y - endY) > 0.5) pts.push({ x: pin, y: endY });
+        if (pts.length < 2) {
+            pts.push({ x: pin, y: startY });
             pts.push({ x: pin, y: endY });
-            return pts;
         }
-        pts.push({ x: pin, y: endY });
         return pts;
     }
 
@@ -1616,13 +1781,17 @@
             const outClass = leaving ? ' is-out' : '';
             parts.push('<line class="tl-pin' + outClass + '" data-tl-pin="' + esc(ev.id) + '" pathLength="1" x1="' + pin + '" y1="' + (y - 22) + '" x2="' + pin + '" y2="' + (y + 22) + '" stroke="#fafafa" stroke-width="1.6"/>');
             if (box) {
-                const toTop = Math.abs(box.top - y) <= Math.abs(box.bottom - y);
-                const cardY = toTop ? box.top : box.bottom;
-                const axisY = cardY >= y ? y + 22 : y - 22;
-                const pts = tlStemPoints(pin, axisY, cardY, ev.id, boxes);
+                const ends = tlStemEnds(box, y);
+                let pts = tlStemPoints(ends.pin, ends.tickY, ends.cardY, ev.id, boxes);
+                if (pts.length < 2) {
+                    pts = [{ x: ends.pin, y: ends.tickY }, { x: ends.pin, y: ends.cardY }];
+                }
+                pts[0] = { x: ends.pin, y: ends.tickY };
+                pts[pts.length - 1] = { x: ends.pin, y: ends.cardY };
                 pts.reverse();
-                const d = tlOrthoPath(pts, 10);
-                if (d) parts.push('<path class="tl-stem' + outClass + '" data-tl-stem="' + esc(ev.id) + '" pathLength="1" d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>');
+                let d = tlOrthoPath(pts, 10);
+                if (!d) d = 'M' + ends.pin + ' ' + ends.cardY + ' L' + ends.pin + ' ' + ends.tickY;
+                parts.push('<path class="tl-stem' + outClass + '" data-tl-stem="' + esc(ev.id) + '"' + (leaving ? ' pathLength="1"' : '') + ' d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/>');
             }
             if (ev.date) {
                 parts.push('<text class="tl-pin-date' + outClass + '" data-tl-pin-date="' + esc(ev.id) + '" x="' + pin + '" y="' + (y - 40) + '" text-anchor="middle" fill="#a1a1aa" font-size="11">' + esc(formatDayLabel(ev.date)) + '</text>');
@@ -1640,7 +1809,7 @@
                 const elA = nodes[ev.id];
                 const elB = nodes[b.id];
                 const leaving = !!(elA && elA.classList.contains('is-out')) || !!(elB && elB.classList.contains('is-out'));
-                parts.push('<path class="tl-card-link' + (leaving ? ' is-out' : '') + '" data-tl-link-a="' + esc(ev.id) + '" data-tl-link-b="' + esc(b.id) + '" pathLength="1" d="' + d + '" fill="none" stroke="#73737a" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" opacity="0.88" marker-end="url(#tl-card-arrow)"/>');
+                parts.push('<path class="tl-card-link' + (leaving ? ' is-out' : '') + '" data-tl-link-a="' + esc(ev.id) + '" data-tl-link-b="' + esc(b.id) + '"' + (leaving ? ' pathLength="1"' : '') + ' d="' + d + '" fill="none" stroke="#73737a" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" opacity="0.88" marker-end="url(#tl-card-arrow)"/>');
             });
         });
         svg.innerHTML = parts.join('');
@@ -1656,6 +1825,7 @@
     }
 
     function addEventAt(x, side, spawn) {
+        hideTimelineIsland();
         rememberTimeline();
         const pinX = clampTimelineX(x);
         const ev = {
@@ -1684,7 +1854,11 @@
         requestAnimationFrame(function () {
             const node = document.querySelector('[data-event="' + ev.id + '"]');
             if (node && spawn) {
-                node.addEventListener('animationend', function () { node.classList.remove('is-spawn'); }, { once: true });
+                node.addEventListener('animationend', function () {
+                    node.classList.remove('is-spawn');
+                    stackTimelineStems();
+                    drawTimelineAxis();
+                }, { once: true });
             }
             const title = node && node.querySelector('[data-tl-field="title"]');
             if (title) title.focus();

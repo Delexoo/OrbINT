@@ -65,16 +65,17 @@
             } catch (e) {}
         })();
     </script>
-    <script src="investigation.js?v=166" defer></script>
-    <script src="app.js?v=166" defer></script>
+    <script src="investigation.js?v=218" defer></script>
+    <script src="app.js?v=218" defer></script>
     <style>
         html[data-orbint-wipe] body { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="css/base.css?v=166">
-    <link rel="stylesheet" href="css/orbit.css?v=166">
-    <link rel="stylesheet" href="css/timeline.css?v=166">
-    <link rel="stylesheet" href="css/whiteboard.css?v=166">
-    <link rel="stylesheet" href="css/datasheet.css?v=166">
+    <link rel="stylesheet" href="css/base.css?v=218">
+    <link rel="stylesheet" href="css/orbit.css?v=218">
+    <link rel="stylesheet" href="css/timeline.css?v=218">
+    <link rel="stylesheet" href="css/whiteboard.css?v=218">
+    <link rel="stylesheet" href="css/compiler.css?v=218">
+    <link rel="stylesheet" href="css/datasheet.css?v=218">
 
 </head>
 <body data-page="orbit">
@@ -123,6 +124,21 @@
                     <button class="icon-btn" id="profileClose" type="button" aria-label="Close casebook">×</button>
                 </div>
                 <button type="button" class="dossier-add" id="dossierAdd" data-dossier-add>+ Add information</button>
+                <div class="case-file" id="caseFile">
+                    <input id="caseNumber" type="text" maxlength="48" placeholder="Case no." spellcheck="false" autocomplete="off" aria-label="Case number">
+                    <div class="case-offense">
+                        <input id="caseOffense" type="text" maxlength="80" placeholder="Offense / matter" spellcheck="false" autocomplete="off" aria-label="Offense">
+                        <button type="button" class="sheet-pick case-offense-pick" id="caseOffensePick" data-sheet-pick="offense" data-value="" aria-haspopup="listbox" aria-expanded="false" aria-label="Offense presets" title="Presets">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                        </button>
+                    </div>
+                    <button type="button" class="sheet-pick" id="caseStatus" data-sheet-pick="status" data-value="open" aria-haspopup="listbox" aria-expanded="false" aria-label="Case status">
+                        <span id="caseStatusLabel">Open</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <input id="caseInvestigator" type="text" maxlength="48" placeholder="Investigator" spellcheck="false" autocomplete="off" aria-label="Investigator">
+                </div>
+                <p class="share-readonly-banner" id="shareReadonlyBanner" hidden>View-only session. You can read this case while the host keeps it on.</p>
                 <div class="profile-socials" id="profileSocials" hidden></div>
                 <div class="coverage" hidden>
                     <div class="coverage-row">
@@ -150,7 +166,13 @@
     </aside>
 
     <div class="workspace" id="workspace">
-    <nav class="page-switch" id="pageSwitch" aria-label="Investigation pages" role="tablist"><span class="page-switch-thumb" aria-hidden="true"></span></nav>
+    <div class="work-nav" id="workNav">
+        <button class="casebook-btn map-toggle" id="profileToggle" type="button" aria-expanded="false" aria-controls="profilePanel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8l2 3h3v13H5V7h3z"/><path d="M8 4v3h8"/></svg>
+            <span>Casebook</span>
+        </button>
+        <nav class="page-switch" id="pageSwitch" aria-label="Investigation pages" role="tablist"><span class="page-switch-thumb" aria-hidden="true"></span></nav>
+    </div>
     <div class="work-stage">
     <!-- pages/orbit.html -->
     <main class="map" id="mapStage">
@@ -158,7 +180,6 @@
             <div class="map-grid-paper"></div>
             <div class="map-grid-spot"></div>
         </div>
-        <button class="btn map-toggle" id="profileToggle" type="button" aria-expanded="false" aria-controls="profilePanel">Casebook</button>
         <svg class="links" id="linkLayer"></svg>
         <svg class="links peer-links" id="peerLinkLayer"></svg>
         <div class="map-canvas" id="mapCanvas">
@@ -412,7 +433,7 @@
                 <div class="tl-follow" id="timelineFollow" hidden></div>
             </div>
             <div class="board-add-menu" id="timelineMenu" hidden></div>
-            <div class="tl-island" id="timelineIsland" role="status" aria-live="polite">
+            <div class="tl-island is-on" id="timelineIsland" role="status" aria-live="polite">
                 <span class="tl-island-ico tl-island-ico-hint" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M8 12v-3M16 12v-3"/><circle cx="12" cy="12" r="2"/></svg>
                 </span>
@@ -596,6 +617,43 @@
     </section>
     <!-- /pages/whiteboard.html -->
 
+    <!-- pages/compiler.html -->
+    <section class="work-page page-compiler" id="page-compiler" hidden>
+        <div class="cp-view" id="compilerView">
+            <div class="cp-bar" role="toolbar" aria-label="Compiler">
+                <span class="work-count" id="compilerCount">No file</span>
+                <span class="cp-rule" aria-hidden="true"></span>
+                <button type="button" id="compilerUploadBtn">Upload</button>
+                <div class="cp-dl">
+                    <button type="button" id="compilerDownloadBtn" disabled>Download</button>
+                    <div class="export-menu" id="compilerDownloadMenu" hidden>
+                        <button type="button" data-cp-fmt="txt">Plain text</button>
+                        <button type="button" data-cp-fmt="md">Markdown</button>
+                        <button type="button" data-cp-fmt="json">JSON</button>
+                        <button type="button" data-cp-fmt="html">HTML</button>
+                        <button type="button" data-cp-fmt="csv">CSV</button>
+                        <button type="button" data-cp-fmt="xml">XML</button>
+                    </div>
+                </div>
+                <button type="button" id="compilerInspectBtn" disabled>Inspect</button>
+            </div>
+            <div class="cp-drop" id="compilerDrop">
+                <strong>Drop a file</strong>
+                <span>Tags and symbols stay in the record.</span>
+                <span class="cp-kinds">.txt · .md · .json · .html · .csv · .xml</span>
+                <button type="button" class="work-ghost" id="compilerDropBtn">Choose files</button>
+            </div>
+            <div class="cp-result" id="compilerResult" hidden></div>
+            <div class="cp-load" id="compilerLoad" hidden>
+                <span class="cp-spin" aria-hidden="true"></span>
+                <strong id="compilerLoadTitle">Compiling</strong>
+                <span id="compilerLoadHint">Lining up the file…</span>
+            </div>
+        </div>
+        <input id="compilerFile" type="file" accept=".txt,.md,.json,.html,.htm,.csv,.xml,text/plain,text/markdown,application/json,text/html,text/csv,text/xml,application/xml" multiple hidden>
+    </section>
+    <!-- /pages/compiler.html -->
+
     <!-- pages/datasheet.html -->
     <section class="work-page page-datasheet" id="page-datasheet" hidden>
         <div class="ds-view" id="datasheetView"></div>
@@ -690,19 +748,38 @@
         <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
             <div class="share-top">
                 <div>
-                    <h2 id="shareTitle">Share OrbINT</h2>
-                    <p class="share-lead">Scan to open this site on another device.</p>
+                    <h2 id="shareTitle">Share</h2>
+                    <p class="share-lead">Send one encrypted link. Anyone with it can view only while you keep the session on.</p>
                 </div>
                 <button class="help-close" id="shareClose" type="button" aria-label="Close">×</button>
+            </div>
+            <div class="share-case">
+                <p class="share-kicker">Encrypted session</p>
+                <p class="share-collab-status" id="shareCollabStatus"></p>
+                <p class="share-collab-error" id="shareCollabError" hidden></p>
+                <div class="share-host" id="shareHostControls">
+                    <label class="set-row share-session-row">
+                        <span>
+                            <b>Live session</b>
+                            <small id="shareSessionHint">Off. Nobody can view anything.</small>
+                        </span>
+                        <span class="set-switch"><input id="shareSessionLive" type="checkbox"><i></i></span>
+                    </label>
+                    <div class="share-link">
+                        <p class="share-url" id="shareViewUrl">Turn the session on to share.</p>
+                        <button type="button" id="shareCopyView">Copy link</button>
+                    </div>
+                </div>
+                <p class="share-hint">Send one link. People can open it only while you keep the session on. End it, and the link shows nothing. The key stays after # — the server only stores ciphertext.</p>
             </div>
             <div class="share-qr-wrap">
                 <canvas id="shareQr" width="232" height="232" aria-label="QR code for this website"></canvas>
             </div>
             <div class="share-link">
                 <p class="share-url" id="shareUrl"></p>
-                <button type="button" id="shareCopy">Copy</button>
+                <button type="button" id="shareCopy">Copy site</button>
             </div>
-            <button type="button" class="share-native" id="shareNative">Share</button>
+            <button type="button" class="share-native" id="shareNative">Share site</button>
         </div>
     </div>
 
@@ -922,7 +999,7 @@
                     <label class="set-row">
                         <span>
                             <b>Remember last page</b>
-                            <small>Reopen Orbit, Timeline, Whiteboard, or Datasheet where you left off.</small>
+                            <small>Reopen Orbit, Timeline, Whiteboard, Compiler, or Case File where you left off.</small>
                         </span>
                         <span class="set-switch"><input id="setRememberPage" type="checkbox"><i></i></span>
                     </label>
@@ -948,6 +1025,37 @@
                     </div>
                 </section>
                 <section class="set-block">
+                    <h3>Investigation</h3>
+                    <div class="set-list">
+                    <label class="set-row">
+                        <span>
+                            <b>Investigator desk</b>
+                            <small>Case number, note, confidence, and collection method on facts. Hides login-stash fields.</small>
+                        </span>
+                        <span class="set-switch"><input id="setInvestigator" type="checkbox"><i></i></span>
+                    </label>
+                    </div>
+                </section>
+                <section class="set-block">
+                    <h3>Encrypted share</h3>
+                    <div class="set-list">
+                    <div class="set-field set-field-stack">
+                        <span>
+                            <b>Share API URL</b>
+                            <small>PUT/GET ciphertext only. Session on/off is also here. Example: http://127.0.0.1:8788 — from SHARE_API_URL in .env.</small>
+                        </span>
+                        <input id="setShareApi" class="set-text" type="url" placeholder="http://127.0.0.1:8788" spellcheck="false" autocomplete="off">
+                    </div>
+                    <div class="set-field set-field-stack">
+                        <span>
+                            <b>Live watch URL</b>
+                            <small>Optional SSE for live updates and session-ended. COLLAB_WS_URL in .env. Can match the share API host.</small>
+                        </span>
+                        <input id="setCollabWs" class="set-text" type="url" placeholder="http://127.0.0.1:8788" spellcheck="false" autocomplete="off">
+                    </div>
+                    </div>
+                </section>
+                <section class="set-block">
                     <h3>Data</h3>
                     <div class="set-list">
                     <label class="set-row">
@@ -963,9 +1071,19 @@
         </div>
         <div class="set-pick-menu" id="setPickMenu" hidden role="listbox"></div>
     </div>
+    <div class="set-pick-menu sheet-pick-menu" id="sheetPickMenu" hidden role="listbox"></div>
+    <div class="sheet-pick-tip" id="sheetPickTip" hidden role="tooltip"></div>
     <div class="cal-pop" id="calPop" hidden role="dialog" aria-label="Choose date"></div>
     <div class="cal-pop time-pop" id="timePop" hidden role="dialog" aria-label="Choose time"></div>
     <div class="cal-pop tl-info-pop" id="tlInfoPop" hidden role="dialog" aria-label="Add information"></div>
+
+    <div class="share-ended-curtain" id="shareEndedCurtain" hidden>
+        <div class="share-ended-card">
+            <div class="help-kicker">Encrypted session</div>
+            <h2>Session off</h2>
+            <p>The host turned this session off. Nothing in this file is available to view.</p>
+        </div>
+    </div>
 
     <div class="lock-curtain" id="lockCurtain" hidden>
         <div class="lock-card">
@@ -1152,7 +1270,7 @@
                         <div><b>OrbINT</b>The orbit workspace. File identifiers around the subject.</div>
                         <div><b>Timeline</b>A pan-and-zoom chronology. Click the axis to add an event. Type on a card, attach an image, drag the card to place it. Minimize tucks the extra fields. Connect cards draws a grey arrow between them. Recenter fits the axis.</div>
                         <div><b>Whiteboard</b>A canvas in OrbINT’s dark UI. Use the Selection tool and drag to select several shapes. Toolbar: lock, shapes, draw, text, image, eraser, connect, pre-sets. Drag to size a shape. The image tool makes a frame you fill. Paste an image anytime. Connect shapes shows every point. Ctrl+Z undoes.</div>
-                        <div><b>Datasheet</b>A print preview of the case record, laid out like the PDF.</div>
+                        <div><b>Case File</b>A print preview of the case record, laid out like the PDF.</div>
                     </div>
                 </section>
 
@@ -1205,6 +1323,10 @@
         </button>
         <button type="button" id="dockImport" data-tip="Import JSON" aria-label="Import JSON">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M5 20h14"/></svg>
+        </button>
+        <button type="button" id="dockSpoilers" data-dock-for="datasheet" data-tip="Show redacted" aria-label="Show redacted" aria-pressed="false">
+            <svg class="dock-ico-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.1A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.7 2.7"/><path d="M6.6 6.6A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/></svg>
+            <svg class="dock-ico-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
         <button type="button" id="dockReport" data-tip="Download Report" aria-label="Download Report">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
@@ -1276,6 +1398,7 @@
                 <button type="button" id="phoneToolkit">OSINT toolkit</button>
                 <button type="button" id="phoneExport">Export</button>
                 <button type="button" id="phoneImport">Import</button>
+                <button type="button" id="phoneSpoilers">Show redacted</button>
                 <button type="button" id="phoneReport">Download Report</button>
                 <button type="button" id="phoneInstall">Install app</button>
                 <a id="phoneDonate" href="https://buy.stripe.com/9B63cu3RE2ouaKgcHLcjS00" target="_blank" rel="noopener noreferrer">Donate</a>

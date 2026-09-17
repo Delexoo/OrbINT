@@ -1,4 +1,4 @@
-const pages = ['orbit', 'timeline', 'whiteboard', 'datasheet'];
+const pages = ['orbit', 'timeline', 'whiteboard', 'compiler', 'datasheet'];
 
 async function cdp(ws, method, params = {}, sessionId) {
     const id = cdp._n = (cdp._n || 0) + 1;

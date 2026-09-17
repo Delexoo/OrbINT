@@ -25,7 +25,8 @@ It runs entirely in the browser. There is no account, no remote database, and no
 - **Orbit** — the subject at the hub, with fields for identity, contact, place, vehicles, infrastructure, and media
 - **Timeline** — a pan-and-zoom chronology of dated events
 - **Whiteboard** — sketches, sticky notes, and diagrams for the same case
-- **Datasheet** — a letter-style PDF of the particulars
+- **Compiler** — drop .txt, .md, .json, .html, .csv, or .xml; keep the tags and line the facts up for inspection
+- **Case File** — a letter-style PDF of the particulars
 - **Toolkit** — searches that open from a filed value
 
 ## How it works
@@ -34,7 +35,7 @@ It runs entirely in the browser. There is no account, no remote database, and no
 2. Name the subject in the hub.
 3. Click a field, enter a value, and use the magnifying glass to search from it.
 4. Keep a timeline and a whiteboard as the case develops.
-5. Export JSON, or generate the datasheet, when you need a copy off the desk.
+5. Export JSON, or generate the case file, when you need a copy off the desk.
 
 Cases are stored in this browser. Clear site data and they are gone.
 

@@ -1,4 +1,4 @@
-/* PDF report (no OrbINT branding in the file) */
+/* PDF report */
 
     function pdfClean(text) {
         return String(text == null ? '' : text)
@@ -19,22 +19,8 @@
         return pdfClean(text).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
     }
 
-    var TIMES_W = {
-        32:250,33:333,34:408,35:500,36:500,37:833,38:778,39:333,40:333,41:333,42:500,43:564,44:250,45:333,46:250,47:278,
-        48:500,49:500,50:500,51:500,52:500,53:500,54:500,55:500,56:500,57:500,58:278,59:278,60:564,61:564,62:564,63:444,
-        64:921,65:722,66:667,67:667,68:722,69:611,70:556,71:722,72:722,73:333,74:389,75:722,76:611,77:889,78:722,79:722,
-        80:556,81:722,82:667,83:556,84:611,85:722,86:722,87:944,88:722,89:722,90:611,91:333,92:278,93:333,94:469,95:500,
-        96:333,97:444,98:500,99:444,100:500,101:444,102:333,103:500,104:500,105:278,106:278,107:500,108:278,109:778,110:500,111:500,
-        112:500,113:500,114:333,115:389,116:278,117:500,118:500,119:722,120:500,121:500,122:444,123:480,124:200,125:480,126:541
-    };
-
     function measurePdf(text, size) {
-        var w = 0;
-        var s = pdfClean(text);
-        for (var i = 0; i < s.length; i++) {
-            w += TIMES_W[s.charCodeAt(i)] || 500;
-        }
-        return w * size / 1000;
+        return pdfClean(text).length * size * 0.6;
     }
 
     function wrapPdf(text, maxW, size) {
@@ -127,7 +113,7 @@
     }
 
     var REPORT_HEAD = 'Open-source Reconnaissance Bureau of Intelligence';
-    var REPORT_HEAD_SIZE = 16;
+    var REPORT_HEAD_SIZE = 12;
     var REPORT_BANNER = 'AUTHORIZED USE ONLY -- INFORMATION SUBJECT TO VERIFICATION -- DO NOT TREAT UNVERIFIED FINDINGS AS ESTABLISHED FACT';
     var REPORT_NOTICE = [
         'This record is intended strictly for **authorized investigative, research, and analytical purposes**. Access, reproduction, disclosure, and distribution should be limited to individuals with a legitimate need to review the information contained herein.',
@@ -140,6 +126,13 @@
     var REPORT_CLOSE = [
         'This record is to be kept strictly confidential. It is issued for the use of the recipient only. Copying, forwarding, posting, printing for circulation, or any other reproduction, disclosure, or distribution of this file, in whole or in part, should be limited to individuals with a legitimate need to review it for **authorized investigative, research, and analytical purposes**. Recipients are required to store it securely and to destroy or return it when it is no longer required. Unauthorized disclosure of the particulars herein is to be avoided in every case.',
         'Nothing in this file should be treated as established fact unless independently verified. Information of material importance should be checked against its originating source, and where appropriate corroborated through additional independent and reliable sources, before any consequential action or conclusion is based upon it. This record should not be interpreted as establishing criminal activity, misconduct, intent, guilt, liability, or any other adverse conclusion. Analytical notes, suspected associations, and unresolved leads remain **information for consideration and further analysis** only.'
+    ];
+    var REPORT_CLOSE_TITLE = 'LIMITATION OF RELIANCE';
+    var REPORT_LIABILITY_TITLE = 'LIABILITY AND DISTRIBUTION DISCLAIMER';
+    var REPORT_LIABILITY = [
+        'This disclaimer serves as formal notice that the creator(s), developer(s), and contributors of OrbINT assume no responsibility or liability for the use, misuse, disclosure, reproduction, distribution, or dissemination of this document or the information contained within it once it has been generated, exported, downloaded, shared, or otherwise transferred outside of their control.',
+        'Responsibility for the lawful handling, verification, security, and distribution of this document rests solely with the individual or organization possessing or using it. The creator(s) of OrbINT shall not be held responsible for any unauthorized disclosure, improper use, reliance upon unverified information, or consequences arising from actions taken by users or third parties.',
+        'Generation of this document does not constitute verification, endorsement, or certification of the information contained herein.'
     ];
     var NICE_LABEL = {
         name: 'Name',
@@ -174,12 +167,42 @@
         Rectangle: 1, Capsule: 1, Document: 1, Line: 1, Arrow: 1, Embed: 1, 'Web Embed': 1
     };
 
-    function noteSource(origin) {
-        return '[' + origin + ']';
+    var CONF_LABEL = { confirmed: 'Confirmed', probable: 'Probable', possible: 'Possible', unconfirmed: 'Unconfirmed' };
+    var METHOD_LABEL = {
+        'open-web': 'Open web',
+        'public-records': 'Public records',
+        'subscriber-db': 'Subscriber DB',
+        interview: 'Interview',
+        'legal-process': 'Legal process'
+    };
+
+    function factBaseId(id) {
+        return String(id || '').replace(/:\d+$/, '').split(/[:_]/)[0];
+    }
+
+    function isRedactField(id) {
+        var base = factBaseId(id);
+        return /^(name|dob|age|phone|email|address|city|username|password|ip|plate|vin|crypto|image|notes)$/i.test(base)
+            || /(password|passwd|pin|ssn|seed|privatekey|apikey|session|passport|secret|token)/i.test(String(id || ''));
+    }
+
+    function prettyConfidence(value) {
+        return CONF_LABEL[value] || prettyPdfValue(value);
+    }
+
+    function prettyMethod(value) {
+        return METHOD_LABEL[value] || prettyPdfValue(value);
+    }
+
+    function prettyCaptured(iso) {
+        var d = new Date(iso);
+        if (!Number.isFinite(d.getTime())) return prettyPdfValue(iso);
+        return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) +
+            '  ' + d.toLocaleString([], { hour: 'numeric', minute: '2-digit' });
     }
 
     function reportFactLabel(item) {
-        var base = NICE_LABEL[item.id] || item.label || 'Item';
+        var base = NICE_LABEL[factBaseId(item.id)] || item.label || 'Item';
         return item.platformLabel ? item.platformLabel + ' / ' + base : base;
     }
 
@@ -188,15 +211,24 @@
         var used = {};
         var out = [];
         function take(item) {
-            if (item.id === 'notes') return;
+            if (factBaseId(item.id) === 'notes') return;
             var value = prettyPdfValue(item.value);
             if (!value) return;
-            out.push({ label: reportFactLabel(item), value: value });
+            out.push({
+                id: item.id,
+                label: reportFactLabel(item),
+                value: value,
+                source: prettyPdfValue(item.source),
+                confidence: prettyConfidence(item.confidence),
+                method: prettyMethod(item.method),
+                captured: item.capturedAt ? prettyCaptured(item.capturedAt) : '',
+                redact: isRedactField(item.id)
+            });
             used[item.id + '\0' + item.value] = true;
         }
         FIELD_ORDER.forEach(function (id) {
             facts.forEach(function (item) {
-                if (item.id === id && !used[item.id + '\0' + item.value]) take(item);
+                if (factBaseId(item.id) === id && !used[item.id + '\0' + item.value]) take(item);
             });
         });
         facts.forEach(function (item) {
@@ -205,27 +237,70 @@
         return out;
     }
 
-    function pushReportNote(notes, origin, text) {
+    function reportChronology() {
+        return numberedTimeline().map(function (ev) {
+            var title = prettyPdfValue(ev.title || '');
+            if (SKIP_TITLES[title]) title = '';
+            return {
+                date: prettyPdfValue(ev.date || ''),
+                time: prettyPdfValue(ev.time || ''),
+                title: title,
+                body: prettyPdfValue(ev.body || ''),
+                source: prettyPdfValue(ev.source || '')
+            };
+        }).filter(function (row) {
+            return row.date || row.time || row.body || row.title;
+        });
+    }
+
+    function redactKey(id, value) {
+        return String(id || '') + '|' + String(value || '').slice(0, 120);
+    }
+
+    function redactHtml(id, value) {
+        var text = String(value || '');
+        if (!text) return '<span class="ds-empty">--</span>';
+        if (!isRedactField(id)) return esc(text);
+        var key = redactKey(id, text);
+        var open = (typeof isRedactOpen === 'function' ? isRedactOpen(key) : (typeof dsRevealed !== 'undefined' && dsRevealed.has(key))) ? ' is-open' : '';
+        return '<button type="button" class="ds-redact' + open + '" data-redact="' + esc(key) + '" aria-label="Reveal redacted value">' +
+            '<span class="ds-redact-bar" aria-hidden="true"></span>' +
+            '<span class="ds-redact-val">' + esc(text) + '</span>' +
+            '</button>';
+    }
+
+    function redactPhotoHtml(src, wide) {
+        if (!src) return '';
+        var key = redactKey('image', src);
+        var open = (typeof isRedactOpen === 'function' ? isRedactOpen(key) : (typeof dsRevealed !== 'undefined' && dsRevealed.has(key))) ? ' is-open' : '';
+        return '<button type="button" class="ds-redact ds-redact-photo' + open + (wide ? ' is-wide' : '') + '" data-redact="' + esc(key) + '" aria-label="Reveal photograph">' +
+            '<span class="ds-redact-bar" aria-hidden="true"></span>' +
+            '<img src="' + esc(src) + '" alt="">' +
+            '</button>';
+    }
+
+    function pushReportNote(notes, text) {
         var t = prettyPdfValue(text);
         if (!t) return;
-        notes.push({ label: noteSource(origin), text: t });
+        if (notes.some(function (item) { return item.text === t; })) return;
+        notes.push({ text: t });
     }
 
     function reportNotes() {
         var notes = [];
         filedFacts().forEach(function (item) {
             if (item.id === 'notes' || /^notes?$/i.test(item.label || '')) {
-                pushReportNote(notes, 'OrbINT', item.value);
+                pushReportNote(notes, item.value);
             }
         });
-        pushReportNote(notes, 'OrbINT', profile().analysis);
+        pushReportNote(notes, profile().analysis);
         numberedTimeline().forEach(function (ev) {
             var title = String(ev.title || '').trim();
             if (SKIP_TITLES[title]) title = '';
             function addTl(text) {
                 var t = prettyPdfValue(text);
                 if (!t) return;
-                pushReportNote(notes, 'Timeline', title ? title + '. ' + t : t);
+                pushReportNote(notes, title ? title + '. ' + t : t);
             }
             addTl(ev.body);
             (ev.moreNotes || []).forEach(function (note) {
@@ -233,7 +308,7 @@
             });
         });
         (data.evidence || []).forEach(function (item) {
-            pushReportNote(notes, 'OrbINT', item && item.note);
+            pushReportNote(notes, item && item.note);
         });
         ((data.whiteboard && data.whiteboard.nodes) || []).forEach(function (node) {
             if (!node || node.type !== 'note') return;
@@ -243,32 +318,51 @@
             var bits = [];
             if (title) bits.push(title);
             if (body) bits.push(body);
-            pushReportNote(notes, 'Whiteboard', bits.join('. '));
+            pushReportNote(notes, bits.join('. '));
         });
         return notes;
     }
 
+    function reportCaseMeta() {
+        var rec = (profile() && profile().case) || {};
+        var status = pdfSafe(rec.status || 'open');
+        return {
+            number: pdfSafe(rec.number || ''),
+            offense: pdfSafe(rec.offense || ''),
+            status: status ? status.charAt(0).toUpperCase() + status.slice(1) : '',
+            investigator: pdfSafe(rec.investigator || ''),
+            openedAt: rec.openedAt ? prettyCaptured(rec.openedAt) : ''
+        };
+    }
+
     function reportDocument() {
+        var rec = reportCaseMeta();
         return {
             subject: subjectName(),
             dateLong: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
             notice: REPORT_NOTICE,
             close: REPORT_CLOSE,
+            closeTitle: REPORT_CLOSE_TITLE,
+            liabilityTitle: REPORT_LIABILITY_TITLE,
+            liability: REPORT_LIABILITY,
             banner: REPORT_BANNER,
+            case: rec,
             rows: reportOrderedFacts(),
             notes: reportNotes(),
+            chronology: reportChronology(),
             photos: collectReportPhotos()
         };
     }
 
-    function loadGreyPhoto(src) {
+    function loadReportPhoto(src, opts) {
+        opts = typeof opts === 'number' ? { max: opts } : (opts || {});
         return new Promise(function (resolve) {
             if (!src) { resolve(null); return; }
             function paint(img) {
                 try {
                     var nw = img.naturalWidth || img.width || 1;
                     var nh = img.naturalHeight || img.height || 1;
-                    var max = 360;
+                    var max = opts.max || 360;
                     var scale = Math.min(1, max / Math.max(nw, nh));
                     var w = Math.max(1, Math.round(nw * scale));
                     var h = Math.max(1, Math.round(nh * scale));
@@ -277,17 +371,17 @@
                     canvas.height = h;
                     var ctx = canvas.getContext('2d');
                     if (!ctx) { resolve(null); return; }
-                    ctx.filter = 'grayscale(100%) contrast(0.9) brightness(1.06)';
-                    ctx.drawImage(img, 0, 0, w, h);
-                    ctx.filter = 'none';
-                    ctx.fillStyle = 'rgba(118,118,118,0.22)';
+                    if (opts.paper) {
+                        ctx.fillStyle = opts.paper;
                     ctx.fillRect(0, 0, w, h);
+                    }
+                    ctx.drawImage(img, 0, 0, w, h);
                     canvas.toBlob(function (blob) {
                         if (!blob) { resolve(null); return; }
                         blob.arrayBuffer().then(function (buf) {
                             resolve({ bytes: new Uint8Array(buf), w: w, h: h });
                         }).catch(function () { resolve(null); });
-                    }, 'image/jpeg', 0.7);
+                    }, 'image/jpeg', 0.86);
                 } catch (err) { resolve(null); }
             }
             function fromUrl(url, cors) {
@@ -346,7 +440,7 @@
     function downloadReport() {
         var photos = collectReportPhotos();
         var jobs = photos.slice(0, 8).map(function (item) {
-            return loadGreyPhoto(item.src).then(function (jpeg) {
+            return loadReportPhoto(item.src).then(function (jpeg) {
                 item.jpeg = jpeg;
                 return item;
             });
@@ -366,30 +460,31 @@
         const LEFT = 72;
         const WIDTH = 612 - LEFT - 72;
         const NARROW = 420;
-        const BOTTOM = 64;
-        const BODY = 12;
-        const LEAD = 15.4;
+        const BOTTOM = 72;
+        const BODY = 10;
 
         function newPage(kind) {
             if (kind === true) kind = 'cover';
             if (kind === false) kind = 'cont';
             var cover = kind === 'cover';
-            var record = kind === 'record';
-            var page = { ops: ['__PAGE_NO__'], y: cover ? 700 : 720, first: cover, kind: kind, images: [] };
-            if (!cover && !record) {
-                var run = pdfSafe(subject);
-                if (run) {
-                    var w = measurePdf(run, 10);
-                    page.ops.push('0.35 0.35 0.35 rg BT /F3 10 Tf 0 Tc 0 Tw ' + ((612 - w) / 2).toFixed(2) + ' 748 Td (' + pdfEscape(run) + ') Tj ET');
-                }
-            }
+            var page = { ops: ['__PAGE_FOOT__'], y: 728, first: cover, kind: kind, images: [] };
+            var rec = doc.case || {};
+            var left = rec.number ? 'CASE ' + rec.number : 'CASE FILE';
+            var mid = 'RECORD';
+            var right = pdfSafe(dateLong);
+            paint(page, '/F1', 9, LEFT, 758, left, '0.15 0.15 0.15');
+            paint(page, '/F2', 9, (612 - measurePdf(mid, 9)) / 2, 758, mid, '0 0 0');
+            paint(page, '/F1', 9, LEFT + WIDTH - measurePdf(right, 9), 758, right, '0.15 0.15 0.15');
+            page.ops.push('0 0 0 RG 0.9 w ' + LEFT.toFixed(2) + ' 746 m ' + (LEFT + WIDTH).toFixed(2) + ' 746 l S');
+            page.ops.push('0 0 0 RG 0.4 w ' + LEFT.toFixed(2) + ' 743 m ' + (LEFT + WIDTH).toFixed(2) + ' 743 l S');
+            page.y = 728;
             return page;
         }
 
         function ensure(page, need) {
             if (page.y - need < BOTTOM) {
                 pages.push(page);
-                return newPage(page.kind === 'cover' ? 'cover' : 'cont');
+                return newPage(page.kind === 'cover' ? 'record' : 'cont');
             }
             return page;
         }
@@ -463,7 +558,13 @@
             if (line.length) lines.push(line);
             lines.forEach(function (ln, i) {
                 page = ensure(page, lead + 2);
-                var ops = [(opts.gray || '0.12 0.12 0.12') + ' rg BT 0 Tc 0 Tw ' + x.toFixed(2) + ' ' + page.y.toFixed(2) + ' Td'];
+                var lineW = 0;
+                ln.forEach(function (tok) {
+                    var chunk = tok.space ? tok.text.replace(/\s+/g, ' ') : tok.text;
+                    if (chunk) lineW += measurePdf(chunk, size);
+                });
+                var drawX = opts.center ? (612 - lineW) / 2 : x;
+                var ops = [(opts.gray || '0.12 0.12 0.12') + ' rg BT 0 Tc 0 Tw ' + drawX.toFixed(2) + ' ' + page.y.toFixed(2) + ' Td'];
                 ln.forEach(function (tok) {
                     var chunk = tok.space ? tok.text.replace(/\s+/g, ' ') : tok.text;
                     if (!chunk) return;
@@ -478,41 +579,85 @@
         }
 
         function heading(page, text) {
-            page = ensure(page, 28);
-            page.y -= 8;
-            paint(page, '/F2', 13, LEFT, page.y, text, '0 0 0');
-            page.y -= 19;
+            page = ensure(page, 20);
+            page.y -= 3;
+            paint(page, '/F2', 11, LEFT, page.y, pdfSafe(text).toUpperCase(), '0 0 0');
+            page.y -= 4;
+            page.ops.push('0 0 0 RG 0.7 w ' + LEFT.toFixed(2) + ' ' + page.y.toFixed(2) + ' m ' + (LEFT + WIDTH).toFixed(2) + ' ' + page.y.toFixed(2) + ' l S');
+            page.y -= 10;
             return page;
         }
 
-        function runIn(page, label, value) {
-            var size = BODY;
-            var rowLead = 18;
-            var labelText = pdfSafe(label);
-            var right = LEFT + WIDTH;
-            var labelW = measurePdf(labelText, size);
-            var maxVal = Math.max(90, WIDTH - labelW - 28);
-            var lines = wrapPdf(value, maxVal, size);
-            if (!lines.length) lines = [''];
-            page = ensure(page, rowLead + 2);
-            paint(page, '/F1', size, LEFT, page.y, labelText, '0.1 0.1 0.1');
-            var v0w = measurePdf(lines[0] || '', size);
-            var valueX = right - v0w;
-            var dotsStart = LEFT + labelW + 4;
-            var dotsEnd = valueX - 2;
-            var dotW = measurePdf('.', size);
-            var nDots = (dotW && dotsEnd > dotsStart) ? Math.max(0, Math.floor((dotsEnd - dotsStart) / dotW) + 1) : 0;
-            if (nDots >= 2) paint(page, '/F1', size, dotsStart, page.y, Array(nDots + 1).join('.'), '0.55 0.55 0.55');
-            paint(page, '/F1', size, valueX, page.y, lines[0] || '', '0.1 0.1 0.1');
-            page.y -= rowLead;
-            for (var i = 1; i < lines.length; i++) {
-                page = ensure(page, rowLead);
-                var lw = measurePdf(lines[i], size);
-                paint(page, '/F1', size, right - lw, page.y, lines[i], '0.1 0.1 0.1');
-                page.y -= rowLead;
-            }
-            page.y -= 3;
+        function centerHeading(page, text) {
+            page = center(page, pdfSafe(text).toUpperCase(), 11, '/F2', 6, '0 0 0', 0);
+            var rw = 168;
+            var rx = (612 - rw) / 2;
+            page.ops.push('0 0 0 RG 0.7 w ' + rx.toFixed(2) + ' ' + page.y.toFixed(2) + ' m ' + (rx + rw).toFixed(2) + ' ' + page.y.toFixed(2) + ' l S');
+            page.y -= 12;
             return page;
+        }
+
+        function closeParaH(text, after) {
+            return wrapPdf(String(text || '').replace(/\*\*/g, ''), WIDTH, 9).length * 12.5 + (after || 8);
+        }
+
+        function paintFill(page, x, width, label, value, size) {
+            size = size || 10;
+            var lab = pdfSafe(label);
+            var val = pdfSafe(value == null || value === '' ? '--' : value);
+            var lines = wrapPdf(val, Math.max(72, width * 0.5), size);
+            if (!lines.length) lines = ['--'];
+            var v0 = lines[0];
+            var labW = measurePdf(lab, size);
+            var valW = measurePdf(v0, size);
+            var valX = x + width - valW;
+            paint(page, '/F2', size, x, page.y, lab, '0.12 0.12 0.12');
+            if (valX > x + labW + 10) {
+                var dots = '';
+                var room = valX - x - labW - 8;
+                while (measurePdf(dots + '.', 8) < room) dots += '.';
+                if (dots) paint(page, '/F1', 8, x + labW + 4, page.y, dots, '0.5 0.5 0.5');
+            }
+            paint(page, '/F1', size, Math.max(x + labW + 6, valX), page.y, v0, '0.12 0.12 0.12');
+            return lines;
+        }
+
+        function fillLine(page, label, value, opts) {
+            opts = opts || {};
+            var size = opts.size || 10;
+            var lead = opts.lead || 12;
+            var indent = opts.indent || 0;
+            var width = opts.width != null ? opts.width : (WIDTH - indent);
+            var x = LEFT + indent;
+            page = ensure(page, lead + 2);
+            var lines = paintFill(page, x, width, label, value, size);
+            page.y -= lead;
+            var i;
+            for (i = 1; i < lines.length; i++) {
+                page = ensure(page, lead);
+                paint(page, '/F1', size, x + width - measurePdf(lines[i], size), page.y, lines[i], '0.12 0.12 0.12');
+                page.y -= lead;
+            }
+            return page;
+        }
+
+        function pairLine(page, leftL, leftV, rightL, rightV, width) {
+            width = width != null ? width : WIDTH;
+            var col = (width - 14) / 2;
+            page = ensure(page, 12);
+            var y = page.y;
+            paintFill(page, LEFT, col, leftL, leftV, 10);
+            paintFill(page, LEFT + col + 14, col, rightL, rightV, 10);
+            page.y = y - 12;
+            return page;
+        }
+
+        function kvLine(page, label, value, indent) {
+            return fillLine(page, label, value, { indent: indent || 0 });
+        }
+
+        function runIn(page, label, value) {
+            return fillLine(page, label, value);
         }
 
         function rule(page) {
@@ -539,65 +684,140 @@
             return page;
         }
 
+        function placePhotoAt(page, jpeg, x, yTop, maxW, maxH) {
+            if (!jpeg || !jpeg.bytes || !jpeg.bytes.length) return { w: 0, h: 0 };
+            var aspect = jpeg.h / Math.max(1, jpeg.w);
+            var w = maxW;
+            var h = w * aspect;
+            if (h > maxH) { h = maxH; w = h / aspect; }
+            var y = yTop - h;
+            var name = 'Im' + (page.images.length + 1);
+            page.images.push({ name: name, bytes: jpeg.bytes, w: jpeg.w, h: jpeg.h });
+            page.ops.push('q ' + w.toFixed(2) + ' 0 0 ' + h.toFixed(2) + ' ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' cm /' + name + ' Do Q');
+            page.ops.push('0.42 0.42 0.42 RG 0.5 w ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re S');
+            return { w: w, h: h };
+        }
+
         var portrait = (photos || []).find(function (item) { return item && item.jpeg && item.jpeg.bytes; }) || null;
         var morePhotos = (photos || []).filter(function (item) { return item && item.jpeg && item.jpeg.bytes && item !== portrait; });
         var rows = doc.rows;
         var notes = doc.notes;
+        var rec = doc.case || {};
+        var chrono = doc.chronology || [];
 
         let pageObj = newPage('cover');
-        pageObj = center(pageObj, REPORT_HEAD, REPORT_HEAD_SIZE, '/F2', 8, '0 0 0', 0);
-        pageObj.y -= 28;
+        var head = REPORT_HEAD.toUpperCase();
+        var headW = measurePdf(head, REPORT_HEAD_SIZE);
+        var coverH = REPORT_HEAD_SIZE + 18 + 10 + 16;
         doc.notice.forEach(function (para, i) {
-            pageObj = flowRich(pageObj, para, { size: 12, lead: 17.5, after: i === doc.notice.length - 1 ? 14 : 12 });
+            coverH += wrapPdf(String(para || '').replace(/\*\*/g, ''), WIDTH, 10).length * 13.5 + (i === doc.notice.length - 1 ? 12 : 8);
         });
-        wrapPdf(doc.banner, NARROW, 10).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 10, '/F2', 4, '0 0 0', 0.4);
+        coverH += wrapPdf(doc.banner, WIDTH, 9).length * 12;
+        var coverTop = 728;
+        var coverBot = 84;
+        pageObj.y = Math.min(coverTop, (coverTop + coverBot + coverH) / 2);
+        paint(pageObj, '/F2', REPORT_HEAD_SIZE, (612 - headW) / 2, pageObj.y, head, '0 0 0', 0);
+        pageObj.y -= REPORT_HEAD_SIZE + 18;
+        pageObj = center(pageObj, 'INVESTIGATIVE NOTICE', 10, '/F2', 16, '0 0 0', 0);
+        doc.notice.forEach(function (para, i) {
+            pageObj = flowRich(pageObj, para, { size: 10, lead: 13.5, after: i === doc.notice.length - 1 ? 12 : 8, center: true });
+        });
+        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
+            pageObj = center(pageObj, ln, 9, '/F2', 3, '0 0 0', 0);
         });
         pages.push(pageObj);
+
         pageObj = newPage('record');
-        wrapPdf(String(subject || 'UNKNOWN').toUpperCase(), NARROW, 17).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 17, '/F2', 6, '0 0 0', 0.7);
-        });
-        pageObj.y -= 6;
-        if (portrait) pageObj = placePhoto(pageObj, portrait.jpeg, 168, 210);
-        pageObj = center(pageObj, dateLong, 12, '/F3', 14, '0.2 0.2 0.2');
-        pageObj = rule(pageObj);
-
-        if (!rows.length && !notes.length && !portrait) {
-            pageObj = flow(pageObj, 'No particulars have been recorded for this person.', { after: 8 });
+        pageObj = heading(pageObj, 'I. Case file');
+        var caseTop = pageObj.y;
+        var textW = WIDTH;
+        var photoBox = { w: 0, h: 0 };
+        if (portrait) {
+            photoBox = placePhotoAt(pageObj, portrait.jpeg, LEFT + WIDTH - 92, caseTop, 92, 118);
+            textW = WIDTH - photoBox.w - 14;
         }
-        rows.forEach(function (row) {
-            pageObj = runIn(pageObj, row.label, row.value);
+        pageObj = pairLine(pageObj, 'Case no.', rec.number || '--', 'Status', rec.status || '--', textW);
+        pageObj = pairLine(pageObj, 'Offense', rec.offense || '--', 'Investigator', rec.investigator || '--', textW);
+        pageObj = pairLine(pageObj, 'Subject', subject || 'UNKNOWN', 'Recorded', dateLong, textW);
+        if (rec.openedAt) pageObj = fillLine(pageObj, 'Opened', rec.openedAt, { width: textW, lead: 12 });
+        if (photoBox.h) pageObj.y = Math.min(pageObj.y, caseTop - photoBox.h - 8);
+        pageObj.y -= 4;
+
+        pageObj = heading(pageObj, 'II. Particulars');
+        if (!rows.length) {
+            pageObj = flow(pageObj, 'No particulars have been recorded.', { size: 10, after: 6 });
+        }
+        rows.forEach(function (row, idx) {
+            var title = String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(row.label).toUpperCase();
+            var meta = [row.confidence, row.method, row.captured].filter(Boolean).join('   ');
+            var valLines = wrapPdf(row.value || '--', WIDTH * 0.5, 10);
+            var need = 16 + (valLines.length - 1) * 12 + (meta ? 11 : 0) + (row.source ? 12 : 0);
+            pageObj = ensure(pageObj, Math.min(need, 220));
+            pageObj = fillLine(pageObj, title, row.value || '--', { lead: 12 });
+            if (meta) {
+                pageObj = ensure(pageObj, 11);
+                paint(pageObj, '/F3', 9, LEFT + 18, pageObj.y, pdfSafe(meta), '0.28 0.28 0.28');
+                pageObj.y -= 11;
+            }
+            if (row.source) pageObj = fillLine(pageObj, 'Note', row.source, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+            pageObj.y -= 3;
         });
 
-        if (morePhotos.length) {
-            pageObj.y -= 6;
-            pageObj = heading(pageObj, 'Photographs');
+        if (chrono.length) {
+            pageObj = heading(pageObj, 'III. Chronology');
+            chrono.forEach(function (row, idx) {
+                var when = [row.date, row.time].filter(Boolean).join('  ') || '--';
+                pageObj = ensure(pageObj, 28);
+                if (row.title) {
+                    pageObj = fillLine(pageObj, String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(when), row.title, { lead: 12 });
+                } else {
+                    pageObj = ensure(pageObj, 13);
+                    paint(pageObj, '/F2', 10, LEFT, pageObj.y, String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(when), '0.12 0.12 0.12');
+                    pageObj.y -= 12;
+                }
+                if (row.body) pageObj = fillLine(pageObj, 'Entry', row.body, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+                if (row.source) pageObj = fillLine(pageObj, 'Source', row.source, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+                pageObj.y -= 3;
+            });
+        }
+
+        if (morePhotos.length || (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption))) {
+            pageObj = heading(pageObj, 'IV. Photographs');
             morePhotos.forEach(function (item) {
-                pageObj = placePhoto(pageObj, item.jpeg, 220, 200);
+                pageObj = placePhoto(pageObj, item.jpeg, 180, 160);
                 if (item.caption) {
-                    pageObj = flow(pageObj, item.caption, { center: true, size: 10, font: '/F3', width: NARROW, after: 12, gray: '0.25 0.25 0.25' });
+                    pageObj = flow(pageObj, item.caption, { center: true, size: 9, font: '/F3', width: NARROW, after: 10, gray: '0.25 0.25 0.25' });
                 }
             });
-        } else if (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption)) {
-            pageObj = runIn(pageObj, 'Photograph', portrait.caption);
+            if (!morePhotos.length && portrait && portrait.caption) pageObj = kvLine(pageObj, 'Photograph', portrait.caption);
         }
 
         if (notes.length) {
-            pageObj.y -= 4;
-            pageObj = heading(pageObj, 'Notes');
+            pageObj = heading(pageObj, 'V. Notes');
             notes.forEach(function (item) {
-                pageObj = runIn(pageObj, item.label, item.text);
+                pageObj = flow(pageObj, item.text, { size: 10, lead: 13, after: 8 });
             });
         }
 
-        pageObj.y -= 8;
-        pageObj = rule(pageObj);
-        doc.close.forEach(function (para, i) {
-            pageObj = flowRich(pageObj, para, { size: 11.5, lead: 16.5, after: i === doc.close.length - 1 ? 12 : 10 });
+        pages.push(pageObj);
+        pageObj = newPage('close');
+        var closeH = closeParaH(doc.close[0], 16) + 29 + closeParaH(doc.close[1], 18) + 29;
+        doc.liability.forEach(function (para, i) {
+            closeH += closeParaH(para, i === doc.liability.length - 1 ? 14 : 10);
         });
-        wrapPdf(doc.banner, WIDTH, 10).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 10, '/F2', 4, '0 0 0', 0.4);
+        closeH += wrapPdf(doc.banner, WIDTH, 9).length * 12;
+        var usableTop = 728;
+        var usableBot = 84;
+        pageObj.y = Math.min(usableTop, (usableTop + usableBot + closeH) / 2);
+        pageObj = flowRich(pageObj, doc.close[0], { size: 9, lead: 12.5, after: 16, center: true });
+        pageObj = centerHeading(pageObj, doc.closeTitle);
+        pageObj = flowRich(pageObj, doc.close[1], { size: 9, lead: 12.5, after: 18, center: true });
+        pageObj = centerHeading(pageObj, doc.liabilityTitle);
+        doc.liability.forEach(function (para, i) {
+            pageObj = flowRich(pageObj, para, { size: 9, lead: 12.5, after: i === doc.liability.length - 1 ? 14 : 10, center: true });
+        });
+        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
+            pageObj = center(pageObj, ln, 9, '/F2', 3, '0 0 0', 0);
         });
 
         pages.push(pageObj);
@@ -606,7 +826,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        var fileBase = String(subject || 'file').replace(/[^\w\-]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+        var fileBase = String(rec.number || subject || 'file').replace(/[^\w\-]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
         a.download = (fileBase || 'file') + '.pdf';
         document.body.appendChild(a);
         a.click();
@@ -623,12 +843,12 @@
     function reportPreviewMarkup() {
         var doc = reportDocument();
         var WIDTH = 468;
-        var NARROW = 420;
-        var MAX = 668;
-        var subject = pdfSafe(doc.subject || 'UNKNOWN').toUpperCase();
+        var MAX = 580;
+        var rec = doc.case || {};
         var photos = doc.photos || [];
         var portrait = photos[0] || null;
         var morePhotos = photos.slice(1);
+        var chrono = doc.chronology || [];
         var pages = [];
         var cur = [];
         var used = 0;
@@ -644,103 +864,165 @@
         }
 
         function add(html, h) {
-            h = h || 20;
-            if (!lockCover && used + h > MAX && cur.length) flush();
+            h = Math.max(8, Math.ceil(h || 20));
+            if (!lockCover && cur.length && used + h > MAX) flush();
             cur.push(html);
             used += h;
         }
 
-        function kv(label, value) {
-            var lines = wrapPdf(value, 250, 12);
-            if (!lines.length) lines = [''];
-            var h = 21 + Math.max(0, lines.length - 1) * 18;
-            var html = '<div class="ds-kv"><span class="ds-k">' + esc(label) + '</span><span class="ds-leader" aria-hidden="true"></span><span class="ds-v">' + esc(lines[0]) + '</span></div>';
-            for (var i = 1; i < lines.length; i++) {
-                html += '<div class="ds-kv is-cont"><span class="ds-v">' + esc(lines[i]) + '</span></div>';
-            }
+        function fillHtml(label, valueHtml) {
+            return '<div class="ds-fill"><span class="ds-fill-k">' + esc(label) + '</span><span class="ds-fill-dots" aria-hidden="true"></span><span class="ds-fill-v">' + valueHtml + '</span></div>';
+        }
+
+        function pairHtml(a, b) {
+            return '<div class="ds-pair">' + fillHtml(a[0], a[1]) + fillHtml(b[0], b[1]) + '</div>';
+        }
+
+        function addRows(pairs) {
+            var html = '';
+            var h = 0;
+            pairs.forEach(function (pair) {
+                html += fillHtml(pair[0], pair[1]);
+                h += 13 * Math.max(1, wrapPdf(String(pair[2] != null ? pair[2] : '').replace(/<[^>]*>/g, ' ') || '--', 220, 10).length);
+            });
             add(html, h);
         }
 
-        function photoFig(src, wide) {
-            if (!src) return;
-            add('<figure class="ds-fig' + (wide ? ' is-wide' : '') + '"><img src="' + esc(src) + '" alt=""></figure>', wide ? 214 : 224);
+        function addFact(row, idx) {
+            var title = String(idx + 1).padStart(2, '0') + '  ' + String(row.label || '').toUpperCase();
+            var html = '<div class="ds-item">' + fillHtml(title, redactHtml(row.id, row.value));
+            var h = 16;
+            var bits = [row.confidence, row.method, row.captured].filter(Boolean);
+            if (bits.length) {
+                html += '<div class="ds-meta">' + esc(bits.join('  ·  ')) + '</div>';
+                h += 11;
+            }
+            if (row.source) {
+                html += fillHtml('Note', esc(row.source));
+                h += 13 * Math.max(1, wrapPdf(row.source, 280, 9).length);
+            }
+            html += '</div>';
+            add(html, h + 4);
         }
 
-        add('<div class="ds-c ds-banner">' + esc(REPORT_HEAD) + '</div>', 24);
-        add('<div class="ds-after-head"></div>', 28);
+        function section(title) {
+            add('<h3 class="ds-h">' + esc(title) + '</h3>', 22);
+        }
+
+        add('<div class="ds-cover"><div class="ds-c ds-banner"><span>' + esc(REPORT_HEAD.toUpperCase()) + '</span></div>', 22);
+        add('<div class="ds-c ds-kicker">INVESTIGATIVE NOTICE</div>', 20);
         doc.notice.forEach(function (para, i) {
             var last = i === doc.notice.length - 1;
-            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 12).length * 17.5 + (last ? 14 : 12);
+            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 10).length * 14 + (last ? 12 : 8);
             add('<p class="ds-p' + (last ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>', h);
         });
-        wrapPdf(doc.banner, NARROW, 10).forEach(function (ln) {
-            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 14);
+        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
+            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 13);
         });
+        add('</div>', 1);
         lockCover = false;
         flush();
-        wrapPdf(subject, NARROW, 17).forEach(function (ln) {
-            add('<div class="ds-c ds-subject">' + esc(ln) + '</div>', 23);
+
+        section('I. Case file');
+        (function () {
+            var meta = pairHtml(
+                ['Case no.', rec.number ? esc(rec.number) : '<span class="ds-empty">--</span>'],
+                ['Status', rec.status ? esc(rec.status) : '<span class="ds-empty">--</span>']
+            ) + pairHtml(
+                ['Offense', rec.offense ? esc(rec.offense) : '<span class="ds-empty">--</span>'],
+                ['Investigator', rec.investigator ? esc(rec.investigator) : '<span class="ds-empty">--</span>']
+            ) + pairHtml(
+                ['Subject', redactHtml('name', doc.subject || 'UNKNOWN')],
+                ['Recorded', esc(doc.dateLong)]
+            ) + (rec.openedAt ? fillHtml('Opened', esc(rec.openedAt)) : '');
+            var html = '<div class="ds-case"><div class="ds-case-meta">' + meta + '</div>';
+            if (portrait && portrait.src) html += redactPhotoHtml(portrait.src, false);
+            html += '</div>';
+            add(html, portrait && portrait.src ? 128 : 48);
+        }());
+
+        section('II. Particulars');
+        if (!doc.rows.length) add('<p class="ds-p">No particulars have been recorded.</p>', 18);
+        doc.rows.forEach(function (row, idx) {
+            addFact(row, idx);
         });
-        add('<div class="ds-gap"></div>', 6);
-        if (portrait && portrait.src) photoFig(portrait.src, false);
-        add('<div class="ds-c ds-date">' + esc(doc.dateLong) + '</div>', 25);
-        add('<hr class="ds-rule">', 16);
 
-        if (!doc.rows.length && !doc.notes.length && !portrait) {
-            add('<p class="ds-p">No particulars have been recorded for this person.</p>', 24);
-        }
-        doc.rows.forEach(function (row) { kv(row.label, row.value); });
-
-        if (morePhotos.length) {
-            add('<h3 class="ds-h">Photographs</h3>', 28);
-            morePhotos.forEach(function (item) {
-                photoFig(item.src, true);
-                if (item.caption) {
-                    wrapPdf(item.caption, NARROW, 10).forEach(function (ln) {
-                        add('<div class="ds-cap">' + esc(ln) + '</div>', 14);
-                    });
+        if (chrono.length) {
+            section('III. Chronology');
+            chrono.forEach(function (row, idx) {
+                var when = [row.date, row.time].filter(Boolean).join('  ') || '--';
+                var html = '<div class="ds-item">' + (row.title
+                    ? fillHtml(String(idx + 1).padStart(2, '0') + '  ' + when, esc(row.title))
+                    : '<div class="ds-fill"><span class="ds-fill-k">' + esc(String(idx + 1).padStart(2, '0') + '  ' + when) + '</span></div>');
+                var h = 16;
+                if (row.body) {
+                    html += fillHtml('Entry', redactHtml('notes', row.body));
+                    h += 12;
                 }
+                if (row.source) {
+                    html += fillHtml('Source', esc(row.source));
+                    h += 12;
+                }
+                html += '</div>';
+                add(html, h + 4);
             });
-        } else if (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption)) {
-            kv('Photograph', portrait.caption);
+        }
+
+        if (morePhotos.length || (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption))) {
+            section('IV. Photographs');
+            morePhotos.forEach(function (item) {
+                add(redactPhotoHtml(item.src, true), 220);
+                if (item.caption) add('<div class="ds-cap">' + esc(item.caption) + '</div>', 14);
+            });
+            if (!morePhotos.length && portrait && portrait.caption) {
+                addRows([['Photograph', esc(portrait.caption), portrait.caption]]);
+            }
         }
 
         if (doc.notes.length) {
-            add('<h3 class="ds-h">Notes</h3>', 28);
-            doc.notes.forEach(function (item) { kv(item.label, item.text); });
+            section('V. Notes');
+            doc.notes.forEach(function (item) {
+                var h = wrapPdf(item.text, WIDTH, 10).length * 13 + 8;
+                add('<p class="ds-p ds-note">' + redactHtml('notes', item.text) + '</p>', h);
+            });
         }
 
-        add('<hr class="ds-rule">', 24);
-        doc.close.forEach(function (para, i) {
-            var last = i === doc.close.length - 1;
-            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 11.5).length * 16.5 + (last ? 12 : 10);
-            add('<p class="ds-p is-close' + (last ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>', h);
+        flush();
+        nextKind = 'close';
+        var closeHtml = '<div class="ds-close">';
+        closeHtml += '<p class="ds-p is-close">' + reportRichHtml(doc.close[0]) + '</p>';
+        closeHtml += '<h3 class="ds-h">' + esc(doc.closeTitle) + '</h3>';
+        closeHtml += '<p class="ds-p is-close">' + reportRichHtml(doc.close[1]) + '</p>';
+        closeHtml += '<h3 class="ds-h">' + esc(doc.liabilityTitle) + '</h3>';
+        doc.liability.forEach(function (para, i) {
+            closeHtml += '<p class="ds-p is-close' + (i === doc.liability.length - 1 ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>';
         });
-        wrapPdf(doc.banner, WIDTH, 10).forEach(function (ln) {
-            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 14);
+        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
+            closeHtml += '<div class="ds-c ds-foot">' + esc(ln) + '</div>';
         });
+        closeHtml += '</div>';
+        add(closeHtml, 520);
         flush();
 
-        var inner = pages.map(function (page, i) {
+        var n = pages.length || 1;
+        return '<div class="ds-fit">' + pages.map(function (page, i) {
             var kind = page.kind || (page.first ? 'cover' : 'cont');
-            var head = kind === 'cont' ? '<div class="ds-runhead">' + esc(pdfSafe(doc.subject)) + '</div>' : '';
-            var cls = kind === 'cover' ? ' is-first' : (kind === 'record' ? ' is-record' : '');
-            return '<article class="ds-page' + cls + '">' + head + page.html + '<div class="ds-pageno">' + (i + 1) + '</div></article>';
-        }).join('');
-        return '<div class="ds-fit"><div class="ds-stage">' + inner + '</div></div>';
+            var cls = kind === 'cover' ? ' is-first' : (kind === 'record' ? ' is-record' : (kind === 'close' ? ' is-close-page' : ''));
+            var head = '<div class="ds-headband"><span>' + esc(rec.number ? 'CASE ' + rec.number : 'CASE FILE') + '</span><span>RECORD</span><span>' + esc(doc.dateLong) + '</span></div>';
+            var foot = '<div class="ds-footband"><span>AUTHORIZED USE ONLY</span><span>PAGE ' + (i + 1) + ' OF ' + n + '</span></div>';
+            return '<div class="ds-sheet"><article class="ds-page' + cls + '">' + head + '<div class="ds-body">' + page.html + '</div>' + foot + '</article></div>';
+        }).join('') + '</div>';
     }
 
     function sizeDatasheet() {
         var view = $('datasheetView');
         var fit = view && view.querySelector('.ds-fit');
-        var stage = view && view.querySelector('.ds-stage');
-        if (!view || !fit || !stage) return;
-        var n = stage.querySelectorAll('.ds-page').length || 1;
-        var gap = 28;
+        if (!view || !fit) return;
+        var n = fit.querySelectorAll('.ds-page').length || 1;
         var avail = Math.max(280, view.clientWidth - 48);
-        var s = Math.min(1.22, Math.max(0.42, avail / 612));
-        stage.style.setProperty('--ds-scale', String(s));
-        fit.style.height = (n * 792 * s + (n - 1) * gap * s + 8) + 'px';
+        var s = Math.min(1.15, Math.max(0.42, avail / 612));
+        fit.style.setProperty('--ds-scale', String(s));
+        fit.style.height = (n * 792 * s + (n - 1) * 28 * s + 8) + 'px';
     }
 
     function buildPdf(pages) {
@@ -761,18 +1043,22 @@
         var objects = new Array(nextId - 1);
         objects[0] = '<< /Type /Catalog /Pages 2 0 R >>';
         objects[1] = '<< /Type /Pages /Kids [ ' + pageDictIds.map(function (id) { return id + ' 0 R'; }).join(' ') + ' ] /Count ' + nPages + ' /MediaBox [0 0 612 792] >>';
-        objects[2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>';
-        objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>';
-        objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>';
+        objects[2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>';
+        objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>';
+        objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique >>';
         pages.forEach(function (pageObj, idx) {
             var xobj = (pageObj.images || []).map(function (im) {
                 return '/' + im.name + ' ' + im.objId + ' 0 R';
             }).join(' ');
             var res = '/Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>' + (xobj ? ' /XObject << ' + xobj + ' >>' : '');
-            var label = String(idx + 1);
-            var numW = measurePdf(label, 10);
-            var pageNo = '0.35 0.35 0.35 rg BT /F1 10 Tf 0 Tc 0 Tw ' + ((612 - numW) / 2).toFixed(2) + ' 46 Td (' + label + ') Tj ET';
-            var streamBytes = latin1Pdf(pageObj.ops.join('\n').replace(/__PAGE_NO__/g, pageNo));
+            var left = 'AUTHORIZED USE ONLY';
+            var right = 'PAGE ' + (idx + 1) + ' OF ' + nPages;
+            var rightX = 540 - measurePdf(right, 9);
+            var pageFoot =
+                '0 0 0 RG 0.8 w 72 62 m 540 62 l S\n' +
+                '0.15 0.15 0.15 rg BT /F1 9 Tf 0 Tc 0 Tw 72 50 Td (' + pdfEscape(left) + ') Tj ET\n' +
+                '0.15 0.15 0.15 rg BT /F1 9 Tf 0 Tc 0 Tw ' + rightX.toFixed(2) + ' 50 Td (' + pdfEscape(right) + ') Tj ET';
+            var streamBytes = latin1Pdf(pageObj.ops.join('\n').replace(/__PAGE_FOOT__/g, pageFoot).replace(/__PAGE_NO__/g, pageFoot));
             objects[pageDictIds[idx] - 1] = '<< /Type /Page /Parent 2 0 R /Resources << ' + res + ' >> /Contents ' + contentIds[idx] + ' 0 R >>';
             objects[contentIds[idx] - 1] = { dict: '<< /Length ' + streamBytes.length + ' >>', stream: streamBytes };
             (pageObj.images || []).forEach(function (im) {

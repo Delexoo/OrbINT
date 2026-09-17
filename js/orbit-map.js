@@ -768,8 +768,7 @@
                 }
                 add(document.getElementById('dock'), 28);
                 add(document.getElementById('donate'), 22);
-                add(document.getElementById('pageSwitch'), 22);
-                add(document.querySelector('.map-toggle'), 16);
+                add(document.getElementById('workNav') || document.getElementById('pageSwitch'), 22);
                 return boxes;
             }
 
@@ -1505,8 +1504,10 @@
                     item.line.setAttribute('stroke-width', stretch > 1.12 ? '1.35' : '1');
                 }
             });
-            if (document.querySelector('.node.menu-open')) {
+            if (document.getElementById('platformMenu') && !document.getElementById('platformMenu').hidden) {
                 placePlatformMenu();
+                placeTimezoneMenu();
+            } else if (document.querySelector('.node.menu-open')) {
                 placeTimezoneMenu();
             }
             const searchNode = document.querySelector('.node.search-open');
@@ -1968,7 +1969,12 @@
             if (copyBtn) copyBtn.textContent = 'Copy';
             const nativeBtn = document.getElementById('shareNative');
             if (nativeBtn) nativeBtn.hidden = !navigator.share;
-            drawShareQr(url);
+            if (window.OrbINTShare && typeof OrbINTShare.paint === 'function') OrbINTShare.paint();
+            const viewEl = document.getElementById('shareViewUrl');
+            const sessionUrl = viewEl && /^https?:/i.test(String(viewEl.textContent || '').trim())
+                ? String(viewEl.textContent).trim()
+                : url;
+            drawShareQr(sessionUrl);
             showSheet(sheet);
             document.getElementById('dock').classList.add('picking-share');
         }
@@ -2251,7 +2257,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=166', './osint-tools.js', './osint-tools.js?v=166', './investigation.js', './investigation.js?v=166', './css/base.css?v=166', './css/orbit.css?v=166', './css/timeline.css?v=166', './css/whiteboard.css?v=166', './css/datasheet.css?v=166', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=218', './osint-tools.js', './osint-tools.js?v=218', './investigation.js', './investigation.js?v=218', './css/base.css?v=218', './css/orbit.css?v=218', './css/timeline.css?v=218', './css/whiteboard.css?v=218', './css/compiler.css?v=218', './css/datasheet.css?v=218', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));
@@ -2305,8 +2311,23 @@
                 applyProfilePhotoFiles: applyProfilePhotoFiles,
                 applyProfilePhotoUrl: applyProfilePhotoUrl,
                 escapeHtml: escapeHtml,
+                addFact: addFact,
                 srcToBlob: srcToBlob,
                 copyImageSource: copyImageSource,
+                closeSheetPick: function () {
+                    if (typeof closeSheetPick === 'function') closeSheetPick();
+                },
+                readonly: function () {
+                    return !!(window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly());
+                },
+                getFactCaptured: function (id) {
+                    return factStampIso(lastFactRecord(id));
+                },
+                setFactCaptured: function (id, iso) {
+                    patchFactMeta(id, 'capturedAt', iso || '');
+                    paintFactCaptured(id);
+                    if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
+                },
                 save: function () {
                     if (typeof saveProfile === 'function') saveProfile();
                     if (typeof queueLibrarySync === 'function') queueLibrarySync();
@@ -2549,15 +2570,49 @@
                 toggleAddField();
                 return;
             }
+            const moreBtn = event.target.closest('[data-fact-more]');
+            if (moreBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleFactDetails(moreBtn.getAttribute('data-fact-more'));
+                return;
+            }
+            const hideBtn = event.target.closest('[data-sheet-hide]');
+            if (hideBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                hideField(hideBtn.getAttribute('data-sheet-hide'));
+                return;
+            }
+            const dupBtn = event.target.closest('[data-sheet-dup]');
+            if (dupBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                duplicateField(dupBtn.getAttribute('data-sheet-dup'), { focus: 'sheet' });
+                return;
+            }
             const sheetPlat = event.target.closest('[data-sheet-platform]');
             if (sheetPlat) {
                 event.preventDefault();
                 event.stopPropagation();
-                const node = document.querySelector('.node[data-field="' + sheetPlat.dataset.sheetPlatform + '"]');
-                if (node) openPlatformMenu(node);
+                const fieldId = sheetPlat.getAttribute('data-sheet-platform') || '';
+                const menu = document.getElementById('platformMenu');
+                if (menu && !menu.hidden && (menu.dataset.field === fieldId)) {
+                    closePlatformMenu();
+                    return;
+                }
+                const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+                openPlatformMenu(node || fieldId, sheetPlat);
                 return;
             }
-            if (event.target.closest('[data-sheet-field]')) return;
+            const sheetPick = event.target.closest('[data-sheet-pick]');
+            if (sheetPick) {
+                event.preventDefault();
+                event.stopPropagation();
+                openSheetPick(sheetPick);
+                return;
+            }
+            if (event.target.closest('[data-sheet-field], [data-sheet-meta], .fact-prov, .fact-detail, .case-file, .sheet-pick, #sheetPickMenu, [data-fact-more], [data-fact-cal], [data-fact-time]')) return;
             const find = event.target.closest('[data-search-field]');
             if (find) {
                 event.preventDefault();
@@ -2590,7 +2645,7 @@
                     const pick = row.querySelector('.sheet-platform');
                     const node = document.querySelector('.node[data-field="' + row.dataset.focus + '"]');
                     if (pick) pick.focus();
-                    if (node) openPlatformMenu(node);
+                    openPlatformMenu(node || row.dataset.focus, pick || row.querySelector('[data-sheet-platform]'));
                     return;
                 }
                 sheet.focus();
@@ -2603,7 +2658,21 @@
             renderProfile();
         });
 
+        document.getElementById('factsList').addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.target.closest('[data-fact-meta], .fact-source, .sheet-area')) return;
+            const input = event.target.closest('[data-sheet-field]');
+            if (!input || input.tagName === 'TEXTAREA') return;
+            event.preventDefault();
+            commitSheetEnter(input.getAttribute('data-sheet-field') || input.dataset.sheetField);
+        });
         document.getElementById('factsList').addEventListener('input', (event) => {
+            const meta = event.target.closest('[data-sheet-meta]');
+            if (meta) {
+                patchFactMeta(meta.getAttribute('data-sheet-meta'), meta.getAttribute('data-fact-meta'), meta.value);
+                return;
+            }
             const input = event.target.closest('[data-sheet-field]');
             if (!input) return;
             const fieldId = input.dataset.sheetField;
@@ -2613,6 +2682,257 @@
                 : (fieldBase(fieldId) === 'countrycode' ? (resolveCountryCodeValue(input.value) || input.value) : input.value);
             writeLatestFact(fieldId, value, extrasFromInput(fieldId, value));
             if (typeof syncMapsButtons === 'function') syncMapsButtons(fieldId);
+        });
+        document.getElementById('factsList').addEventListener('change', (event) => {
+            const meta = event.target.closest('[data-sheet-meta]');
+            if (!meta) return;
+            patchFactMeta(meta.getAttribute('data-sheet-meta'), meta.getAttribute('data-fact-meta'), meta.value);
+        });
+
+        function bindCaseFileFields() {
+            ['caseNumber', 'caseOffense', 'caseInvestigator'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (!el || el.dataset.boundCase) return;
+                el.dataset.boundCase = '1';
+                const apply = function () {
+                    if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+                    profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+                    const map = { caseNumber: 'number', caseOffense: 'offense', caseInvestigator: 'investigator' };
+                    profile.case[map[id]] = el.value;
+                    if (id === 'caseOffense') {
+                        const pick = document.getElementById('caseOffensePick');
+                        if (pick) pick.dataset.value = el.value;
+                    }
+                    if (id === 'caseNumber' && el.value && !profile.case.openedAt) profile.case.openedAt = new Date().toISOString();
+                    saveProfile();
+                };
+                el.addEventListener('input', apply);
+                el.addEventListener('change', apply);
+            });
+            function bindCasePick(id) {
+                const btn = document.getElementById(id);
+                if (!btn || btn.dataset.boundCase) return;
+                btn.dataset.boundCase = '1';
+                btn.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openSheetPick(btn);
+                });
+            }
+            bindCasePick('caseStatus');
+            bindCasePick('caseOffensePick');
+        }
+        bindCaseFileFields();
+
+        let sheetPickOpen = '';
+        let sheetPickAnchor = null;
+        let sheetPickCloseTimer = 0;
+
+        function finishSheetPickClose(menu) {
+            hideSheetPickTip();
+            if (!menu || sheetPickOpen) return;
+            menu.hidden = true;
+            menu.innerHTML = '';
+            menu.classList.remove('is-up', 'is-in', 'is-out');
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.bottom = '';
+            menu.style.minWidth = '';
+        }
+
+        function hideSheetPickTip() {
+            const tip = document.getElementById('sheetPickTip');
+            if (!tip) return;
+            tip.hidden = true;
+            tip.textContent = '';
+            tip.style.left = '';
+            tip.style.top = '';
+        }
+
+        function showSheetPickTip(btn) {
+            const hint = btn && btn.getAttribute('data-pick-hint');
+            const tip = document.getElementById('sheetPickTip');
+            const menu = document.getElementById('sheetPickMenu');
+            if (!hint || !tip || !menu || menu.hidden) {
+                hideSheetPickTip();
+                return;
+            }
+            tip.textContent = hint;
+            tip.hidden = false;
+            const br = btn.getBoundingClientRect();
+            const mr = menu.getBoundingClientRect();
+            const tr = tip.getBoundingClientRect();
+            let left = mr.right + 8;
+            if (left + tr.width > window.innerWidth - 8) left = Math.max(8, mr.left - tr.width - 8);
+            let top = br.top + (br.height - tr.height) / 2;
+            top = Math.max(8, Math.min(top, window.innerHeight - tr.height - 8));
+            tip.style.left = left + 'px';
+            tip.style.top = top + 'px';
+        }
+
+        function closeSheetPick() {
+            hideSheetPickTip();
+            sheetPickOpen = '';
+            sheetPickAnchor = null;
+            const menu = document.getElementById('sheetPickMenu');
+            document.querySelectorAll('.sheet-pick[aria-expanded="true"]').forEach(function (btn) {
+                btn.setAttribute('aria-expanded', 'false');
+            });
+            if (!menu || menu.hidden) return;
+            clearTimeout(sheetPickCloseTimer);
+            if (document.documentElement.classList.contains('reduce-motion')) {
+                finishSheetPickClose(menu);
+                return;
+            }
+            menu.classList.remove('is-in');
+            menu.classList.add('is-out');
+            const onEnd = function (event) {
+                if (event.target !== menu) return;
+                menu.removeEventListener('animationend', onEnd);
+                finishSheetPickClose(menu);
+            };
+            menu.addEventListener('animationend', onEnd);
+            sheetPickCloseTimer = setTimeout(function () {
+                menu.removeEventListener('animationend', onEnd);
+                finishSheetPickClose(menu);
+            }, 200);
+        }
+
+        function placeSheetPick(btn) {
+            const menu = document.getElementById('sheetPickMenu');
+            if (!menu || !btn) return;
+            const box = btn.closest('.case-offense') || btn;
+            const r = box.getBoundingClientRect();
+            const w = Math.max(r.width, 196);
+            let left = r.left;
+            if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+            if (left < 8) left = 8;
+            const spaceBelow = window.innerHeight - r.bottom - 10;
+            const spaceAbove = r.top - 10;
+            const need = Math.min(menu.scrollHeight || 240, Math.min(window.innerHeight * 0.7, 420));
+            const up = spaceBelow < Math.min(need, 240) && spaceAbove > spaceBelow;
+            const room = Math.max(120, up ? spaceAbove : spaceBelow);
+            menu.classList.toggle('is-up', up);
+            menu.style.minWidth = w + 'px';
+            menu.style.maxWidth = Math.min(280, window.innerWidth - 16) + 'px';
+            menu.style.maxHeight = Math.min(room, window.innerHeight * 0.7, 420) + 'px';
+            menu.style.left = left + 'px';
+            if (up) {
+                menu.style.top = 'auto';
+                menu.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+            } else {
+                menu.style.bottom = 'auto';
+                menu.style.top = (r.bottom + 6) + 'px';
+            }
+        }
+
+        function paintSheetPickButton(btn, kind, value) {
+            if (!btn) return;
+            btn.dataset.value = value || '';
+            btn.classList.toggle('is-empty', !value);
+            const lab = btn.querySelector('span');
+            if (lab) lab.textContent = sheetPickLabel(kind, value);
+        }
+
+        function applySheetPick(kind, fieldId, value) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+            if (kind === 'status') {
+                profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+                profile.case.status = value || 'open';
+                paintSheetPickButton(document.getElementById('caseStatus'), 'status', profile.case.status);
+                saveProfile();
+                return;
+            }
+            if (kind === 'offense') {
+                profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+                profile.case.offense = value || '';
+                const input = document.getElementById('caseOffense');
+                if (input) input.value = profile.case.offense;
+                paintSheetPickButton(document.getElementById('caseOffensePick'), 'offense', profile.case.offense);
+                saveProfile();
+                return;
+            }
+            if (!fieldId) return;
+            patchFactMeta(fieldId, kind, value);
+            const btn = document.querySelector('.sheet-pick[data-sheet-pick="' + kind + '"][data-sheet-meta="' + fieldId + '"]');
+            paintSheetPickButton(btn, kind, value);
+        }
+
+        function openSheetPick(btn) {
+            const kind = btn && btn.getAttribute('data-sheet-pick');
+            const menu = document.getElementById('sheetPickMenu');
+            const options = (typeof SHEET_PICKS !== 'undefined' && SHEET_PICKS[kind]) || [];
+            if (!kind || !menu || !options.length) return;
+            const key = kind + ':' + (btn.getAttribute('data-sheet-meta') || btn.id || '');
+            if (sheetPickOpen === key) {
+                closeSheetPick();
+                return;
+            }
+            if (typeof closeSetPick === 'function') closeSetPick();
+            if (typeof closePlatformMenu === 'function') closePlatformMenu();
+            if (menu.parentElement !== document.body) document.body.appendChild(menu);
+            sheetPickOpen = key;
+            sheetPickAnchor = btn;
+            const current = kind === 'offense'
+                ? String((document.getElementById('caseOffense') || {}).value || '').trim()
+                : (btn.getAttribute('data-value') || '');
+            const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+            menu.innerHTML = options.map(function (item) {
+                if (item.sep) return '<div class="set-pick-sep"></div>';
+                const on = String(item.value || '').trim().toLowerCase() === current.toLowerCase();
+                const active = on ? ' is-active' : '';
+                const hint = item.hint ? ' data-pick-hint="' + escapeHtml(item.hint) + '"' : '';
+                const aria = item.hint
+                    ? ' aria-label="' + escapeHtml(item.label + '. ' + item.hint) + '"'
+                    : '';
+                return '<button type="button" role="option" class="' + active + '" data-pick-kind="' + kind + '" data-pick-field="' + escapeHtml(btn.getAttribute('data-sheet-meta') || '') + '" data-pick-value="' + escapeHtml(item.value) + '" aria-selected="' + (on ? 'true' : 'false') + '"' + hint + aria + '><span>' + escapeHtml(item.label) + '</span>' + check + '</button>';
+            }).join('');
+            clearTimeout(sheetPickCloseTimer);
+            menu.classList.remove('is-out', 'is-in');
+            menu.hidden = false;
+            document.querySelectorAll('.sheet-pick[aria-expanded="true"]').forEach(function (el) {
+                el.setAttribute('aria-expanded', 'false');
+            });
+            btn.setAttribute('aria-expanded', 'true');
+            placeSheetPick(btn);
+            void menu.offsetWidth;
+            menu.classList.add('is-in');
+        }
+
+        const sheetPickMenu = document.getElementById('sheetPickMenu');
+        if (sheetPickMenu) {
+            sheetPickMenu.addEventListener('click', function (event) {
+                const choice = event.target.closest('[data-pick-kind]');
+                if (!choice) return;
+                event.preventDefault();
+                const kind = choice.getAttribute('data-pick-kind');
+                const fieldId = choice.getAttribute('data-pick-field') || '';
+                const value = choice.getAttribute('data-pick-value') || '';
+                hideSheetPickTip();
+                closeSheetPick();
+                applySheetPick(kind, fieldId, value);
+            });
+            sheetPickMenu.addEventListener('mouseover', function (event) {
+                const opt = event.target.closest('[data-pick-hint]');
+                if (opt) showSheetPickTip(opt);
+            });
+            sheetPickMenu.addEventListener('mouseleave', hideSheetPickTip);
+            sheetPickMenu.addEventListener('scroll', hideSheetPickTip);
+            sheetPickMenu.addEventListener('focusin', function (event) {
+                const opt = event.target.closest('[data-pick-hint]');
+                if (opt) showSheetPickTip(opt);
+            });
+            sheetPickMenu.addEventListener('focusout', function (event) {
+                if (!event.relatedTarget || !sheetPickMenu.contains(event.relatedTarget)) hideSheetPickTip();
+            });
+        }
+        document.addEventListener('mousedown', function (event) {
+            if (!sheetPickOpen) return;
+            if (event.target.closest('.sheet-pick') || event.target.closest('#sheetPickMenu')) return;
+            closeSheetPick();
+        });
+        window.addEventListener('resize', function () {
+            if (sheetPickOpen && sheetPickAnchor) placeSheetPick(sheetPickAnchor);
         });
 
         let nameEditOriginal = '';
@@ -2767,7 +3087,8 @@
             setLargeType: 'largeType',
             setRememberPage: 'rememberPage',
             setHideBg: 'hideBackground',
-            setExportNoPhotos: 'exportNoPhotos'
+            setExportNoPhotos: 'exportNoPhotos',
+            setInvestigator: 'investigatorMode'
         };
         Object.keys(settingToggles).forEach(function (id) {
             const el = document.getElementById(id);
@@ -2779,6 +3100,7 @@
                 patchSettings(patch);
                 applyAppSettings(true);
                 syncSettingsForm();
+                if (settingToggles[id] === 'investigatorMode' && typeof renderProfile === 'function') renderProfile(true);
             });
         });
         document.querySelectorAll('[data-set-pick]').forEach(function (wrap) {
@@ -2787,6 +3109,7 @@
             btn.addEventListener('click', function (event) {
                 event.preventDefault();
                 event.stopPropagation();
+                closeSheetPick();
                 openSetPick(wrap.getAttribute('data-set-pick'), btn);
             });
         });
@@ -3009,6 +3332,41 @@
             if (event.target.id === 'shareSheet') closeShare();
         });
         document.getElementById('shareCopy').addEventListener('click', copyShareLink);
+        const shareSessionLive = document.getElementById('shareSessionLive');
+        if (shareSessionLive) {
+            shareSessionLive.addEventListener('change', function () {
+                if (!window.OrbINTShare || typeof OrbINTShare.setLive !== 'function') return;
+                const on = !!shareSessionLive.checked;
+                const err = document.getElementById('shareCollabError');
+                shareSessionLive.disabled = true;
+                OrbINTShare.setLive(on).then(function () {
+                    if (err) { err.hidden = true; err.textContent = ''; }
+                }).catch(function (error) {
+                    if (err) {
+                        err.hidden = false;
+                        err.textContent = String(error && error.message || error);
+                    }
+                    shareSessionLive.checked = !on;
+                }).then(function () {
+                    shareSessionLive.disabled = false;
+                    if (window.OrbINTShare) OrbINTShare.paint();
+                });
+            });
+        }
+        const shareCopyView = document.getElementById('shareCopyView');
+        if (shareCopyView) shareCopyView.addEventListener('click', function () {
+            const el = document.getElementById('shareViewUrl');
+            if (el && /^https?:/i.test(el.textContent)) OrbINTShare.copy(el.textContent);
+        });
+        ['setShareApi', 'setCollabWs'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const key = id === 'setShareApi' ? 'shareApiUrl' : 'collabWsUrl';
+            el.addEventListener('change', function () {
+                patchSettings({ [key]: el.value.trim() });
+                if (window.OrbINTShare) OrbINTShare.paint();
+            });
+        });
         document.getElementById('shareNative').addEventListener('click', nativeShareSite);
         const installSheet = document.getElementById('installSheet');
         const installClose = document.getElementById('installClose');
@@ -3052,13 +3410,21 @@
             peerHubs.addEventListener('pointerdown', (event) => {
                 if (event.button === 1) return;
                 if (event.button !== 0) return;
-                const peerEl = event.target.closest('[data-peer]');
+                const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]') || event.target.closest('.peer-hub, [data-peer]');
                 if (!peerEl) return;
                 const body = peerBodyFromEl(peerEl);
                 if (!body) return;
                 event.preventDefault();
                 event.stopPropagation();
                 beginOrbitDrag(event, 'peer', body);
+            }, true);
+            peerHubs.addEventListener('contextmenu', (event) => {
+                const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]') || event.target.closest('.peer-hub, [data-peer]');
+                const peerId = peerIdFromEl(peerEl);
+                if (!peerId) return;
+                event.preventDefault();
+                event.stopPropagation();
+                openPeerMenu(event, peerId);
             }, true);
             peerHubs.addEventListener('error', (event) => {
                 const img = event.target.closest('.peer-hub-face');
@@ -3135,8 +3501,21 @@
             openLead(option.dataset.openLead, fieldInputValue(toolkitFocusField), option.dataset.leadMode);
         });
 
-        document.getElementById('profileToggle').addEventListener('click', () => setPanelOpen(true));
+        const profileToggle = document.getElementById('profileToggle');
+        if (profileToggle) {
+            profileToggle.addEventListener('click', function () {
+                setPanelOpen(!profilePanel.classList.contains('open'));
+            });
+        }
         document.getElementById('profileClose').addEventListener('click', () => setPanelOpen(false));
+        const pageSwitchNav = document.getElementById('pageSwitch');
+        if (pageSwitchNav) {
+            pageSwitchNav.addEventListener('click', function (event) {
+                if (event.target.closest('[data-page]') && isPhone() && profilePanel.classList.contains('open')) {
+                    setPanelOpen(false);
+                }
+            });
+        }
         const dockPortfolio = document.getElementById('dockPortfolio');
         if (dockPortfolio) {
             dockPortfolio.addEventListener('click', () => {
@@ -3643,7 +4022,7 @@
                 return;
             }
             if (event.target.closest('#hubAdd')) return;
-            const peerEl = event.target.closest('[data-peer]');
+            const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]');
             if (peerEl) {
                 const body = peerBodyFromEl(peerEl);
                 if (body) {
@@ -3677,6 +4056,16 @@
             }
             if (event.button === 1) return;
             if (event.button !== 0) return;
+            const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]');
+            if (peerEl) {
+                const body = peerBodyFromEl(peerEl);
+                if (body) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    beginOrbitDrag(event, 'peer', body);
+                    return;
+                }
+            }
             event.preventDefault();
             event.stopPropagation();
             beginOrbitDrag(event, 'hub');
@@ -3809,7 +4198,7 @@
         });
 
         document.addEventListener('click', (event) => {
-            if (!event.target.closest('#platformMenu, .platform-trigger, #phonePlatformBtn, .node.menu-open:not(.tz-open):not(.cc-open)')) {
+            if (!event.target.closest('#platformMenu, .platform-trigger, .platform-icon, #phonePlatformBtn, [data-sheet-platform], .node.menu-open:not(.tz-open):not(.cc-open)')) {
                 closePlatformMenu();
             }
             if (!event.target.closest('#tzMenu, .tz-trigger, .tz-pick, .tz-abbr, #phoneTzBtn, .node.tz-open')) {
@@ -3838,43 +4227,73 @@
             closeFieldMenu();
         }, true);
 
-        document.getElementById('fieldMenu').addEventListener('click', (event) => {
+        document.getElementById('fieldMenu').addEventListener('pointerdown', onFieldMenuAct);
+        document.getElementById('fieldMenu').addEventListener('click', onFieldMenuAct);
+
+        function onFieldMenuAct(event) {
             const button = event.target.closest('[data-field-act]');
             if (!button || button.disabled) return;
+            event.preventDefault();
             event.stopPropagation();
             const menu = document.getElementById('fieldMenu');
             const act = button.dataset.fieldAct;
             const fieldId = menu ? menu.dataset.field : '';
             const extra = button.dataset.linkId || (menu && menu.dataset.peer) || '';
+            if (!act) return;
+            if (menu && menu.dataset.actLock === act + ':' + extra) return;
+            if (menu) menu.dataset.actLock = act + ':' + extra;
             closeFieldMenu();
             runFieldAction(act, fieldId, extra);
-        });
+        }
+
+        function orbitHitEl(event, selector) {
+            const stage = document.getElementById('mapStage');
+            if (!event || !selector || !stage) return null;
+            const fromTarget = event.target && event.target.closest && event.target.closest(selector);
+            if (fromTarget && stage.contains(fromTarget)) return fromTarget;
+            let stack = [];
+            try { stack = document.elementsFromPoint(event.clientX, event.clientY) || []; } catch (err) { stack = []; }
+            for (let i = 0; i < stack.length; i++) {
+                const node = stack[i];
+                if (!node || !node.closest) continue;
+                const el = node.closest(selector);
+                if (el && stage.contains(el)) return el;
+            }
+            return null;
+        }
+
+        function peerIdFromEl(el) {
+            if (!el) return '';
+            return el.getAttribute('data-peer') || '';
+        }
 
         if (mapStage) mapStage.addEventListener('contextmenu', (event) => {
             if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #ccMenu, #exportMenu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .install-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
-            const node = event.target.closest('.node');
+            const peer = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]');
+            const peerId = peerIdFromEl(peer);
+            if (peerId) {
+                event.preventDefault();
+                event.stopPropagation();
+                openPeerMenu(event, peerId);
+                return;
+            }
+            const node = orbitHitEl(event, '.node');
             if (node) {
                 event.preventDefault();
                 openFieldMenu(event, node);
                 return;
             }
-            if (event.target.closest('#hubAdd')) {
+            if (orbitHitEl(event, '#hubAdd')) {
                 event.preventDefault();
                 toggleAddField();
                 return;
             }
-            const peer = event.target.closest('[data-peer]');
-            if (peer) {
-                event.preventDefault();
-                openPeerMenu(event, peer.dataset.peer);
-                return;
-            }
-            if (event.target.closest('#hub')) {
+            if (orbitHitEl(event, '#hub')) {
                 event.preventDefault();
                 openHubMenu(event);
                 return;
             }
-            if (event.target.closest('.map-toggle, .donate, .dock')) return;
+            if (event.target.closest('.map-toggle, .casebook-btn, #workNav, .donate, .dock')) return;
             event.preventDefault();
             openMapMenu(event);
         });
@@ -4108,7 +4527,7 @@
         if (mapStage) {
             mapStage.addEventListener('pointerdown', (event) => {
                 if (event.pointerType !== 'touch') return;
-                if (event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                if (event.target.closest('.map-toggle, .casebook-btn, #workNav, button, a, input, select, textarea')) return;
                 pinchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
                 if (pinchPointers.size >= 2) {
                     event.preventDefault();
@@ -4135,12 +4554,12 @@
             }, true);
             ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
                 mapStage.addEventListener(name, (event) => {
-                    if (event.target.closest && event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                    if (event.target.closest && event.target.closest('.map-toggle, .casebook-btn, #workNav, button, a, input, select, textarea')) return;
                     event.preventDefault();
                 });
             });
             mapStage.addEventListener('touchmove', (event) => {
-                if (event.target.closest && event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                if (event.target.closest && event.target.closest('.map-toggle, .casebook-btn, #workNav, button, a, input, select, textarea')) return;
                 if (event.touches && event.touches.length > 1) event.preventDefault();
             }, { passive: false });
         }
@@ -4265,3 +4684,4 @@
             }
             kickOrbit();
         });
+        if (window.OrbINTShare && typeof OrbINTShare.boot === 'function') OrbINTShare.boot();

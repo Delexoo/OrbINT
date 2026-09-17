@@ -1,4 +1,4 @@
-/* Assembled from js/orbit-settings.js, orbit-fields.js, orbit-library.js, orbit-map.js
+/* Assembled from js/orbit-settings.js, orbit-fields.js, orbit-library.js, crypto-share.js, orbit-map.js
    Edit those files, then run: python tools/bundle.py */
 
         const GROUPS = [
@@ -38,7 +38,10 @@
             idleLock: 'off',
             exportNoPhotos: false,
             stealthTab: false,
-            largeType: false
+            largeType: false,
+            investigatorMode: true,
+            shareApiUrl: 'http://127.0.0.1:8788',
+            collabWsUrl: 'http://127.0.0.1:8788'
         };
         const BOMB_DAYS = { '1d': 1, '3d': 3, '1w': 7, '2w': 14, '1m': 30, '3m': 90, '6m': 180, '12m': 365, '24m': 730 };
         const STEALTH_TITLE = 'Notes';
@@ -201,7 +204,8 @@
                     { value: 'orbit', label: 'Orbit' },
                     { value: 'timeline', label: 'Timeline' },
                     { value: 'whiteboard', label: 'Whiteboard' },
-                    { value: 'datasheet', label: 'Datasheet' }
+                    { value: 'compiler', label: 'Compiler' },
+                    { value: 'datasheet', label: 'Case File' }
                 ]
             }
         };
@@ -349,6 +353,7 @@
                 body.classList.toggle('is-curtain', !!appSettings.curtain);
                 body.classList.toggle('hide-tips', !!appSettings.hideTips);
                 body.classList.toggle('no-bg', !!appSettings.hideBackground);
+                body.classList.toggle('investigator-mode', appSettings.investigatorMode !== false);
             }
             root.classList.toggle('reduce-motion', !!appSettings.reduceMotion);
             root.classList.toggle('large-type', !!appSettings.largeType);
@@ -396,7 +401,8 @@
                 setLargeType: 'largeType',
                 setRememberPage: 'rememberPage',
                 setHideBg: 'hideBackground',
-                setExportNoPhotos: 'exportNoPhotos'
+                setExportNoPhotos: 'exportNoPhotos',
+                setInvestigator: 'investigatorMode'
             };
             if (bomb) bomb.checked = !!appSettings.logicBomb;
             bombPrevPeriod = appSettings.logicBombPeriod === 'now' ? '6m' : (appSettings.logicBombPeriod || '6m');
@@ -405,6 +411,10 @@
                 const el = document.getElementById(id);
                 if (el) el.checked = !!appSettings[map[id]];
             });
+            const api = document.getElementById('setShareApi');
+            const watch = document.getElementById('setCollabWs');
+            if (api && document.activeElement !== api) api.value = appSettings.shareApiUrl || '';
+            if (watch && document.activeElement !== watch) watch.value = appSettings.collabWsUrl || '';
             updateBombCountdown();
             syncSetPickLabels();
         }
@@ -429,6 +439,7 @@
                 body.classList.toggle('is-curtain', !!appSettings.curtain);
                 body.classList.toggle('hide-tips', !!appSettings.hideTips);
                 body.classList.toggle('no-bg', !!appSettings.hideBackground);
+                body.classList.toggle('investigator-mode', appSettings.investigatorMode !== false);
             }
             root.classList.toggle('reduce-motion', !!appSettings.reduceMotion);
             root.classList.toggle('large-type', !!appSettings.largeType);
@@ -1954,6 +1965,7 @@
         const FIND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>';
         const DEEP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>';
         const MORE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';
+        const DUP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/><path d="M14.5 12.5v6M11.5 15.5h6"/></svg>';
 
         function fieldBase(id) {
             const field = fieldById(id);
@@ -2298,7 +2310,7 @@
             if (window.__orbintToolkitWait) return window.__orbintToolkitWait;
             window.__orbintToolkitWait = new Promise(function (resolve) {
                 const s = document.createElement('script');
-                s.src = 'osint-tools.js?v=159';
+                s.src = 'osint-tools.js?v=218';
                 s.onload = function () {
                     try { window.dispatchEvent(new Event('orbint-toolkit-ready')); } catch (error) {}
                     resolve(window.OSINT_TOOLKIT || null);
@@ -2437,6 +2449,7 @@
         }
 
         function hideField(id) {
+            if (typeof recordHistory === 'function') recordHistory(true);
             hiddenFields.add(id);
             FIELDS.forEach((field) => {
                 if (isDescendantOf(field.id, id)) hiddenFields.add(field.id);
@@ -2461,14 +2474,29 @@
             const groups = GROUPS.map((group) => ({
                 id: group.id,
                 label: group.label,
-                fields: group.fields.slice()
+                fields: []
             }));
+            const placed = {};
+            function place(gid, id) {
+                if (!id || placed[id]) return;
+                const group = groups.find((item) => item.id === gid) || groups.find((item) => item.id === 'custom');
+                if (!group) return;
+                group.fields.push(id);
+                placed[id] = true;
+            }
+            GROUPS.forEach((group) => {
+                group.fields.forEach((id) => {
+                    place(group.id, id);
+                    FIELDS.forEach((field) => {
+                        if (!field || placed[field.id]) return;
+                        if (field.id === id) return;
+                        if (fieldBase(field.id) === id) place(group.id, field.id);
+                    });
+                });
+            });
             FIELDS.forEach((field) => {
-                if (groups.some((group) => group.fields.indexOf(field.id) !== -1)) return;
-                const gid = fieldGroupId(field);
-                let group = groups.find((item) => item.id === gid);
-                if (!group) group = groups.find((item) => item.id === 'custom');
-                if (group) group.fields.push(field.id);
+                if (!field || placed[field.id]) return;
+                place(fieldGroupId(field), field.id);
             });
             return groups;
         }
@@ -2552,9 +2580,10 @@
             });
         }
 
-        function duplicateField(sourceId) {
+        function duplicateField(sourceId, opts) {
             const source = fieldById(sourceId);
             if (!source) return;
+            if (typeof recordHistory === 'function') recordHistory(true);
             const base = fieldBase(sourceId);
             const stock = fieldById(base);
             const id = uniqueDupId(base);
@@ -2575,9 +2604,11 @@
             createNodes();
             applyHiddenFields();
             renderNodes();
-            renderProfile();
+            if (typeof renderProfile === 'function') renderProfile(true);
             updateHubProgress();
-            focusOrbitField(id);
+            if (opts && opts.focus === 'sheet' && typeof focusSheetField === 'function') focusSheetField(id);
+            else focusOrbitField(id);
+            return id;
         }
 
         function installOrbitField(spec) {
@@ -3063,6 +3094,8 @@
                 '<button type="button" data-field-act="hide">Remove field</button>' +
                 (hiddenFields.size ? '<div class="field-sep"></div><button type="button" data-field-act="restore">Show all fields</button>' : '');
             menu.dataset.field = fieldId;
+            menu.dataset.peer = '';
+            menu.dataset.actLock = '';
             menu.hidden = false;
             const mapRect = stage.getBoundingClientRect();
             const left = event.clientX - mapRect.left;
@@ -3256,6 +3289,7 @@
                 '<button type="button" class="field-danger" data-field-act="reset">Reset</button>';
             menu.dataset.field = '';
             menu.dataset.peer = '';
+            menu.dataset.actLock = '';
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -3306,6 +3340,7 @@
                 '<button type="button" data-field-act="recenter">Recenter map</button>';
             menu.dataset.field = '';
             menu.dataset.peer = '';
+            menu.dataset.actLock = '';
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -3327,6 +3362,7 @@
                 '<button type="button" class="field-danger" data-field-act="delete-profile" data-link-id="' + escapeHtml(peerId) + '"' + (canDelete ? '' : ' disabled') + '>Delete</button>';
             menu.dataset.field = '';
             menu.dataset.peer = peerId;
+            menu.dataset.actLock = '';
             menu.hidden = false;
             placeFieldMenu(event);
         }
@@ -3513,17 +3549,124 @@
                         analysis: saved.analysis || '',
                         facts,
                         nulls: missingFieldIds(saved),
-                        customPlatforms: Array.isArray(saved.customPlatforms) ? saved.customPlatforms : []
+                        customPlatforms: Array.isArray(saved.customPlatforms) ? saved.customPlatforms : [],
+                        case: Object.assign({}, emptyCaseMeta(), saved.case || {}),
+                        audit: Array.isArray(saved.audit) ? saved.audit.slice(-200) : []
                     };
                 }
             } catch (error) {}
-            return { facts: emptyFacts(), analysis: '', nulls: [], customPlatforms: [] };
+            return { facts: emptyFacts(), analysis: '', nulls: [], customPlatforms: [], case: emptyCaseMeta(), audit: [] };
+        }
+
+        function emptyCaseMeta() {
+            return { number: '', offense: '', status: 'open', investigator: '', openedAt: '' };
+        }
+
+        const SHEET_PICKS = {
+            confidence: [
+                { value: '', label: 'Unrated' },
+                { value: 'confirmed', label: 'Confirmed' },
+                { value: 'probable', label: 'Probable' },
+                { value: 'possible', label: 'Possible' },
+                { value: 'unconfirmed', label: 'Unconfirmed' }
+            ],
+            method: [
+                { value: '', label: 'Method' },
+                { value: 'open-web', label: 'Open web' },
+                { value: 'public-records', label: 'Public records' },
+                { value: 'subscriber-db', label: 'Subscriber DB' },
+                { value: 'interview', label: 'Interview' },
+                { value: 'legal-process', label: 'Legal process' }
+            ],
+            status: [
+                { value: 'open', label: 'Open' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'closed', label: 'Closed' }
+            ],
+            offense: [
+                { value: 'Background check', label: 'Background check', hint: 'Public history, records, and reputation of a person.' },
+                { value: 'Due diligence', label: 'Due diligence', hint: 'Verify facts about a person or company before a deal or hire.' },
+                { value: 'Person of interest', label: 'Person of interest', hint: 'Someone tied to the inquiry who has not been charged.' },
+                { value: 'Missing person', label: 'Missing person', hint: 'Find someone whose whereabouts are unknown.' },
+                { value: 'Open-source review', label: 'Open-source review', hint: 'Research from public sites, posts, and records only.' },
+                { value: 'Intellectual property', label: 'Intellectual property', hint: 'Misuse of trademarks, copyrights, patents, or trade secrets.' },
+                { value: 'Workplace inquiry', label: 'Workplace inquiry', hint: 'Internal review of an employee or workplace issue.' },
+                { sep: true },
+                { value: 'Murder', label: 'Murder', hint: 'Unlawful killing carried out with intent.' },
+                { value: 'Homicide', label: 'Homicide', hint: 'A killing of one person by another, including murder and manslaughter.' },
+                { value: 'Manslaughter', label: 'Manslaughter', hint: 'Unlawful killing without a prior intent to murder.' },
+                { value: 'Attempted murder', label: 'Attempted murder', hint: 'Trying to kill someone but not succeeding.' },
+                { value: 'Assault', label: 'Assault', hint: 'Unlawful threat or attempt to cause physical harm.' },
+                { value: 'Aggravated assault', label: 'Aggravated assault', hint: 'Assault with a weapon or that causes serious injury.' },
+                { value: 'Kidnapping', label: 'Kidnapping', hint: 'Taking or holding someone against their will.' },
+                { value: 'Robbery', label: 'Robbery', hint: 'Theft from a person using force or the threat of force.' },
+                { value: 'Sexual assault', label: 'Sexual assault', hint: 'Sexual contact without consent.' },
+                { value: 'Human trafficking', label: 'Human trafficking', hint: 'Exploiting people through force, fraud, or coercion.' },
+                { value: 'Domestic violence', label: 'Domestic violence', hint: 'Abuse by a current or former partner or family member.' },
+                { value: 'Terrorism', label: 'Terrorism', hint: 'Violence meant to intimidate a population or government.' },
+                { sep: true },
+                { value: 'Harassment', label: 'Harassment', hint: 'Repeated unwanted contact that causes distress.' },
+                { value: 'Stalking', label: 'Stalking', hint: 'Repeated following or watching that causes fear.' },
+                { value: 'Threats', label: 'Threats', hint: 'Words or acts meant to frighten someone with harm.' },
+                { value: 'Extortion', label: 'Extortion', hint: 'Forcing someone to pay or act by using threats.' },
+                { value: 'Theft', label: 'Theft', hint: 'Taking property without permission.' },
+                { value: 'Burglary', label: 'Burglary', hint: 'Entering a building to commit a crime, usually theft.' },
+                { value: 'Arson', label: 'Arson', hint: 'Deliberately setting fire to property.' },
+                { value: 'Fraud', label: 'Fraud', hint: 'Deceiving someone for money or other gain.' },
+                { value: 'Identity theft', label: 'Identity theft', hint: 'Using someone else\'s identity without permission.' },
+                { value: 'Impersonation', label: 'Impersonation', hint: 'Pretending to be another person.' },
+                { value: 'Forgery', label: 'Forgery', hint: 'Making or altering a document in order to deceive.' },
+                { value: 'Embezzlement', label: 'Embezzlement', hint: 'Stealing money or property you were trusted to handle.' },
+                { value: 'Money laundering', label: 'Money laundering', hint: 'Hiding the source of money from crime.' },
+                { value: 'Corruption', label: 'Corruption', hint: 'Abuse of power for private gain.' },
+                { value: 'Drug trafficking', label: 'Drug trafficking', hint: 'Selling, moving, or distributing illegal drugs.' },
+                { value: 'Weapons offense', label: 'Weapons offense', hint: 'Unlawful possession, sale, or use of a weapon.' },
+                { value: 'Cybercrime', label: 'Cybercrime', hint: 'Crime committed with computers, accounts, or networks.' },
+                { value: 'Conspiracy', label: 'Conspiracy', hint: 'An agreement between people to commit a crime.' },
+                { value: 'Organized crime', label: 'Organized crime', hint: 'Crime carried out by a structured group.' }
+            ]
+        };
+
+        function sheetPickLabel(kind, value) {
+            const list = SHEET_PICKS[kind] || [];
+            const hit = list.find(function (item) { return item.value === String(value || ''); });
+            if (hit) return hit.label;
+            return (list[0] && list[0].label) || '';
+        }
+
+        function investigatorModeOn() {
+            try {
+                if (typeof OrbINTSettings !== 'undefined' && OrbINTSettings.get) {
+                    return OrbINTSettings.get('investigatorMode') !== false;
+                }
+            } catch (error) {}
+            return true;
+        }
+
+        function investigatorHidesField(field) {
+            if (!investigatorModeOn() || !field) return false;
+            const base = fieldBase(field.id);
+            return /^(password|pin|seedphrase|privatekey|apikey|session)$/.test(base);
+        }
+
+        function appendCaseAudit(act, field, note) {
+            if (!profile) return;
+            if (!Array.isArray(profile.audit)) profile.audit = [];
+            profile.audit.push({
+                at: new Date().toISOString(),
+                act: String(act || ''),
+                field: String(field || ''),
+                note: String(note || '').slice(0, 180)
+            });
+            if (profile.audit.length > 200) profile.audit = profile.audit.slice(-200);
         }
 
         profile = loadProfile();
         if (!profile.facts) profile.facts = emptyFacts();
         if (!Array.isArray(profile.nulls)) profile.nulls = [];
         if (!Array.isArray(profile.customPlatforms)) profile.customPlatforms = [];
+        profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+        if (!Array.isArray(profile.audit)) profile.audit = [];
         restoreFilledOptionalPresets();
 
         const mediaStore = {};
@@ -3746,6 +3889,10 @@
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(slim)); } catch (retry) {}
             }
             if (typeof queueLibrarySync === 'function') queueLibrarySync();
+            if (window.OrbINTShare && typeof OrbINTShare.push === 'function' && !OrbINTShare.readonly()) {
+                clearTimeout(saveProfile.shareTimer);
+                saveProfile.shareTimer = setTimeout(function () { OrbINTShare.push(); }, 1100);
+            }
         }
 
         const history = { past: [], future: [], applying: false, timer: 0 };
@@ -3756,7 +3903,9 @@
                 facts: slimFactsForStorage(profile.facts || emptyFacts()),
                 nulls: Array.isArray(profile.nulls) ? profile.nulls.slice() : [],
                 missing: Array.isArray(profile.nulls) ? profile.nulls.slice() : [],
-                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : []
+                customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : [],
+                case: Object.assign({}, emptyCaseMeta(), profile.case || {}),
+                audit: Array.isArray(profile.audit) ? profile.audit.slice(-200) : []
             };
         }
 
@@ -3838,6 +3987,8 @@
                 layout: null,
                 peerHomes: {},
                 customPlatforms: [],
+                case: emptyCaseMeta(),
+                audit: [],
                 investigation: null
             };
         }
@@ -4118,6 +4269,8 @@
                 layout: currentLayoutSnapshot(),
                 peerHomes: Object.assign({}, peerHomes),
                 customPlatforms: Array.isArray(profile.customPlatforms) ? profile.customPlatforms.slice() : [],
+                case: Object.assign({}, emptyCaseMeta(), (profile && profile.case) || (prev && prev.case) || {}),
+                audit: Array.isArray(profile && profile.audit) ? profile.audit.slice(-200) : ((prev && prev.audit) || []),
                 investigation: (window.OrbINTCase && typeof OrbINTCase.snapshot === 'function')
                     ? OrbINTCase.snapshot()
                     : ((prev && prev.investigation) || null)
@@ -4372,6 +4525,8 @@
                 profile.analysis = entry.analysis || '';
                 profile.nulls = missingFieldIds(entry);
                 profile.customPlatforms = Array.isArray(entry.customPlatforms) ? entry.customPlatforms : [];
+                profile.case = Object.assign({}, emptyCaseMeta(), entry.case || {});
+                profile.audit = Array.isArray(entry.audit) ? entry.audit.slice(-200) : [];
                 restoreFilledOptionalPresets();
                 try {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.assign({}, profile, {
@@ -4778,7 +4933,9 @@
                 hidden: Array.isArray(raw.hidden) ? raw.hidden : (Array.isArray(source.hidden) ? source.hidden : []),
                 layout: raw.layout || source.layout || null,
                 peerHomes: normalizePeerHomes(raw.peerHomes || source.peerHomes),
-                investigation: raw.investigation || source.investigation || null
+                investigation: raw.investigation || source.investigation || null,
+                case: Object.assign({}, emptyCaseMeta(), raw.case || source.case || {}),
+                audit: Array.isArray(raw.audit) ? raw.audit : (Array.isArray(source.audit) ? source.audit : [])
             };
         }
 
@@ -4997,7 +5154,10 @@
             backdrop.hidden = !next || !drawerQuery.matches || phone;
             backdrop.classList.toggle('visible', next && drawerQuery.matches && !phone);
             const toggle = document.getElementById('profileToggle');
-            if (toggle) toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+                toggle.classList.toggle('is-on', next);
+            }
             const dockPort = document.getElementById('dockPortfolio');
             if (dockPort) dockPort.setAttribute('aria-expanded', next ? 'true' : 'false');
             if (phone && !next && typeof kickOrbit === 'function') kickOrbit();
@@ -5042,8 +5202,8 @@
             const extra = {};
             const base = fieldBase(fieldId);
             if (isPlatformField(fieldId)) {
-                const node = document.querySelector('.node[data-field="' + fieldId + '"]');
-                if (node && node.dataset.platform) extra.platform = node.dataset.platform;
+                const platform = fieldPlatformId(fieldId);
+                if (platform) extra.platform = platform;
             } else if (base === 'image' && looksLikeImageSrc(value)) {
                 extra.preview = value;
                 extra.media = value;
@@ -5055,7 +5215,28 @@
             return extra;
         }
 
+        function patchFactMeta(id, key, value) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+            if (!id || !key) return;
+            profile.facts[id] = profile.facts[id] || [];
+            let current = profile.facts[id][profile.facts[id].length - 1];
+            if (!current) {
+                current = { value: '', addedAt: new Date().toISOString() };
+                profile.facts[id].push(current);
+            }
+            if (key === 'capturedAt') {
+                if (value) current.capturedAt = String(value).trim();
+                else delete current.capturedAt;
+            } else {
+                if (value) current[key] = String(value).trim();
+                else delete current[key];
+                if (!current.capturedAt) current.capturedAt = new Date().toISOString();
+            }
+            saveProfile();
+        }
+
         function writeLatestFact(id, value, extra) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
             const clean = String(value || '').trim();
             profile.facts[id] = profile.facts[id] || [];
             if (!clean) {
@@ -5081,6 +5262,7 @@
             }
             if (isNullField(id)) setFieldNull(id, false, true);
             let current = profile.facts[id][profile.facts[id].length - 1];
+            const prevValue = current ? String(current.value || '') : '';
             if (!current) {
                 current = { value: clean, addedAt: new Date().toISOString() };
                 profile.facts[id].push(current);
@@ -5092,6 +5274,9 @@
                 const platform = fieldPlatformId(id);
                 if (platform) current.platform = platform;
             }
+            if (!current.capturedAt) current.capturedAt = new Date().toISOString();
+            if (investigatorModeOn() && !current.method) current.method = 'open-web';
+            if (prevValue !== clean) appendCaseAudit('fact', id, String(clean).slice(0, 80));
             saveProfile();
             refreshProfileChrome();
             syncLinkedField(id, clean);
@@ -6069,7 +6254,27 @@
         function profileSheetEditing() {
             const el = document.activeElement;
             if (!el || !el.closest) return false;
-            return el.id === 'subjectNameInput' || !!el.closest('#factsList [data-sheet-field]');
+            return el.id === 'subjectNameInput' || !!el.closest('#factsList [data-sheet-field], .fact-prov, .fact-detail, .case-file, .sheet-pick, #sheetPickMenu');
+        }
+
+        const openFactDetails = new Set();
+
+        function factDetailsOpen(id) {
+            return openFactDetails.has(id);
+        }
+
+        function toggleFactDetails(id) {
+            if (!id) return;
+            if (openFactDetails.has(id)) openFactDetails.delete(id);
+            else openFactDetails.add(id);
+            const item = document.querySelector('.fact-item[data-fact-item="' + id + '"]');
+            if (!item) return;
+            const on = openFactDetails.has(id);
+            item.classList.toggle('is-open', on);
+            const panel = item.querySelector('.fact-detail');
+            const btn = item.querySelector('[data-fact-more]');
+            if (panel) panel.setAttribute('aria-hidden', on ? 'false' : 'true');
+            if (btn) btn.setAttribute('aria-expanded', on ? 'true' : 'false');
         }
 
         function dossierFieldRowHtml(field) {
@@ -6077,40 +6282,142 @@
             const value = sheetFieldValue(field);
             const isNotes = base === 'notes';
             const secret = isSecretField(field.id);
-            const open = secret && secretIsOpen(field.id);
+            const secretOpen = secret && secretIsOpen(field.id);
             const platformField = isPlatformField(field.id);
             const platformId = platformField ? fieldPlatformId(field.id) : '';
             const platform = platformId ? platformById(platformId) : null;
             let control;
+            const reveal = secret
+                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, secretOpen)) + '" title="' + (secretOpen ? 'Hide' : 'Show') + '">' + (secretOpen ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                : '';
             if (isNotes) {
                 control = '<textarea class="sheet-area" data-sheet-field="' + field.id + '" rows="2" placeholder="' + escapeHtml(field.placeholder || '') + '">' + escapeHtml(value) + '</textarea>';
             } else if (platformField) {
+                const passInput = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !secretOpen ? 'password' : 'text') + '" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
                 control =
                     '<button type="button" class="sheet-platform" data-sheet-platform="' + field.id + '"' + (platform ? ' hidden' : '') + '>Select site</button>' +
                     '<div class="sheet-platform-value"' + (platform ? '' : ' hidden') + '>' +
                         (platform
-                            ? '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" title="' + escapeHtml(platform.label) + '" aria-label="Change platform">' + platformMark(platform) + '</button>'
-                            : '') +
-                        '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !open ? 'password' : 'text') + '" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">' +
+                            ? '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" title="Change site" aria-label="Change site">' + platformMark(platform) + '</button>'
+                            : '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" hidden title="Change site" aria-label="Change site"></button>') +
+                        (secret ? '<span class="sheet-secret">' + passInput + reveal + '</span>' : passInput) +
                     '</div>';
             } else {
-                control = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !open ? 'password' : 'text') + '" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder || '') + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
+                const input = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !secretOpen ? 'password' : 'text') + '" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder || '') + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
+                control = secret ? '<span class="sheet-secret">' + input + reveal + '</span>' : input;
             }
-            const reveal = secret
-                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, open)) + '" title="' + (open ? 'Hide' : 'Show') + '">' + (open ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
-                : '';
             const maps = isMapsField(field.id) ? mapsButtonHtml(field.id) : '';
             const filled = !!String(value || '').trim() && (!platformField || !!platform);
             const find = '<button type="button" class="fact-find' + (filled ? ' ready' : '') + '" data-search-field="' + field.id + '" aria-label="' + (filled ? 'Search deeper' : 'How to find this') + '" title="' + (filled ? 'Search deeper' : 'How to find this') + '">' + (filled ? DEEP_ICON : FIND_ICON) + '</button>';
-            return '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
+            const drop = '<button type="button" class="fact-drop" data-sheet-hide="' + field.id + '" aria-label="Delete" title="Delete">×</button>';
+            const fact = lastFactRecord(field.id);
+            const detailsOpen = factDetailsOpen(field.id);
+            const hasMeta = !!(fact && (fact.source || fact.confidence || fact.method || fact.capturedAt));
+            const more = '<button type="button" class="fact-more' + (hasMeta ? ' has-meta' : '') + '" data-fact-more="' + field.id + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '" aria-label="Details" title="Details">' + SHEET_CHEVRON + '</button>';
+            return '<div class="fact-item' + (detailsOpen ? ' is-open' : '') + '" data-fact-item="' + field.id + '">' +
+                '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
                 '<span class="fact-label">' + escapeHtml(field.label) + '</span>' +
-                control +
+                '<div class="fact-control">' + control + '</div>' +
                 '<div class="fact-tools">' +
                     maps +
-                    reveal +
+                    more +
                     find +
+                    drop +
+                '</div>' +
+                '</div>' +
+                factDetailHtml(field.id, fact, detailsOpen) +
+                '</div>';
+        }
+
+        const SHEET_CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+        function sheetPickButton(kind, value, extras) {
+            const label = sheetPickLabel(kind, value);
+            const empty = value ? '' : ' is-empty';
+            return '<button type="button" class="sheet-pick' + empty + '" data-sheet-pick="' + kind + '" data-value="' + escapeHtml(value || '') + '" ' + (extras || '') + ' aria-haspopup="listbox" aria-expanded="false"><span>' + escapeHtml(label) + '</span>' + SHEET_CHEVRON + '</button>';
+        }
+
+        function factDetailHtml(fieldId, fact, open) {
+            const source = (fact && fact.source) || '';
+            const confidence = (fact && fact.confidence) || '';
+            const method = (fact && fact.method) || '';
+            const captured = factStampIso(fact);
+            const locked = window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly();
+            const lock = locked ? ' disabled' : '';
+            const stamp = factStampHtml(fieldId, captured, lock);
+            const dup = '<button type="button" class="fact-dup" data-sheet-dup="' + fieldId + '" aria-label="Duplicate" title="Duplicate">' + DUP_ICON + '<span>Duplicate</span></button>';
+            return '<div class="fact-detail" data-fact-detail="' + fieldId + '" aria-hidden="' + (open ? 'false' : 'true') + '">' +
+                '<div class="fact-detail-body">' +
+                '<input class="fact-source" data-fact-meta="source" data-sheet-meta="' + fieldId + '" type="text" placeholder="Note" value="' + escapeHtml(source) + '" spellcheck="true" autocomplete="off" aria-label="Note">' +
+                '<div class="fact-detail-row">' +
+                    '<div class="fact-picks">' +
+                        sheetPickButton('confidence', confidence, 'data-sheet-meta="' + fieldId + '" aria-label="Confidence"') +
+                        sheetPickButton('method', method, 'data-sheet-meta="' + fieldId + '" aria-label="Collection method"') +
+                        dup +
+                        stamp +
+                    '</div>' +
+                '</div>' +
                 '</div>' +
                 '</div>';
+        }
+
+        function lastFactRecord(id) {
+            const list = (profile.facts && profile.facts[id]) || [];
+            return list.length ? list[list.length - 1] : null;
+        }
+
+        function factStampIso(fact) {
+            if (!fact) return '';
+            return fact.capturedAt || fact.addedAt || '';
+        }
+
+        function factStampHtml(fieldId, captured, lock) {
+            const empty = captured ? '' : ' is-empty';
+            return '<div class="fact-stamp">' +
+                '<button type="button" class="fact-captured' + empty + '" data-fact-cal="' + fieldId + '" aria-haspopup="dialog" aria-expanded="false" aria-label="Change date" title="Change date"' + lock + '>' +
+                    escapeHtml(captured ? formatCapturedDate(captured) : 'Date') +
+                '</button>' +
+                '<span class="fact-stamp-sep" aria-hidden="true">·</span>' +
+                '<button type="button" class="fact-captured fact-captured-time' + empty + '" data-fact-time="' + fieldId + '" aria-haspopup="dialog" aria-expanded="false" aria-label="Change time" title="Change time"' + lock + '>' +
+                    escapeHtml(captured ? formatCapturedTime(captured) : 'Time') +
+                '</button>' +
+                '</div>';
+        }
+
+        function paintFactCaptured(id) {
+            if (!id) return;
+            const iso = factStampIso(lastFactRecord(id));
+            const root = document.querySelector('#factsList [data-fact-item="' + id + '"]');
+            if (!root) return;
+            const dateBtn = root.querySelector('[data-fact-cal]');
+            const timeBtn = root.querySelector('[data-fact-time]');
+            if (dateBtn) {
+                dateBtn.textContent = iso ? formatCapturedDate(iso) : 'Date';
+                dateBtn.classList.toggle('is-empty', !iso);
+            }
+            if (timeBtn) {
+                timeBtn.textContent = iso ? formatCapturedTime(iso) : 'Time';
+                timeBtn.classList.toggle('is-empty', !iso);
+            }
+        }
+
+        function formatCapturedDate(iso) {
+            const d = new Date(iso);
+            if (!Number.isFinite(d.getTime())) return 'Date';
+            return d.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+        }
+
+        function formatCapturedTime(iso) {
+            const d = new Date(iso);
+            if (!Number.isFinite(d.getTime())) return 'Time';
+            return d.toLocaleString([], { hour: 'numeric', minute: '2-digit' });
+        }
+
+        function formatCaptured(iso) {
+            const day = formatCapturedDate(iso);
+            const time = formatCapturedTime(iso);
+            if (day === 'Date' || time === 'Time') return '';
+            return day + ' · ' + time;
         }
 
         function dossierHtml() {
@@ -6155,7 +6462,7 @@
                 amount = Math.floor(secs / (365 * 86400));
                 unit = amount === 1 ? 'year' : 'years';
             }
-            return 'Last updated: ' + amount + ' ' + unit + ' ago';
+            return 'OrbINT.net last updated: ' + amount + ' ' + unit + ' ago';
         }
 
         function paintSiteUpdated() {
@@ -6261,6 +6568,24 @@
             if (completeness) completeness.style.width = ((filled / caseTotal) * 100) + '%';
             if (coverageLabel) coverageLabel.textContent = filled + ' of ' + caseTotal + ' filed';
 
+            const rec = Object.assign({}, emptyCaseMeta(), (profile && profile.case) || {});
+            const num = document.getElementById('caseNumber');
+            const offense = document.getElementById('caseOffense');
+            const status = document.getElementById('caseStatus');
+            const who = document.getElementById('caseInvestigator');
+            if (num && document.activeElement !== num) num.value = rec.number || '';
+            if (offense && document.activeElement !== offense) offense.value = rec.offense || '';
+            const offensePick = document.getElementById('caseOffensePick');
+            if (offensePick) offensePick.dataset.value = rec.offense || '';
+            if (status && document.activeElement !== status) {
+                const val = rec.status || 'open';
+                status.dataset.value = val;
+                status.classList.toggle('is-empty', !val);
+                const lab = document.getElementById('caseStatusLabel') || status.querySelector('span');
+                if (lab) lab.textContent = sheetPickLabel('status', val);
+            }
+            if (who && document.activeElement !== who) who.value = rec.investigator || '';
+
             const face = document.getElementById('targetFace');
             if (face) {
                 face.classList.add('visible');
@@ -6325,6 +6650,56 @@
             renderPeerHubs();
             if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
             else if (window.OrbINTCase && typeof OrbINTCase.renderDatasheet === 'function') OrbINTCase.renderDatasheet();
+        }
+
+        function nextEmptyClone(sourceId) {
+            const base = fieldBase(sourceId);
+            if (!base) return '';
+            const ids = [];
+            groupsForProfile().forEach(function (group) {
+                (group.fields || []).forEach(function (id) { ids.push(id); });
+            });
+            const at = ids.indexOf(sourceId);
+            if (at < 0) return '';
+            let i;
+            for (i = at + 1; i < ids.length; i++) {
+                if (fieldBase(ids[i]) !== base) break;
+                if (typeof hiddenFields !== 'undefined' && hiddenFields.has(ids[i])) continue;
+                const field = fieldById(ids[i]);
+                if (!field || skipSheetField(field)) continue;
+                const fact = latestFact(ids[i]);
+                if (!String((fact && fact.value) || '').trim()) return ids[i];
+            }
+            return '';
+        }
+
+        function focusSheetField(id) {
+            if (!id) return;
+            activeField = id;
+            const pick = document.querySelector('#factsList [data-sheet-platform="' + id + '"]');
+            const input = document.querySelector('#factsList [data-sheet-field="' + id + '"]');
+            const el = (input && !input.hidden) ? input : (pick && !pick.hidden ? pick : input || pick);
+            if (!el) return;
+            requestAnimationFrame(function () {
+                el.focus();
+                const item = el.closest('.fact-item');
+                if (item && item.scrollIntoView) item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            });
+        }
+
+        function commitSheetEnter(fieldId) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+            const field = fieldById(fieldId);
+            if (!field || skipSheetField(field)) return;
+            if (fieldBase(fieldId) === 'notes') return;
+            const fact = latestFact(fieldId);
+            if (!String((fact && fact.value) || '').trim()) return;
+            const emptyId = nextEmptyClone(fieldId);
+            if (emptyId) {
+                focusSheetField(emptyId);
+                return;
+            }
+            if (typeof duplicateField === 'function') duplicateField(fieldId, { focus: 'sheet' });
         }
 
         function beginNameEdit() {
@@ -6506,11 +6881,11 @@
             layer.dataset.stamp = stamp;
             layer.innerHTML = rows.map((row) => {
                 const mark = row.face
-                    ? '<img class="peer-hub-face" alt="" data-peer-face="' + escapeHtml(row.id) + '">'
-                    : '<span class="peer-hub-letter">' + escapeHtml(profileLetter(row.name)) + '</span>';
+                    ? '<img class="peer-hub-face" alt="" data-peer="' + escapeHtml(row.id) + '" data-peer-face="' + escapeHtml(row.id) + '">'
+                    : '<span class="peer-hub-letter" data-peer="' + escapeHtml(row.id) + '">' + escapeHtml(profileLetter(row.name)) + '</span>';
                 return '<div class="peer-hub" data-peer="' + escapeHtml(row.id) + '" title="' + escapeHtml(row.name) + '" role="button" tabindex="0" aria-label="' + escapeHtml(row.name) + '">' +
                     mark +
-                    '<span class="peer-hub-name">' + escapeHtml(row.name) + '</span>' +
+                    '<span class="peer-hub-name" data-peer="' + escapeHtml(row.id) + '">' + escapeHtml(row.name) + '</span>' +
                     '</div>';
             }).join('');
             rows.forEach((row) => {
@@ -6561,15 +6936,16 @@
         }
 
         function peerBodyFromEl(el) {
-            if (!el || !el.dataset.peer) return null;
-            let body = peerBodies.find((entry) => entry.id === el.dataset.peer);
+            const hubEl = el && (el.classList && el.classList.contains('peer-hub') ? el : (el.closest && el.closest('.peer-hub')));
+            if (!hubEl || !hubEl.dataset.peer) return null;
+            let body = peerBodies.find((entry) => entry.id === hubEl.dataset.peer);
             if (body) {
-                body.el = el;
+                body.el = hubEl;
                 return body;
             }
             body = {
-                id: el.dataset.peer,
-                el: el,
+                id: hubEl.dataset.peer,
+                el: hubEl,
                 x: null,
                 y: null,
                 vx: 0,
@@ -7069,7 +7445,9 @@
         }
 
         function skipSheetField(field) {
-            return skipProfileRow(field);
+            if (skipProfileRow(field)) return true;
+            if (typeof investigatorHidesField === 'function' && investigatorHidesField(field)) return true;
+            return false;
         }
 
         function subjectAddressLines() {
@@ -7127,7 +7505,7 @@
             return '<a class="' + className + '" href="' + (ready ? escapeHtml(href) : '#') + '"' +
                 (ready ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') +
                 ' data-open-maps="' + fieldId + '" aria-label="Open in Google Maps" title="Google Maps">' +
-                PIN_ICON + '<span>Maps</span></a>';
+                PIN_ICON + '</a>';
         }
 
         function mapsButtonHtml(fieldId) {
@@ -7544,7 +7922,7 @@
                 const showMaps = isMapsField(phoneFieldId) && !needsPlatform;
                 mapsBtn.hidden = !showMaps;
                 applyMapsControlState(mapsBtn, phoneFieldId);
-                mapsBtn.innerHTML = PIN_ICON + '<span>Maps</span>';
+                mapsBtn.innerHTML = PIN_ICON;
             }
             if (upload) {
                 if (img) {
@@ -7722,9 +8100,18 @@
             if (!row) return;
             const pick = row.querySelector('.sheet-platform');
             const wrap = row.querySelector('.sheet-platform-value');
-            const mark = row.querySelector('.sheet-platform-mark');
+            let mark = row.querySelector('.sheet-platform-mark');
             const input = row.querySelector('[data-sheet-field]');
             const platform = platformById(fieldPlatformId(fieldId));
+            if (wrap && !mark) {
+                mark = document.createElement('button');
+                mark.type = 'button';
+                mark.className = 'sheet-platform-mark';
+                mark.setAttribute('data-sheet-platform', fieldId);
+                mark.title = 'Change site';
+                mark.setAttribute('aria-label', 'Change site');
+                wrap.insertBefore(mark, wrap.firstChild);
+            }
             if (pick) {
                 pick.hidden = !!platform;
                 pick.textContent = 'Select site';
@@ -7733,21 +8120,40 @@
             if (mark) {
                 if (platform) {
                     mark.innerHTML = platformMark(platform);
-                    mark.title = platform.label;
-                    mark.setAttribute('aria-label', 'Change ' + platform.label);
+                    mark.title = 'Change site · ' + platform.label;
+                    mark.setAttribute('aria-label', 'Change site');
                     mark.hidden = false;
                 } else {
                     mark.hidden = true;
+                    mark.innerHTML = '';
                 }
             }
             if (input) input.hidden = !platform;
         }
 
+        let platformMenuAnchor = null;
+
+        function restorePlatformMenuHost() {
+            const menu = document.getElementById('platformMenu');
+            const stage = document.getElementById('mapStage');
+            if (!menu) return;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.zIndex = '';
+            if (stage && menu.parentNode !== stage) stage.appendChild(menu);
+        }
+
         function closePlatformMenu() {
             const menu = document.getElementById('platformMenu');
-            if (!menu) return;
-            menu.hidden = true;
+            platformMenuAnchor = null;
+            if (menu) {
+                menu.hidden = true;
+                menu.classList.remove('is-sheet');
+            }
             document.querySelectorAll('.node.menu-open:not(.tz-open)').forEach((node) => node.classList.remove('menu-open'));
+            document.querySelectorAll('[data-sheet-platform].is-open').forEach((el) => el.classList.remove('is-open'));
+            restorePlatformMenuHost();
         }
 
         function closeTimezoneMenu() {
@@ -7875,9 +8281,32 @@
 
         function placePlatformMenu() {
             const menu = document.getElementById('platformMenu');
-            const node = document.querySelector('.node.menu-open');
+            if (!menu || menu.hidden) return;
             const stage = document.getElementById('mapStage');
-            if (!menu || menu.hidden || !node || !stage) return;
+            const node = document.querySelector('.node.menu-open:not(.tz-open):not(.cc-open)');
+            const el = platformMenuAnchor || document.querySelector('[data-sheet-platform].is-open') || node;
+            if (!el) return;
+            const sheet = !!(el.closest && el.closest('#profilePanel, #factsList, .profile-panel, .phone-sheet, .phone-bar'));
+            if (sheet || (stage && !stage.contains(el))) {
+                if (menu.parentNode !== document.body) document.body.appendChild(menu);
+                const r = el.getBoundingClientRect();
+                const w = menu.offsetWidth || 260;
+                const h = menu.offsetHeight || 280;
+                let left = r.left;
+                let top = r.bottom + 6;
+                if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+                if (left < 8) left = 8;
+                if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+                menu.classList.add('is-sheet');
+                menu.style.position = 'fixed';
+                menu.style.zIndex = '90';
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
+                return;
+            }
+            restorePlatformMenuHost();
+            menu.classList.remove('is-sheet');
+            if (!node || !stage) return;
             const nodeRect = node.getBoundingClientRect();
             const mapRect = stage.getBoundingClientRect();
             const left = Math.min(nodeRect.left - mapRect.left, mapRect.width - 272);
@@ -7910,19 +8339,25 @@
         }
 
         function applyPlatformChoice(fieldId, platformId) {
+            if (!fieldId || !platformId) return;
             const node = document.querySelector('.node[data-field="' + fieldId + '"]') || document.querySelector('.node.menu-open:not(.tz-open):not(.cc-open)');
-            if (!node || !fieldId) return;
             const input = document.getElementById('field-' + fieldId);
-            const filled = !!(input && String(input.value || '').trim());
+            const sheetInput = document.querySelector('#factsList [data-sheet-field="' + fieldId + '"]');
+            const filled = !!(
+                (input && String(input.value || '').trim()) ||
+                (sheetInput && String(sheetInput.value || '').trim())
+            );
             setFieldPlatform(fieldId, platformId);
-            setUsernameStep(node, platformId, filled);
+            if (node) setUsernameStep(node, platformId, filled);
+            else syncSheetPlatform(fieldId);
             if (filled && input) saveInputAsIs(input);
             if (isPhone()) syncPhoneField();
             closePlatformMenu();
-            if (input) input.focus();
             activeField = fieldId;
             renderProfile();
             recordHistory(false);
+            const next = document.querySelector('#factsList [data-sheet-field="' + fieldId + '"]') || input;
+            if (next) next.focus();
         }
 
         function applyCustomPlatformPick(label) {
@@ -7935,9 +8370,18 @@
             return true;
         }
 
-        function openPlatformMenu(node) {
+        function openPlatformMenu(target, anchor) {
             const menu = document.getElementById('platformMenu');
             if (!menu) return;
+            const fieldId = (typeof target === 'string')
+                ? target
+                : ((target && target.dataset && target.dataset.field) ||
+                    (anchor && (anchor.getAttribute('data-sheet-platform') || (anchor.dataset && anchor.dataset.sheetPlatform))) ||
+                    '');
+            if (!fieldId) return;
+            const node = (target && target.classList && target.classList.contains('node'))
+                ? target
+                : document.querySelector('.node[data-field="' + fieldId + '"]');
             closeSearchMenu();
             closeTimezoneMenu();
             closeCountryCodeMenu();
@@ -7955,9 +8399,15 @@
                     '</button>' +
                     platforms.map(platformOptionHtml).join('') +
                 '</div>';
-            menu.dataset.field = node.dataset.field || '';
+            menu.dataset.field = fieldId;
             menu.hidden = false;
-            node.classList.add('menu-open');
+            document.querySelectorAll('.node.menu-open:not(.tz-open)').forEach((item) => {
+                if (item !== node) item.classList.remove('menu-open');
+            });
+            document.querySelectorAll('[data-sheet-platform].is-open').forEach((item) => item.classList.remove('is-open'));
+            if (node) node.classList.add('menu-open');
+            platformMenuAnchor = anchor || target || node;
+            if (platformMenuAnchor && platformMenuAnchor.classList) platformMenuAnchor.classList.add('is-open');
             placePlatformMenu();
             const search = menu.querySelector('.platform-search');
             const form = menu.querySelector('#platformCustomForm');
@@ -8111,6 +8561,472 @@
                 search.focus();
             }
         }
+
+        const SHARE_IV_LEN = 12;
+        const SHARE_POLL_MS = 2800;
+        const SHARE_HOST_KEY = 'orbint-share-host';
+        let shareState = {
+            roomId: '',
+            keyB64: '',
+            hostToken: '',
+            hosting: false,
+            live: false,
+            ended: false,
+            mode: '',
+            readonly: false,
+            rev: 0,
+            lastPut: 0,
+            timer: 0,
+            watch: null,
+            busy: false,
+            error: '',
+            lastViewUrl: ''
+        };
+
+        function shareServices() {
+            const set = (typeof OrbINTSettings !== 'undefined' && OrbINTSettings.get) ? OrbINTSettings.get() : {};
+            const baked = window.ORBINT_SERVICES || {};
+            return {
+                api: String(set.shareApiUrl || baked.shareApi || '').replace(/\/$/, ''),
+                watch: String(set.collabWsUrl || baked.collabWs || '').replace(/\/$/, '')
+            };
+        }
+
+        function shareRandomB64(bytes) {
+            const buf = new Uint8Array(bytes);
+            crypto.getRandomValues(buf);
+            return btoa(String.fromCharCode.apply(null, buf)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+
+        function shareB64ToBytes(b64) {
+            const pad = b64.replace(/-/g, '+').replace(/_/g, '/');
+            const raw = atob(pad + '==='.slice((pad.length + 3) % 4));
+            const out = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+            return out;
+        }
+
+        function shareParseHash(hash) {
+            const raw = String(hash || location.hash || '').replace(/^#/, '');
+            const room = /^room=([A-Za-z0-9_-]+),([A-Za-z0-9_-]+)(?:,(view|edit))?$/.exec(raw);
+            if (room) {
+                return { kind: 'room', id: room[1], key: room[2], mode: room[3] === 'edit' ? 'edit' : 'view' };
+            }
+            const frozen = /^json=([A-Za-z0-9_-]+),([A-Za-z0-9_-]+)$/.exec(raw);
+            if (frozen) return { kind: 'json', id: frozen[1], key: frozen[2], mode: 'view' };
+            return null;
+        }
+
+        function shareLink(id, key) {
+            const origin = location.origin + location.pathname + location.search;
+            return origin + '#room=' + id + ',' + key + ',view';
+        }
+
+        async function shareImportKey(b64) {
+            return crypto.subtle.importKey(
+                'raw',
+                shareB64ToBytes(b64),
+                { name: 'AES-GCM' },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        async function shareEncrypt(keyB64, obj) {
+            const key = await shareImportKey(keyB64);
+            const iv = crypto.getRandomValues(new Uint8Array(SHARE_IV_LEN));
+            const encoded = new TextEncoder().encode(JSON.stringify(obj));
+            const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoded));
+            const out = new Uint8Array(iv.length + sealed.length);
+            out.set(iv, 0);
+            out.set(sealed, iv.length);
+            return out;
+        }
+
+        async function shareDecrypt(keyB64, buf) {
+            const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+            if (bytes.length < SHARE_IV_LEN + 16) throw new Error('short');
+            const key = await shareImportKey(keyB64);
+            const iv = bytes.slice(0, SHARE_IV_LEN);
+            const data = bytes.slice(SHARE_IV_LEN);
+            const open = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, data);
+            return JSON.parse(new TextDecoder().decode(open));
+        }
+
+        async function shareDigestHex(bytes) {
+            const hash = await crypto.subtle.digest('SHA-256', bytes);
+            return Array.from(new Uint8Array(hash)).map(function (n) {
+                return (n < 16 ? '0' : '') + n.toString(16);
+            }).join('');
+        }
+
+        function shareApiUrl(kind, id) {
+            const svc = shareServices();
+            if (!svc.api) return '';
+            return svc.api + '/v1/' + kind + '/' + encodeURIComponent(id);
+        }
+
+        function shareHostHeaders(extra) {
+            const headers = extra || {};
+            if (shareState.hostToken) headers['X-OrbINT-Host'] = shareState.hostToken;
+            headers['X-OrbINT-Live'] = shareState.live ? 'on' : 'off';
+            return headers;
+        }
+
+        function sharePersistHost() {
+            if (!shareState.hosting || !shareState.roomId || !shareState.keyB64 || !shareState.hostToken) return;
+            try {
+                localStorage.setItem(SHARE_HOST_KEY, JSON.stringify({
+                    roomId: shareState.roomId,
+                    keyB64: shareState.keyB64,
+                    hostToken: shareState.hostToken,
+                    live: !!shareState.live
+                }));
+            } catch (error) {}
+        }
+
+        function shareLoadHost() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(SHARE_HOST_KEY) || 'null');
+                if (!raw || !raw.roomId || !raw.keyB64 || !raw.hostToken) return;
+                shareState.roomId = raw.roomId;
+                shareState.keyB64 = raw.keyB64;
+                shareState.hostToken = raw.hostToken;
+                shareState.hosting = true;
+                shareState.live = !!raw.live;
+                shareState.mode = 'edit';
+                shareState.lastViewUrl = shareLink(raw.roomId, raw.keyB64);
+            } catch (error) {}
+        }
+
+        function shareEnsureIdentity() {
+            if (shareState.roomId && shareState.keyB64 && shareState.hostToken) {
+                shareState.lastViewUrl = shareLink(shareState.roomId, shareState.keyB64);
+                return;
+            }
+            shareState.roomId = shareRandomB64(16);
+            shareState.keyB64 = shareRandomB64(16);
+            shareState.hostToken = shareRandomB64(18);
+            shareState.hosting = true;
+            shareState.live = false;
+            shareState.mode = 'edit';
+            shareState.lastViewUrl = shareLink(shareState.roomId, shareState.keyB64);
+            sharePersistHost();
+        }
+
+        async function sharePutBlob(id, bytes) {
+            const url = shareApiUrl('blob', id);
+            if (!url) throw new Error('no-api');
+            const headers = shareHostHeaders({ 'Content-Type': 'application/octet-stream', 'X-OrbINT-Kind': 'room' });
+            const res = await fetch(url, { method: 'PUT', headers: headers, body: bytes });
+            if (res.status === 403) throw new Error('host-token');
+            if (!res.ok) throw new Error('put-' + res.status);
+            return res;
+        }
+
+        async function sharePutSession(live) {
+            const url = shareApiUrl('session', shareState.roomId);
+            if (!url) throw new Error('no-api');
+            const headers = shareHostHeaders({});
+            headers['X-OrbINT-Live'] = live ? 'on' : 'off';
+            const res = await fetch(url, { method: 'PUT', headers: headers });
+            if (res.status === 403) throw new Error('host-token');
+            if (!res.ok) throw new Error('session-' + res.status);
+        }
+
+        async function shareGetBlob(id) {
+            const url = shareApiUrl('blob', id);
+            if (!url) throw new Error('no-api');
+            const res = await fetch(url, { method: 'GET' });
+            if (res.status === 410 || res.status === 404) return { ended: true };
+            if (!res.ok) throw new Error('get-' + res.status);
+            return { bytes: new Uint8Array(await res.arrayBuffer()) };
+        }
+
+        function shareCurrentBundle() {
+            if (typeof flushLibrarySync === 'function') flushLibrarySync();
+            const id = profileLibrary && profileLibrary.activeId;
+            if (typeof exportProfileBundle === 'function') return exportProfileBundle(id);
+            return {};
+        }
+
+        function shareApplyBundle(bundle, opts) {
+            if (!bundle || typeof bundle !== 'object') return;
+            const entry = (typeof coerceImportedEntry === 'function')
+                ? coerceImportedEntry(bundle, bundle.title || 'Shared case')
+                : bundle;
+            if (!entry) return;
+            if (bundle.id) entry.id = bundle.id;
+            if (bundle.case) entry.case = bundle.case;
+            if (bundle.audit) entry.audit = bundle.audit;
+            if (profileLibrary && profileLibrary.items) {
+                const id = entry.id || (profileLibrary.activeId);
+                entry.id = id;
+                profileLibrary.items[id] = Object.assign(profileLibrary.items[id] || {}, entry);
+                profileLibrary.activeId = id;
+            }
+            if (typeof applyWorkspace === 'function') applyWorkspace(entry, opts || { keepCamera: true });
+        }
+
+        function shareSetReadonly(on) {
+            shareState.readonly = !!on;
+            document.body.classList.toggle('share-readonly', shareState.readonly);
+            const banner = document.getElementById('shareReadonlyBanner');
+            if (banner) {
+                banner.hidden = !shareState.readonly || shareState.ended;
+                banner.textContent = 'View-only session. You can read this case while the host keeps it on.';
+            }
+        }
+
+        function shareShowEnded(on) {
+            const show = !shareState.hosting && !!on;
+            const first = show && !shareState.ended;
+            shareState.ended = !!on;
+            document.body.classList.toggle('share-ended', show);
+            const el = document.getElementById('shareEndedCurtain');
+            if (el) el.hidden = !show;
+            const banner = document.getElementById('shareReadonlyBanner');
+            if (banner && show) banner.hidden = true;
+            if (first) shareClearViewerCase();
+        }
+
+        function shareClearViewerCase() {
+            if (shareState.hosting) return;
+            const facts = (typeof emptyFacts === 'function') ? emptyFacts() : {};
+            shareApplyBundle({
+                facts: facts,
+                title: '',
+                analysis: '',
+                added: [],
+                labels: {},
+                hidden: [],
+                layout: null,
+                peerHomes: {},
+                investigation: null,
+                case: {},
+                audit: []
+            }, { keepCamera: false });
+        }
+
+        async function sharePush() {
+            if (!shareState.hosting || !shareState.live || shareState.busy) return;
+            const id = shareState.roomId;
+            const key = shareState.keyB64;
+            if (!id || !key) return;
+            shareState.rev += 1;
+            const payload = {
+                v: 1,
+                kind: 'orbint-share',
+                mode: 'view',
+                rev: shareState.rev,
+                at: new Date().toISOString(),
+                bundle: shareCurrentBundle()
+            };
+            const bytes = await shareEncrypt(key, payload);
+            await sharePutBlob(id, bytes);
+            shareState.lastPut = Date.now();
+            shareState.error = '';
+        }
+
+        async function sharePull(force) {
+            if (!shareState.roomId || !shareState.keyB64 || shareState.busy) return;
+            if (shareState.hosting && !force) return;
+            shareState.busy = true;
+            try {
+                const got = await shareGetBlob(shareState.roomId);
+                if (got && got.ended) {
+                    shareState.live = false;
+                    if (!shareState.hosting) shareShowEnded(true);
+                    shareState.error = '';
+                    return;
+                }
+                if (!got || !got.bytes) return;
+                const payload = await shareDecrypt(shareState.keyB64, got.bytes);
+                if (!payload || !payload.bundle) return;
+                if (!force && Number(payload.rev || 0) <= shareState.rev) return;
+                shareState.rev = Number(payload.rev || 0);
+                shareState.live = true;
+                shareShowEnded(false);
+                shareApplyBundle(payload.bundle, { keepCamera: true });
+                shareState.error = '';
+            } catch (error) {
+                shareState.error = String(error && error.message || error);
+            } finally {
+                shareState.busy = false;
+            }
+        }
+
+        function shareStopLive() {
+            if (shareState.timer) {
+                clearInterval(shareState.timer);
+                shareState.timer = 0;
+            }
+            if (shareState.watch) {
+                try { shareState.watch.close(); } catch (error) {}
+                shareState.watch = null;
+            }
+        }
+
+        function shareStartLive() {
+            shareStopLive();
+            if (!shareState.roomId) return;
+            const svc = shareServices();
+            if (svc.watch) {
+                try {
+                    const url = svc.watch.replace(/\/$/, '') + '/v1/watch/' + encodeURIComponent(shareState.roomId);
+                    const es = new EventSource(url);
+                    es.onmessage = function (event) {
+                        if (String(event.data || '').indexOf('ended') === 0) {
+                            shareState.live = false;
+                            if (!shareState.hosting) shareShowEnded(true);
+                            sharePaint();
+                            return;
+                        }
+                        sharePull(false);
+                    };
+                    shareState.watch = es;
+                } catch (error) {}
+            }
+            shareState.timer = setInterval(function () {
+                if (document.hidden) return;
+                sharePull(false);
+            }, SHARE_POLL_MS);
+        }
+
+        async function shareSetLive(on) {
+            const svc = shareServices();
+            if (!svc.api) throw new Error('Set a share API URL in Settings (or .env SHARE_API_URL).');
+            shareEnsureIdentity();
+            shareState.error = '';
+            if (on) {
+                shareState.hosting = true;
+                shareSetReadonly(false);
+                shareShowEnded(false);
+                shareState.live = true;
+                try {
+                    await sharePush();
+                } catch (error) {
+                    shareState.live = false;
+                    throw error;
+                }
+                shareStartLive();
+                sharePersistHost();
+                if (typeof appendCaseAudit === 'function') appendCaseAudit('share', '', 'Session on');
+            } else {
+                await sharePutSession(false);
+                shareState.live = false;
+                shareStopLive();
+                sharePersistHost();
+                if (typeof appendCaseAudit === 'function') appendCaseAudit('share', '', 'Session off');
+            }
+            sharePaint();
+            return shareState.lastViewUrl;
+        }
+
+        async function shareJoinFromHash() {
+            const parsed = shareParseHash(location.hash);
+            if (!parsed) return false;
+            const svc = shareServices();
+            if (!svc.api) {
+                shareState.error = 'This link needs SHARE_API_URL configured.';
+                sharePaint();
+                return false;
+            }
+            const isHost = !!(shareState.hosting && shareState.roomId === parsed.id && shareState.keyB64 === parsed.key);
+            shareState.roomId = parsed.id;
+            shareState.keyB64 = parsed.key;
+            shareState.mode = parsed.mode;
+            shareState.lastViewUrl = shareLink(parsed.id, parsed.key);
+            if (isHost) {
+                shareSetReadonly(false);
+                shareShowEnded(false);
+                if (shareState.live) shareStartLive();
+                sharePaint();
+                return true;
+            }
+            shareState.hosting = false;
+            shareState.hostToken = '';
+            shareSetReadonly(true);
+            await sharePull(true);
+            shareStartLive();
+            sharePaint();
+            return true;
+        }
+
+        function shareCopyText(text) {
+            const value = String(text || '');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(value);
+            }
+            return Promise.resolve();
+        }
+
+        function sharePaint() {
+            const status = document.getElementById('shareCollabStatus');
+            const hint = document.getElementById('shareSessionHint');
+            const viewUrl = document.getElementById('shareViewUrl');
+            const err = document.getElementById('shareCollabError');
+            const toggle = document.getElementById('shareSessionLive');
+            const hostBox = document.getElementById('shareHostControls');
+            const svc = shareServices();
+            if (!shareState.readonly) shareEnsureIdentity();
+            if (hostBox) hostBox.hidden = !!(shareState.readonly && !shareState.hosting);
+            if (toggle && document.activeElement !== toggle) toggle.checked = !!(shareState.hosting && shareState.live);
+            if (status) {
+                if (!svc.api) status.textContent = 'No share server yet. Add SHARE_API_URL in .env / Settings.';
+                else if (shareState.hosting && shareState.live) status.textContent = 'Session on. Anyone with the link can view this case.';
+                else if (shareState.hosting) status.textContent = 'Session off. The link stays the same, but nobody can view the case.';
+                else if (shareState.ended) status.textContent = 'This session is off. Nothing is available to view.';
+                else if (shareState.readonly) status.textContent = 'Viewing an encrypted session.';
+                else status.textContent = 'Turn the session on to let the link work. The key stays in the #hash.';
+            }
+            if (hint) {
+                hint.textContent = shareState.live
+                    ? 'On. Anyone with the link can view until you end it.'
+                    : 'Off. Nobody can view anything.';
+            }
+            if (viewUrl) {
+                const url = shareState.lastViewUrl || (shareState.roomId && shareState.keyB64 ? shareLink(shareState.roomId, shareState.keyB64) : '');
+                viewUrl.textContent = url || 'A link appears here once this device is ready.';
+            }
+            if (err) {
+                err.hidden = !shareState.error;
+                err.textContent = shareState.error || '';
+            }
+        }
+
+        window.OrbINTShare = {
+            create: function () { return shareSetLive(true); },
+            setLive: shareSetLive,
+            join: shareJoinFromHash,
+            push: function () {
+                if (!shareState.hosting || !shareState.live) return Promise.resolve();
+                return sharePush().catch(function (error) {
+                    shareState.error = String(error && error.message || error);
+                    sharePaint();
+                });
+            },
+            paint: sharePaint,
+            readonly: function () { return shareState.readonly; },
+            digest: shareDigestHex,
+            copy: shareCopyText,
+            boot: function () {
+                shareLoadHost();
+                shareJoinFromHash().then(function () {
+                    if (shareState.hosting && shareState.live && !shareState.readonly) {
+                        return sharePush().then(function () { shareStartLive(); });
+                    }
+                }).then(function () {
+                    sharePaint();
+                }).catch(function (error) {
+                    shareState.error = String(error && error.message || error);
+                    sharePaint();
+                });
+                window.addEventListener('hashchange', function () {
+                    shareJoinFromHash().then(sharePaint);
+                });
+            }
+        };
 
         function createNodes() {
             if (!mapCanvas) return;
@@ -8880,8 +9796,7 @@
                 }
                 add(document.getElementById('dock'), 28);
                 add(document.getElementById('donate'), 22);
-                add(document.getElementById('pageSwitch'), 22);
-                add(document.querySelector('.map-toggle'), 16);
+                add(document.getElementById('workNav') || document.getElementById('pageSwitch'), 22);
                 return boxes;
             }
 
@@ -9617,8 +10532,10 @@
                     item.line.setAttribute('stroke-width', stretch > 1.12 ? '1.35' : '1');
                 }
             });
-            if (document.querySelector('.node.menu-open')) {
+            if (document.getElementById('platformMenu') && !document.getElementById('platformMenu').hidden) {
                 placePlatformMenu();
+                placeTimezoneMenu();
+            } else if (document.querySelector('.node.menu-open')) {
                 placeTimezoneMenu();
             }
             const searchNode = document.querySelector('.node.search-open');
@@ -10080,7 +10997,12 @@
             if (copyBtn) copyBtn.textContent = 'Copy';
             const nativeBtn = document.getElementById('shareNative');
             if (nativeBtn) nativeBtn.hidden = !navigator.share;
-            drawShareQr(url);
+            if (window.OrbINTShare && typeof OrbINTShare.paint === 'function') OrbINTShare.paint();
+            const viewEl = document.getElementById('shareViewUrl');
+            const sessionUrl = viewEl && /^https?:/i.test(String(viewEl.textContent || '').trim())
+                ? String(viewEl.textContent).trim()
+                : url;
+            drawShareQr(sessionUrl);
             showSheet(sheet);
             document.getElementById('dock').classList.add('picking-share');
         }
@@ -10363,7 +11285,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=159', './osint-tools.js', './osint-tools.js?v=159', './investigation.js', './investigation.js?v=159', './css/base.css?v=159', './css/orbit.css?v=159', './css/timeline.css?v=159', './css/whiteboard.css?v=159', './css/datasheet.css?v=159', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=218', './osint-tools.js', './osint-tools.js?v=218', './investigation.js', './investigation.js?v=218', './css/base.css?v=218', './css/orbit.css?v=218', './css/timeline.css?v=218', './css/whiteboard.css?v=218', './css/compiler.css?v=218', './css/datasheet.css?v=218', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));
@@ -10417,8 +11339,23 @@
                 applyProfilePhotoFiles: applyProfilePhotoFiles,
                 applyProfilePhotoUrl: applyProfilePhotoUrl,
                 escapeHtml: escapeHtml,
+                addFact: addFact,
                 srcToBlob: srcToBlob,
                 copyImageSource: copyImageSource,
+                closeSheetPick: function () {
+                    if (typeof closeSheetPick === 'function') closeSheetPick();
+                },
+                readonly: function () {
+                    return !!(window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly());
+                },
+                getFactCaptured: function (id) {
+                    return factStampIso(lastFactRecord(id));
+                },
+                setFactCaptured: function (id, iso) {
+                    patchFactMeta(id, 'capturedAt', iso || '');
+                    paintFactCaptured(id);
+                    if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
+                },
                 save: function () {
                     if (typeof saveProfile === 'function') saveProfile();
                     if (typeof queueLibrarySync === 'function') queueLibrarySync();
@@ -10661,15 +11598,49 @@
                 toggleAddField();
                 return;
             }
+            const moreBtn = event.target.closest('[data-fact-more]');
+            if (moreBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleFactDetails(moreBtn.getAttribute('data-fact-more'));
+                return;
+            }
+            const hideBtn = event.target.closest('[data-sheet-hide]');
+            if (hideBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                hideField(hideBtn.getAttribute('data-sheet-hide'));
+                return;
+            }
+            const dupBtn = event.target.closest('[data-sheet-dup]');
+            if (dupBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                duplicateField(dupBtn.getAttribute('data-sheet-dup'), { focus: 'sheet' });
+                return;
+            }
             const sheetPlat = event.target.closest('[data-sheet-platform]');
             if (sheetPlat) {
                 event.preventDefault();
                 event.stopPropagation();
-                const node = document.querySelector('.node[data-field="' + sheetPlat.dataset.sheetPlatform + '"]');
-                if (node) openPlatformMenu(node);
+                const fieldId = sheetPlat.getAttribute('data-sheet-platform') || '';
+                const menu = document.getElementById('platformMenu');
+                if (menu && !menu.hidden && (menu.dataset.field === fieldId)) {
+                    closePlatformMenu();
+                    return;
+                }
+                const node = document.querySelector('.node[data-field="' + fieldId + '"]');
+                openPlatformMenu(node || fieldId, sheetPlat);
                 return;
             }
-            if (event.target.closest('[data-sheet-field]')) return;
+            const sheetPick = event.target.closest('[data-sheet-pick]');
+            if (sheetPick) {
+                event.preventDefault();
+                event.stopPropagation();
+                openSheetPick(sheetPick);
+                return;
+            }
+            if (event.target.closest('[data-sheet-field], [data-sheet-meta], .fact-prov, .fact-detail, .case-file, .sheet-pick, #sheetPickMenu, [data-fact-more], [data-fact-cal], [data-fact-time]')) return;
             const find = event.target.closest('[data-search-field]');
             if (find) {
                 event.preventDefault();
@@ -10702,7 +11673,7 @@
                     const pick = row.querySelector('.sheet-platform');
                     const node = document.querySelector('.node[data-field="' + row.dataset.focus + '"]');
                     if (pick) pick.focus();
-                    if (node) openPlatformMenu(node);
+                    openPlatformMenu(node || row.dataset.focus, pick || row.querySelector('[data-sheet-platform]'));
                     return;
                 }
                 sheet.focus();
@@ -10715,7 +11686,21 @@
             renderProfile();
         });
 
+        document.getElementById('factsList').addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.target.closest('[data-fact-meta], .fact-source, .sheet-area')) return;
+            const input = event.target.closest('[data-sheet-field]');
+            if (!input || input.tagName === 'TEXTAREA') return;
+            event.preventDefault();
+            commitSheetEnter(input.getAttribute('data-sheet-field') || input.dataset.sheetField);
+        });
         document.getElementById('factsList').addEventListener('input', (event) => {
+            const meta = event.target.closest('[data-sheet-meta]');
+            if (meta) {
+                patchFactMeta(meta.getAttribute('data-sheet-meta'), meta.getAttribute('data-fact-meta'), meta.value);
+                return;
+            }
             const input = event.target.closest('[data-sheet-field]');
             if (!input) return;
             const fieldId = input.dataset.sheetField;
@@ -10725,6 +11710,257 @@
                 : (fieldBase(fieldId) === 'countrycode' ? (resolveCountryCodeValue(input.value) || input.value) : input.value);
             writeLatestFact(fieldId, value, extrasFromInput(fieldId, value));
             if (typeof syncMapsButtons === 'function') syncMapsButtons(fieldId);
+        });
+        document.getElementById('factsList').addEventListener('change', (event) => {
+            const meta = event.target.closest('[data-sheet-meta]');
+            if (!meta) return;
+            patchFactMeta(meta.getAttribute('data-sheet-meta'), meta.getAttribute('data-fact-meta'), meta.value);
+        });
+
+        function bindCaseFileFields() {
+            ['caseNumber', 'caseOffense', 'caseInvestigator'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (!el || el.dataset.boundCase) return;
+                el.dataset.boundCase = '1';
+                const apply = function () {
+                    if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+                    profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+                    const map = { caseNumber: 'number', caseOffense: 'offense', caseInvestigator: 'investigator' };
+                    profile.case[map[id]] = el.value;
+                    if (id === 'caseOffense') {
+                        const pick = document.getElementById('caseOffensePick');
+                        if (pick) pick.dataset.value = el.value;
+                    }
+                    if (id === 'caseNumber' && el.value && !profile.case.openedAt) profile.case.openedAt = new Date().toISOString();
+                    saveProfile();
+                };
+                el.addEventListener('input', apply);
+                el.addEventListener('change', apply);
+            });
+            function bindCasePick(id) {
+                const btn = document.getElementById(id);
+                if (!btn || btn.dataset.boundCase) return;
+                btn.dataset.boundCase = '1';
+                btn.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openSheetPick(btn);
+                });
+            }
+            bindCasePick('caseStatus');
+            bindCasePick('caseOffensePick');
+        }
+        bindCaseFileFields();
+
+        let sheetPickOpen = '';
+        let sheetPickAnchor = null;
+        let sheetPickCloseTimer = 0;
+
+        function finishSheetPickClose(menu) {
+            hideSheetPickTip();
+            if (!menu || sheetPickOpen) return;
+            menu.hidden = true;
+            menu.innerHTML = '';
+            menu.classList.remove('is-up', 'is-in', 'is-out');
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.bottom = '';
+            menu.style.minWidth = '';
+        }
+
+        function hideSheetPickTip() {
+            const tip = document.getElementById('sheetPickTip');
+            if (!tip) return;
+            tip.hidden = true;
+            tip.textContent = '';
+            tip.style.left = '';
+            tip.style.top = '';
+        }
+
+        function showSheetPickTip(btn) {
+            const hint = btn && btn.getAttribute('data-pick-hint');
+            const tip = document.getElementById('sheetPickTip');
+            const menu = document.getElementById('sheetPickMenu');
+            if (!hint || !tip || !menu || menu.hidden) {
+                hideSheetPickTip();
+                return;
+            }
+            tip.textContent = hint;
+            tip.hidden = false;
+            const br = btn.getBoundingClientRect();
+            const mr = menu.getBoundingClientRect();
+            const tr = tip.getBoundingClientRect();
+            let left = mr.right + 8;
+            if (left + tr.width > window.innerWidth - 8) left = Math.max(8, mr.left - tr.width - 8);
+            let top = br.top + (br.height - tr.height) / 2;
+            top = Math.max(8, Math.min(top, window.innerHeight - tr.height - 8));
+            tip.style.left = left + 'px';
+            tip.style.top = top + 'px';
+        }
+
+        function closeSheetPick() {
+            hideSheetPickTip();
+            sheetPickOpen = '';
+            sheetPickAnchor = null;
+            const menu = document.getElementById('sheetPickMenu');
+            document.querySelectorAll('.sheet-pick[aria-expanded="true"]').forEach(function (btn) {
+                btn.setAttribute('aria-expanded', 'false');
+            });
+            if (!menu || menu.hidden) return;
+            clearTimeout(sheetPickCloseTimer);
+            if (document.documentElement.classList.contains('reduce-motion')) {
+                finishSheetPickClose(menu);
+                return;
+            }
+            menu.classList.remove('is-in');
+            menu.classList.add('is-out');
+            const onEnd = function (event) {
+                if (event.target !== menu) return;
+                menu.removeEventListener('animationend', onEnd);
+                finishSheetPickClose(menu);
+            };
+            menu.addEventListener('animationend', onEnd);
+            sheetPickCloseTimer = setTimeout(function () {
+                menu.removeEventListener('animationend', onEnd);
+                finishSheetPickClose(menu);
+            }, 200);
+        }
+
+        function placeSheetPick(btn) {
+            const menu = document.getElementById('sheetPickMenu');
+            if (!menu || !btn) return;
+            const box = btn.closest('.case-offense') || btn;
+            const r = box.getBoundingClientRect();
+            const w = Math.max(r.width, 196);
+            let left = r.left;
+            if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+            if (left < 8) left = 8;
+            const spaceBelow = window.innerHeight - r.bottom - 10;
+            const spaceAbove = r.top - 10;
+            const need = Math.min(menu.scrollHeight || 240, Math.min(window.innerHeight * 0.7, 420));
+            const up = spaceBelow < Math.min(need, 240) && spaceAbove > spaceBelow;
+            const room = Math.max(120, up ? spaceAbove : spaceBelow);
+            menu.classList.toggle('is-up', up);
+            menu.style.minWidth = w + 'px';
+            menu.style.maxWidth = Math.min(280, window.innerWidth - 16) + 'px';
+            menu.style.maxHeight = Math.min(room, window.innerHeight * 0.7, 420) + 'px';
+            menu.style.left = left + 'px';
+            if (up) {
+                menu.style.top = 'auto';
+                menu.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+            } else {
+                menu.style.bottom = 'auto';
+                menu.style.top = (r.bottom + 6) + 'px';
+            }
+        }
+
+        function paintSheetPickButton(btn, kind, value) {
+            if (!btn) return;
+            btn.dataset.value = value || '';
+            btn.classList.toggle('is-empty', !value);
+            const lab = btn.querySelector('span');
+            if (lab) lab.textContent = sheetPickLabel(kind, value);
+        }
+
+        function applySheetPick(kind, fieldId, value) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+            if (kind === 'status') {
+                profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+                profile.case.status = value || 'open';
+                paintSheetPickButton(document.getElementById('caseStatus'), 'status', profile.case.status);
+                saveProfile();
+                return;
+            }
+            if (kind === 'offense') {
+                profile.case = Object.assign({}, emptyCaseMeta(), profile.case || {});
+                profile.case.offense = value || '';
+                const input = document.getElementById('caseOffense');
+                if (input) input.value = profile.case.offense;
+                paintSheetPickButton(document.getElementById('caseOffensePick'), 'offense', profile.case.offense);
+                saveProfile();
+                return;
+            }
+            if (!fieldId) return;
+            patchFactMeta(fieldId, kind, value);
+            const btn = document.querySelector('.sheet-pick[data-sheet-pick="' + kind + '"][data-sheet-meta="' + fieldId + '"]');
+            paintSheetPickButton(btn, kind, value);
+        }
+
+        function openSheetPick(btn) {
+            const kind = btn && btn.getAttribute('data-sheet-pick');
+            const menu = document.getElementById('sheetPickMenu');
+            const options = (typeof SHEET_PICKS !== 'undefined' && SHEET_PICKS[kind]) || [];
+            if (!kind || !menu || !options.length) return;
+            const key = kind + ':' + (btn.getAttribute('data-sheet-meta') || btn.id || '');
+            if (sheetPickOpen === key) {
+                closeSheetPick();
+                return;
+            }
+            if (typeof closeSetPick === 'function') closeSetPick();
+            if (typeof closePlatformMenu === 'function') closePlatformMenu();
+            if (menu.parentElement !== document.body) document.body.appendChild(menu);
+            sheetPickOpen = key;
+            sheetPickAnchor = btn;
+            const current = kind === 'offense'
+                ? String((document.getElementById('caseOffense') || {}).value || '').trim()
+                : (btn.getAttribute('data-value') || '');
+            const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+            menu.innerHTML = options.map(function (item) {
+                if (item.sep) return '<div class="set-pick-sep"></div>';
+                const on = String(item.value || '').trim().toLowerCase() === current.toLowerCase();
+                const active = on ? ' is-active' : '';
+                const hint = item.hint ? ' data-pick-hint="' + escapeHtml(item.hint) + '"' : '';
+                const aria = item.hint
+                    ? ' aria-label="' + escapeHtml(item.label + '. ' + item.hint) + '"'
+                    : '';
+                return '<button type="button" role="option" class="' + active + '" data-pick-kind="' + kind + '" data-pick-field="' + escapeHtml(btn.getAttribute('data-sheet-meta') || '') + '" data-pick-value="' + escapeHtml(item.value) + '" aria-selected="' + (on ? 'true' : 'false') + '"' + hint + aria + '><span>' + escapeHtml(item.label) + '</span>' + check + '</button>';
+            }).join('');
+            clearTimeout(sheetPickCloseTimer);
+            menu.classList.remove('is-out', 'is-in');
+            menu.hidden = false;
+            document.querySelectorAll('.sheet-pick[aria-expanded="true"]').forEach(function (el) {
+                el.setAttribute('aria-expanded', 'false');
+            });
+            btn.setAttribute('aria-expanded', 'true');
+            placeSheetPick(btn);
+            void menu.offsetWidth;
+            menu.classList.add('is-in');
+        }
+
+        const sheetPickMenu = document.getElementById('sheetPickMenu');
+        if (sheetPickMenu) {
+            sheetPickMenu.addEventListener('click', function (event) {
+                const choice = event.target.closest('[data-pick-kind]');
+                if (!choice) return;
+                event.preventDefault();
+                const kind = choice.getAttribute('data-pick-kind');
+                const fieldId = choice.getAttribute('data-pick-field') || '';
+                const value = choice.getAttribute('data-pick-value') || '';
+                hideSheetPickTip();
+                closeSheetPick();
+                applySheetPick(kind, fieldId, value);
+            });
+            sheetPickMenu.addEventListener('mouseover', function (event) {
+                const opt = event.target.closest('[data-pick-hint]');
+                if (opt) showSheetPickTip(opt);
+            });
+            sheetPickMenu.addEventListener('mouseleave', hideSheetPickTip);
+            sheetPickMenu.addEventListener('scroll', hideSheetPickTip);
+            sheetPickMenu.addEventListener('focusin', function (event) {
+                const opt = event.target.closest('[data-pick-hint]');
+                if (opt) showSheetPickTip(opt);
+            });
+            sheetPickMenu.addEventListener('focusout', function (event) {
+                if (!event.relatedTarget || !sheetPickMenu.contains(event.relatedTarget)) hideSheetPickTip();
+            });
+        }
+        document.addEventListener('mousedown', function (event) {
+            if (!sheetPickOpen) return;
+            if (event.target.closest('.sheet-pick') || event.target.closest('#sheetPickMenu')) return;
+            closeSheetPick();
+        });
+        window.addEventListener('resize', function () {
+            if (sheetPickOpen && sheetPickAnchor) placeSheetPick(sheetPickAnchor);
         });
 
         let nameEditOriginal = '';
@@ -10879,7 +12115,8 @@
             setLargeType: 'largeType',
             setRememberPage: 'rememberPage',
             setHideBg: 'hideBackground',
-            setExportNoPhotos: 'exportNoPhotos'
+            setExportNoPhotos: 'exportNoPhotos',
+            setInvestigator: 'investigatorMode'
         };
         Object.keys(settingToggles).forEach(function (id) {
             const el = document.getElementById(id);
@@ -10891,6 +12128,7 @@
                 patchSettings(patch);
                 applyAppSettings(true);
                 syncSettingsForm();
+                if (settingToggles[id] === 'investigatorMode' && typeof renderProfile === 'function') renderProfile(true);
             });
         });
         document.querySelectorAll('[data-set-pick]').forEach(function (wrap) {
@@ -10899,6 +12137,7 @@
             btn.addEventListener('click', function (event) {
                 event.preventDefault();
                 event.stopPropagation();
+                closeSheetPick();
                 openSetPick(wrap.getAttribute('data-set-pick'), btn);
             });
         });
@@ -11121,6 +12360,41 @@
             if (event.target.id === 'shareSheet') closeShare();
         });
         document.getElementById('shareCopy').addEventListener('click', copyShareLink);
+        const shareSessionLive = document.getElementById('shareSessionLive');
+        if (shareSessionLive) {
+            shareSessionLive.addEventListener('change', function () {
+                if (!window.OrbINTShare || typeof OrbINTShare.setLive !== 'function') return;
+                const on = !!shareSessionLive.checked;
+                const err = document.getElementById('shareCollabError');
+                shareSessionLive.disabled = true;
+                OrbINTShare.setLive(on).then(function () {
+                    if (err) { err.hidden = true; err.textContent = ''; }
+                }).catch(function (error) {
+                    if (err) {
+                        err.hidden = false;
+                        err.textContent = String(error && error.message || error);
+                    }
+                    shareSessionLive.checked = !on;
+                }).then(function () {
+                    shareSessionLive.disabled = false;
+                    if (window.OrbINTShare) OrbINTShare.paint();
+                });
+            });
+        }
+        const shareCopyView = document.getElementById('shareCopyView');
+        if (shareCopyView) shareCopyView.addEventListener('click', function () {
+            const el = document.getElementById('shareViewUrl');
+            if (el && /^https?:/i.test(el.textContent)) OrbINTShare.copy(el.textContent);
+        });
+        ['setShareApi', 'setCollabWs'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const key = id === 'setShareApi' ? 'shareApiUrl' : 'collabWsUrl';
+            el.addEventListener('change', function () {
+                patchSettings({ [key]: el.value.trim() });
+                if (window.OrbINTShare) OrbINTShare.paint();
+            });
+        });
         document.getElementById('shareNative').addEventListener('click', nativeShareSite);
         const installSheet = document.getElementById('installSheet');
         const installClose = document.getElementById('installClose');
@@ -11164,13 +12438,21 @@
             peerHubs.addEventListener('pointerdown', (event) => {
                 if (event.button === 1) return;
                 if (event.button !== 0) return;
-                const peerEl = event.target.closest('[data-peer]');
+                const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]') || event.target.closest('.peer-hub, [data-peer]');
                 if (!peerEl) return;
                 const body = peerBodyFromEl(peerEl);
                 if (!body) return;
                 event.preventDefault();
                 event.stopPropagation();
                 beginOrbitDrag(event, 'peer', body);
+            }, true);
+            peerHubs.addEventListener('contextmenu', (event) => {
+                const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]') || event.target.closest('.peer-hub, [data-peer]');
+                const peerId = peerIdFromEl(peerEl);
+                if (!peerId) return;
+                event.preventDefault();
+                event.stopPropagation();
+                openPeerMenu(event, peerId);
             }, true);
             peerHubs.addEventListener('error', (event) => {
                 const img = event.target.closest('.peer-hub-face');
@@ -11247,8 +12529,21 @@
             openLead(option.dataset.openLead, fieldInputValue(toolkitFocusField), option.dataset.leadMode);
         });
 
-        document.getElementById('profileToggle').addEventListener('click', () => setPanelOpen(true));
+        const profileToggle = document.getElementById('profileToggle');
+        if (profileToggle) {
+            profileToggle.addEventListener('click', function () {
+                setPanelOpen(!profilePanel.classList.contains('open'));
+            });
+        }
         document.getElementById('profileClose').addEventListener('click', () => setPanelOpen(false));
+        const pageSwitchNav = document.getElementById('pageSwitch');
+        if (pageSwitchNav) {
+            pageSwitchNav.addEventListener('click', function (event) {
+                if (event.target.closest('[data-page]') && isPhone() && profilePanel.classList.contains('open')) {
+                    setPanelOpen(false);
+                }
+            });
+        }
         const dockPortfolio = document.getElementById('dockPortfolio');
         if (dockPortfolio) {
             dockPortfolio.addEventListener('click', () => {
@@ -11755,7 +13050,7 @@
                 return;
             }
             if (event.target.closest('#hubAdd')) return;
-            const peerEl = event.target.closest('[data-peer]');
+            const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]');
             if (peerEl) {
                 const body = peerBodyFromEl(peerEl);
                 if (body) {
@@ -11789,6 +13084,16 @@
             }
             if (event.button === 1) return;
             if (event.button !== 0) return;
+            const peerEl = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]');
+            if (peerEl) {
+                const body = peerBodyFromEl(peerEl);
+                if (body) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    beginOrbitDrag(event, 'peer', body);
+                    return;
+                }
+            }
             event.preventDefault();
             event.stopPropagation();
             beginOrbitDrag(event, 'hub');
@@ -11921,7 +13226,7 @@
         });
 
         document.addEventListener('click', (event) => {
-            if (!event.target.closest('#platformMenu, .platform-trigger, #phonePlatformBtn, .node.menu-open:not(.tz-open):not(.cc-open)')) {
+            if (!event.target.closest('#platformMenu, .platform-trigger, .platform-icon, #phonePlatformBtn, [data-sheet-platform], .node.menu-open:not(.tz-open):not(.cc-open)')) {
                 closePlatformMenu();
             }
             if (!event.target.closest('#tzMenu, .tz-trigger, .tz-pick, .tz-abbr, #phoneTzBtn, .node.tz-open')) {
@@ -11950,43 +13255,73 @@
             closeFieldMenu();
         }, true);
 
-        document.getElementById('fieldMenu').addEventListener('click', (event) => {
+        document.getElementById('fieldMenu').addEventListener('pointerdown', onFieldMenuAct);
+        document.getElementById('fieldMenu').addEventListener('click', onFieldMenuAct);
+
+        function onFieldMenuAct(event) {
             const button = event.target.closest('[data-field-act]');
             if (!button || button.disabled) return;
+            event.preventDefault();
             event.stopPropagation();
             const menu = document.getElementById('fieldMenu');
             const act = button.dataset.fieldAct;
             const fieldId = menu ? menu.dataset.field : '';
             const extra = button.dataset.linkId || (menu && menu.dataset.peer) || '';
+            if (!act) return;
+            if (menu && menu.dataset.actLock === act + ':' + extra) return;
+            if (menu) menu.dataset.actLock = act + ':' + extra;
             closeFieldMenu();
             runFieldAction(act, fieldId, extra);
-        });
+        }
+
+        function orbitHitEl(event, selector) {
+            const stage = document.getElementById('mapStage');
+            if (!event || !selector || !stage) return null;
+            const fromTarget = event.target && event.target.closest && event.target.closest(selector);
+            if (fromTarget && stage.contains(fromTarget)) return fromTarget;
+            let stack = [];
+            try { stack = document.elementsFromPoint(event.clientX, event.clientY) || []; } catch (err) { stack = []; }
+            for (let i = 0; i < stack.length; i++) {
+                const node = stack[i];
+                if (!node || !node.closest) continue;
+                const el = node.closest(selector);
+                if (el && stage.contains(el)) return el;
+            }
+            return null;
+        }
+
+        function peerIdFromEl(el) {
+            if (!el) return '';
+            return el.getAttribute('data-peer') || '';
+        }
 
         if (mapStage) mapStage.addEventListener('contextmenu', (event) => {
             if (event.target.closest('#fieldMenu, #searchMenu, #platformMenu, #tzMenu, #ccMenu, #exportMenu, #profileMenu, .profile-rail, .media-viewer, .help-guide, .share-sheet, .install-sheet, .add-sheet, .confirm-sheet, .phone-sheet, .phone-bar')) return;
-            const node = event.target.closest('.node');
+            const peer = orbitHitEl(event, '.peer-hub') || orbitHitEl(event, '[data-peer]');
+            const peerId = peerIdFromEl(peer);
+            if (peerId) {
+                event.preventDefault();
+                event.stopPropagation();
+                openPeerMenu(event, peerId);
+                return;
+            }
+            const node = orbitHitEl(event, '.node');
             if (node) {
                 event.preventDefault();
                 openFieldMenu(event, node);
                 return;
             }
-            if (event.target.closest('#hubAdd')) {
+            if (orbitHitEl(event, '#hubAdd')) {
                 event.preventDefault();
                 toggleAddField();
                 return;
             }
-            const peer = event.target.closest('[data-peer]');
-            if (peer) {
-                event.preventDefault();
-                openPeerMenu(event, peer.dataset.peer);
-                return;
-            }
-            if (event.target.closest('#hub')) {
+            if (orbitHitEl(event, '#hub')) {
                 event.preventDefault();
                 openHubMenu(event);
                 return;
             }
-            if (event.target.closest('.map-toggle, .donate, .dock')) return;
+            if (event.target.closest('.map-toggle, .casebook-btn, #workNav, .donate, .dock')) return;
             event.preventDefault();
             openMapMenu(event);
         });
@@ -12220,7 +13555,7 @@
         if (mapStage) {
             mapStage.addEventListener('pointerdown', (event) => {
                 if (event.pointerType !== 'touch') return;
-                if (event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                if (event.target.closest('.map-toggle, .casebook-btn, #workNav, button, a, input, select, textarea')) return;
                 pinchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
                 if (pinchPointers.size >= 2) {
                     event.preventDefault();
@@ -12247,12 +13582,12 @@
             }, true);
             ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
                 mapStage.addEventListener(name, (event) => {
-                    if (event.target.closest && event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                    if (event.target.closest && event.target.closest('.map-toggle, .casebook-btn, #workNav, button, a, input, select, textarea')) return;
                     event.preventDefault();
                 });
             });
             mapStage.addEventListener('touchmove', (event) => {
-                if (event.target.closest && event.target.closest('.map-toggle, button, a, input, select, textarea')) return;
+                if (event.target.closest && event.target.closest('.map-toggle, .casebook-btn, #workNav, button, a, input, select, textarea')) return;
                 if (event.touches && event.touches.length > 1) event.preventDefault();
             }, { passive: false });
         }
@@ -12377,3 +13712,4 @@
             }
             kickOrbit();
         });
+        if (window.OrbINTShare && typeof OrbINTShare.boot === 'function') OrbINTShare.boot();

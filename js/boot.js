@@ -97,6 +97,7 @@
             const world = timelineWorldAt(event.clientX, event.clientY);
             const cam = world.cam;
             if (nearTlAxis(world) && !timelineConnectOn) {
+                hideTimelineIsland();
                 drag = { mode: 'mark', x: event.clientX, y: event.clientY, ox: cam.x, oy: cam.y, worldX: world.x, worldY: world.y };
                 view.setPointerCapture(event.pointerId);
                 return;
@@ -258,13 +259,13 @@
             onTlInfoClick(event);
             return;
         }
-        const calBtn = event.target.closest('[data-tl-cal], #eventDateBtn') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-cal], #eventDateBtn');
+        const calBtn = event.target.closest('[data-tl-cal], [data-fact-cal], #eventDateBtn') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-cal], #eventDateBtn');
         if (calBtn) {
             event.preventDefault();
             openCalendar(calBtn);
             return;
         }
-        const timeBtn = event.target.closest('[data-tl-time]') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-time]');
+        const timeBtn = event.target.closest('[data-tl-time], [data-fact-time]') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-time]');
         if (timeBtn) {
             event.preventDefault();
             openTimePicker(timeBtn);
@@ -850,6 +851,7 @@
                     rec[key] = tlEditableBlank(field) ? '' : field.innerText;
                 }
                 schedulePersist();
+                scheduleStemRedraw();
             }
         }
         if (event.target.id === 'boardSizeW' || event.target.id === 'boardSizeH') {
@@ -1153,6 +1155,11 @@
     }
 
     function onFile(event) {
+        if (event.target.id === 'compilerFile') {
+            ingestCompilerFiles(event.target.files);
+            event.target.value = '';
+            return;
+        }
         if (event.target.id === 'timelineImageFile') {
         const file = event.target.files && event.target.files[0];
             const id = timelinePhotoId;
@@ -1211,6 +1218,7 @@
         document.addEventListener('change', onFile, true);
         bindBoardPointers();
         bindTimelinePointers();
+        bindCompiler();
         document.addEventListener('pointermove', function (event) {
             if (event.pointerType === 'touch') return;
             setBoardDrift(event.clientX, event.clientY);
@@ -1229,7 +1237,7 @@
                 saved = localStorage.getItem('orbint-page') || settingValue('startPage', 'orbit') || 'orbit';
             }
         } catch (error) {}
-        if (['orbit', 'timeline', 'whiteboard', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
+        if (['orbit', 'timeline', 'whiteboard', 'compiler', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
         setPage(saved);
         renderAll();
         window.addEventListener('resize', function () {
@@ -1274,6 +1282,7 @@
             return true;
         }
         if (page === 'datasheet') return true;
+        if (page === 'compiler') return true;
         return false;
     }
 
@@ -1301,5 +1310,6 @@
         syncBoardHistory: syncBoardHistory,
         pages: PAGES,
         renderDatasheet: renderDatasheet,
-        scheduleDatasheet: scheduleDatasheet
+        scheduleDatasheet: scheduleDatasheet,
+        ingestCompilerFiles: ingestCompilerFiles
     };

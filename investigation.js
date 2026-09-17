@@ -1,4 +1,4 @@
-/* Assembled from js/{core,datasheet,timeline,whiteboard,intel,report,boot}.js
+/* Assembled from js/{core,datasheet,timeline,whiteboard,compiler,intel,report,boot}.js
    Edit those files, then run: python tools/bundle.py */
 (function () {
     'use strict';
@@ -7,7 +7,8 @@
         { id: 'orbit', label: 'OrbINT', kicker: 'Workspace', blurb: 'Orbit-style profile for names, usernames, emails, phones, domains, companies, and other identifiers.' },
         { id: 'timeline', label: 'Timeline', kicker: 'Chronology', blurb: 'Events and discoveries in order — who, when, evidence, and source.' },
         { id: 'whiteboard', label: 'Whiteboard', kicker: 'Diagram', blurb: 'Flowchart shapes and case cards on one board, including investigation playbooks.' },
-        { id: 'datasheet', label: 'Datasheet', kicker: 'Record', blurb: 'Preview of the printed case record, as it appears in the PDF.' }
+        { id: 'compiler', label: 'Compiler', kicker: 'Processor', blurb: 'Upload messy files. Keep every tag and symbol — the compiler only rearranges them so the facts are easier to read.' },
+        { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' }
     ];
 
     const FLOW_PRESETS = [
@@ -309,6 +310,7 @@
             timelineView: { x: 48, y: 40, z: 1 },
             evidence: [],
             whiteboard: { x: 0, y: 0, z: 1, nodes: [], links: [], grid: true },
+            compiler: { files: [], hits: [], ready: false },
             flowchart: { preset: 'username', checks: {}, notes: {} },
             intel: { host: '' }
         };
@@ -2231,6 +2233,12 @@
                 next.flowchart.notes = raw.flowchart.notes && typeof raw.flowchart.notes === 'object' ? raw.flowchart.notes : {};
             }
             next.intel.host = (raw.intel && raw.intel.host) || '';
+            if (raw.compiler && typeof raw.compiler === 'object') {
+                next.compiler.files = Array.isArray(raw.compiler.files) ? raw.compiler.files : [];
+                next.compiler.hits = Array.isArray(raw.compiler.hits) ? raw.compiler.hits : [];
+                next.compiler.ready = !!raw.compiler.ready;
+                next.compiler.at = raw.compiler.at || '';
+            }
         }
         data = next;
         selectedEvent = '';
@@ -2349,8 +2357,12 @@
         if (map) map.setAttribute('aria-hidden', page === 'orbit' ? 'false' : 'true');
         renderPageSwitch({ instant: !slideTab });
         syncDock();
-        if (page === 'timeline') renderTimeline();
+        if (page === 'timeline') {
+            renderTimeline();
+            syncTimelineIsland();
+        }
         if (page === 'whiteboard') renderWhiteboard();
+        if (page === 'compiler') renderCompiler();
         if (page === 'datasheet') renderDatasheet();
         try {
             if (window.OrbINTSettings && OrbINTSettings.get('rememberPage') === false) {
@@ -2372,7 +2384,8 @@
         const labels = {
             orbit: 'Add field',
             timeline: 'Add event',
-            whiteboard: 'Add shape'
+            whiteboard: 'Add shape',
+            compiler: 'Upload file'
         };
         const label = labels[page] || labels.orbit;
         if (add) {
@@ -2385,6 +2398,7 @@
             connect.setAttribute('data-tip', 'Connect cards');
             connect.setAttribute('aria-label', 'Connect cards');
         }
+        if (typeof paintDatasheetSpoilers === 'function') paintDatasheetSpoilers();
         syncBoardHistory();
     }
 
@@ -2407,6 +2421,10 @@
                 x: ((w / 2) - board.x) / z - 74,
                 y: ((h / 2) - board.y) / z - 74
             });
+            return true;
+        }
+        if (page === 'compiler') {
+            openCompilerPicker();
             return true;
         }
         return false;
@@ -2493,7 +2511,11 @@
                     group: field.group || '',
                     value: String(item.value).trim(),
                     platform: item.platform || '',
-                    platformLabel: (platformById(item.platform) || {}).label || item.platformLabel || ''
+                    platformLabel: (platformById(item.platform) || {}).label || item.platformLabel || '',
+                    source: item.source || '',
+                    confidence: item.confidence || '',
+                    method: item.method || '',
+                    capturedAt: item.capturedAt || item.addedAt || ''
                 });
             });
         });
@@ -2519,19 +2541,103 @@
         renderPageSwitch();
         renderTimeline();
         renderWhiteboard();
+        renderCompiler();
         renderDatasheet();
     }
 
 
     let dsLiveTimer = 0;
     let dsMarkup = '';
+    let dsRevealed = new Set();
+    let dsHidden = new Set();
+    let dsRevealAll = false;
+
+    function isRedactOpen(key) {
+        if (dsRevealAll) return !dsHidden.has(key || '');
+        return dsRevealed.has(key || '');
+    }
+
+    function paintDatasheetSpoilers() {
+        const label = dsRevealAll ? 'Hide redacted' : 'Show redacted';
+        const btn = $('dockSpoilers');
+        if (btn) {
+            btn.classList.toggle('is-on', !!dsRevealAll);
+            btn.setAttribute('aria-pressed', dsRevealAll ? 'true' : 'false');
+            btn.setAttribute('data-tip', label);
+            btn.setAttribute('aria-label', label);
+        }
+        const phone = $('phoneSpoilers');
+        if (phone) {
+            phone.hidden = page !== 'datasheet';
+            phone.textContent = label;
+        }
+    }
+
+    function applyDatasheetSpoilers() {
+        const view = $('datasheetView');
+        if (view) {
+            view.querySelectorAll('.ds-redact').forEach(function (btn) {
+                const key = btn.getAttribute('data-redact') || '';
+                btn.classList.toggle('is-open', isRedactOpen(key));
+            });
+        }
+        paintDatasheetSpoilers();
+    }
+
+    function toggleDatasheetSpoilers() {
+        dsRevealAll = !dsRevealAll;
+        dsRevealed = new Set();
+        dsHidden = new Set();
+        applyDatasheetSpoilers();
+        dsMarkup = '';
+        renderDatasheet();
+    }
+
+    function bindDatasheet() {
+        const view = $('datasheetView');
+        if (view && !view.dataset.redactBound) {
+            view.dataset.redactBound = '1';
+            view.addEventListener('click', function (event) {
+                const btn = event.target.closest('.ds-redact');
+                if (!btn) return;
+                event.preventDefault();
+                const key = btn.getAttribute('data-redact') || '';
+                const on = !btn.classList.contains('is-open');
+                btn.classList.toggle('is-open', on);
+                if (dsRevealAll) {
+                    if (on) dsHidden.delete(key);
+                    else dsHidden.add(key);
+                } else if (on) dsRevealed.add(key);
+                else dsRevealed.delete(key);
+            });
+        }
+        const dockBtn = $('dockSpoilers');
+        if (dockBtn && !dockBtn.dataset.boundSpoilers) {
+            dockBtn.dataset.boundSpoilers = '1';
+            dockBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                toggleDatasheetSpoilers();
+            });
+        }
+        const phoneBtn = $('phoneSpoilers');
+        if (phoneBtn && !phoneBtn.dataset.boundSpoilers) {
+            phoneBtn.dataset.boundSpoilers = '1';
+            phoneBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                toggleDatasheetSpoilers();
+            });
+        }
+        paintDatasheetSpoilers();
+    }
 
     function renderDatasheet() {
         const view = $('datasheetView');
         if (!view) return;
+        bindDatasheet();
         const html = reportPreviewMarkup();
         if (html === dsMarkup && view.firstChild) {
             sizeDatasheet();
+            applyDatasheetSpoilers();
             return;
         }
         dsMarkup = html;
@@ -2539,6 +2645,7 @@
         view.innerHTML = html;
         sizeDatasheet();
         view.scrollTop = y;
+        applyDatasheetSpoilers();
     }
 
     function scheduleDatasheet() {
@@ -2562,12 +2669,13 @@
     const TL_CARD_MAX_H = 2400;
     const TL_GAP = 280;
     const TL_STEM = 64;
-    const TL_AXIS_CLEAR = 42;
+    const TL_AXIS_CLEAR = TL_STEM;
     const TL_MIN_DX = TL_CARD_W + 40;
     const TL_CTRL = 'button, input, textarea, [contenteditable="true"], [data-tl-info], [data-tl-cal], [data-tl-time], [data-tl-mini], [data-tl-fold], [data-tl-drop], [data-del-event], [data-connect-event], [data-tl-photo], [data-tl-add], [data-tl-expand], .tl-acts, .tl-attach, .tl-media, .tl-thumb, .tl-bit-btn';
     let tlAimX = 220;
     let tlNodeObs = null;
     let tlStemRedraw = 0;
+    let tlStemTrack = 0;
 
     function tlHitFromPoint(x, y, selector) {
         if (typeof document.elementsFromPoint !== 'function') return null;
@@ -2576,7 +2684,7 @@
         for (let i = 0; i < stack.length; i++) {
             const el = stack[i];
             if (!el || !el.closest) continue;
-            if (el.closest('.tl-rs, .cal-pop, #timelineMenu, #timelineIsland, #timelineTips')) {
+            if (el.closest('.tl-rs, .cal-pop, #timelineMenu, #timelineIsland')) {
                 if (el.closest('.cal-pop')) {
                     const hit = el.closest(sel);
                     if (hit) return hit;
@@ -2599,6 +2707,68 @@
         const n = Number(ev && ev.h);
         if (n >= TL_CARD_MIN_H) return Math.min(TL_CARD_MAX_H, n);
         return 0;
+    }
+
+    function tlNodeH(el, ev) {
+        const card = el && el.querySelector('.tl-card');
+        return Math.max(
+            (card && card.offsetHeight) || 0,
+            (el && el.offsetHeight) || 0,
+            tlCardH(ev) || 0,
+            86
+        );
+    }
+
+    function tlNaturalH(el) {
+        if (!el) return 86;
+        const card = el.querySelector('.tl-card');
+        const sized = el.classList.contains('is-sized');
+        if (!sized) {
+            return Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+        }
+        const extra = el.querySelector('.tl-extra-inner');
+        const clipped = (extra && extra.scrollHeight > extra.clientHeight + 1) ||
+            (card && card.scrollHeight > card.clientHeight + 1);
+        if (!clipped) {
+            return Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+        }
+        const prev = el.style.height;
+        el.classList.remove('is-sized');
+        el.style.height = 'auto';
+        const h = Math.max((card && card.offsetHeight) || 0, el.offsetHeight || 0, 86);
+        el.style.height = prev;
+        el.classList.add('is-sized');
+        return h;
+    }
+
+    function tlFitNodeHeight(el, ev) {
+        if (!el || !ev || ev.mini) return tlNodeH(el, ev);
+        const natural = tlNaturalH(el);
+        const locked = tlCardH(ev);
+        if (locked) {
+            if (natural > locked + 1) {
+                ev.h = Math.min(TL_CARD_MAX_H, natural);
+                el.style.height = ev.h + 'px';
+                el.classList.add('is-sized');
+                return ev.h;
+            }
+            return Math.max(locked, tlNodeH(el, ev));
+        }
+        return natural;
+    }
+
+    function tlFacingSide(top, h, stored) {
+        const bottom = top + h;
+        if (top >= TL_AXIS_Y - 8) return 1;
+        if (bottom <= TL_AXIS_Y + 8) return -1;
+        if (stored === 1 || stored === -1) return stored;
+        return (top + h / 2) >= TL_AXIS_Y ? 1 : -1;
+    }
+
+    function tlPlantTop(side, h, freeTop, free) {
+        const natural = side === 1 ? TL_AXIS_Y + TL_STEM : TL_AXIS_Y - TL_STEM - h;
+        if (!free || !isFinite(freeTop)) return natural;
+        return tlKeepClearOfAxis(side, freeTop, h);
     }
 
     function placeTlCard(el, rec) {
@@ -2683,55 +2853,50 @@
         syncTimelineIsland();
     }
 
+    function hideTimelineIsland(instant) {
+        const island = $('timelineIsland');
+        if (!island) return;
+        const alreadyOut = island.classList.contains('is-out') && !island.classList.contains('is-on');
+        if (alreadyOut && !instant) return;
+        island.classList.remove('is-on', 'is-connect');
+        island.classList.add('is-out');
+        island.setAttribute('aria-hidden', 'true');
+        clearTimeout(tlIslandHide);
+        if (instant || reduceMotion()) return;
+    }
+
     function syncTimelineIsland() {
         const island = $('timelineIsland');
         const label = $('timelineIslandText');
         const hint = $('timelineHint');
-        if (island) {
-            if (timelineConnectOn) {
-                clearTimeout(tlIslandHide);
-                if (label) label.textContent = connectFrom ? 'Click the second card to connect them.' : 'Click two cards to connect them.';
-                island.hidden = false;
-                island.setAttribute('aria-hidden', 'false');
-                requestAnimationFrame(function () {
-                    island.classList.add('is-on');
-                    island.classList.remove('is-out');
-                });
-            } else if (island.classList.contains('is-on')) {
-                island.classList.remove('is-on');
-                island.classList.add('is-out');
-                island.setAttribute('aria-hidden', 'true');
-                clearTimeout(tlIslandHide);
-                tlIslandHide = setTimeout(function () {
-                    if (timelineConnectOn) return;
-                    island.hidden = true;
-                    island.classList.remove('is-out');
-                    if (label) label.textContent = '';
-                }, 340);
-            }
-        }
         if (hint) {
             hint.hidden = true;
             hint.textContent = '';
         }
-    }
-
-    function timelineTipsWanted() {
-        try { return localStorage.getItem('orbint-tl-tips') !== 'off'; } catch (error) { return true; }
-    }
-
-    function setTimelineTips(open) {
-        const widget = $('timelineTips');
-        const btn = $('timelineTipsBtn');
-        const card = $('timelineTipsCard');
-        if (!widget) return;
-        widget.classList.toggle('is-open', !!open);
-        if (btn) {
-            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            btn.setAttribute('aria-label', open ? 'Hide timeline tips' : 'Show timeline tips');
+        if (!island) return;
+        const connecting = !!timelineConnectOn;
+        const empty = !(data.timeline && data.timeline.length);
+        if (!connecting && !empty) {
+            hideTimelineIsland();
+            return;
         }
-        if (card) card.hidden = !open;
-        try { localStorage.setItem('orbint-tl-tips', open ? 'on' : 'off'); } catch (error) {}
+        clearTimeout(tlIslandHide);
+        const text = connecting
+            ? (connectFrom ? 'Click the second card to connect them.' : 'Click two cards to connect them.')
+            : 'Click the number line to add a card';
+        if (label) label.textContent = text;
+        island.classList.toggle('is-connect', connecting);
+        island.hidden = false;
+        island.removeAttribute('hidden');
+        island.setAttribute('aria-hidden', 'false');
+        if (island.classList.contains('is-on') && !island.classList.contains('is-out')) return;
+        island.classList.remove('is-on');
+        island.classList.add('is-out');
+        void island.offsetWidth;
+        requestAnimationFrame(function () {
+            island.classList.remove('is-out');
+            island.classList.add('is-on');
+        });
     }
 
     function relatedIds(ev) {
@@ -2805,8 +2970,7 @@
         const items = (data.timeline || []).map(function (ev) {
             const el = list.querySelector('[data-event="' + ev.id + '"]');
             if (!el || el.classList.contains('is-out') || el.classList.contains('is-moving') || el.classList.contains('is-resizing')) return null;
-            const card = el.querySelector('.tl-card');
-            const h = (card && card.offsetHeight) || el.offsetHeight || 168;
+            const h = tlFitNodeHeight(el, ev);
             const w = el.offsetWidth || tlCardW(ev);
             const left = parseFloat(el.style.left);
             const top = parseFloat(el.style.top);
@@ -2820,9 +2984,7 @@
             };
         }).filter(Boolean);
         items.forEach(function (item) {
-            item.side = (item.ev.side === 1 || item.ev.side === -1)
-                ? item.ev.side
-                : ((item.top0 + item.h / 2) >= TL_AXIS_Y ? 1 : -1);
+            item.side = tlFacingSide(item.top0, item.h, item.ev.side);
         });
         [-1, 1].forEach(function (side) {
             const group = items.filter(function (item) { return item.side === side; }).sort(function (a, b) {
@@ -2837,8 +2999,9 @@
             });
             const placed = [];
             group.forEach(function (item) {
-                const natural = side === 1 ? TL_AXIS_Y + TL_STEM : TL_AXIS_Y - TL_STEM - item.h;
-                let top = item.ev.free && isFinite(item.top0) ? item.top0 : natural;
+                let top = item.ev.locked && isFinite(item.top0)
+                    ? item.top0
+                    : tlPlantTop(side, item.h, item.top0, !!(item.ev.free && isFinite(item.top0)));
                 if (!item.ev.locked) top = tlKeepClearOfAxis(side, top, item.h);
                 if (!item.ev.locked) {
                     let guard = 0;
@@ -2916,7 +3079,7 @@
     }
 
     function cardTop(ev, height) {
-        if (ev && ev.free && ev.pinY != null && isFinite(Number(ev.pinY))) return Number(ev.pinY);
+        if (ev && ev.pinY != null && isFinite(Number(ev.pinY))) return Number(ev.pinY);
         const h = height || 168;
         return ev.side === 1 ? TL_AXIS_Y + TL_STEM : TL_AXIS_Y - TL_STEM - h;
     }
@@ -2941,6 +3104,43 @@
         const d = Number(hit[3]);
         if (!y || m < 0 || m > 11 || d < 1 || d > 31) return null;
         return { y: y, m: m, d: d };
+    }
+
+    function parseCalAny(value) {
+        const exact = parseCalIso(value);
+        if (exact) return exact;
+        const d = new Date(value);
+        if (!Number.isFinite(d.getTime())) return null;
+        return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+    }
+
+    function stampFromIso(iso) {
+        const d = iso ? new Date(iso) : null;
+        if (!d || !Number.isFinite(d.getTime())) return null;
+        return {
+            date: calIso(d.getFullYear(), d.getMonth(), d.getDate()),
+            h: d.getHours(),
+            m: d.getMinutes()
+        };
+    }
+
+    function isoFromStamp(dateIso, h, m) {
+        const parsed = parseCalIso(dateIso);
+        if (!parsed) return '';
+        const dt = new Date(parsed.y, parsed.m, parsed.d, ((h % 24) + 24) % 24, ((m % 60) + 60) % 60, 0, 0);
+        return dt.toISOString();
+    }
+
+    function readFactStamp(factId) {
+        return (host && host.getFactCaptured && host.getFactCaptured(factId)) || '';
+    }
+
+    function writeFactStamp(factId, iso) {
+        if (host && host.setFactCaptured) host.setFactCaptured(factId, iso || '');
+    }
+
+    function factStampLocked() {
+        return !!(host && host.readonly && host.readonly());
     }
 
     function calNavSvg(dir) {
@@ -3070,22 +3270,29 @@
             return;
         }
         const eventId = anchor.getAttribute('data-tl-cal') || '';
+        const factId = anchor.getAttribute('data-fact-cal') || '';
+        if (factId && factStampLocked()) return;
         let value = '';
-        if (eventId) {
+        if (factId) {
+            const stamp = stampFromIso(readFactStamp(factId));
+            value = stamp ? stamp.date : '';
+        } else if (eventId) {
             const rec = (data.timeline || []).find(function (item) { return item.id === eventId; });
             value = rec ? (rec.date || '') : '';
         } else {
             value = ($('eventDate') && $('eventDate').value) || '';
         }
-        const parsed = parseCalIso(value);
+        const parsed = parseCalAny(value);
         const now = new Date();
+        if (host && host.closeSheetPick) host.closeSheetPick();
         closeTimePicker();
         closeTlInfoPop();
         closeCalendar();
         calState = {
             anchor: anchor,
             eventId: eventId,
-            field: eventId ? '' : 'eventDate',
+            factId: factId,
+            field: eventId || factId ? '' : 'eventDate',
             value: value,
             y: parsed ? parsed.y : now.getFullYear(),
             m: parsed ? parsed.m : now.getMonth(),
@@ -3111,8 +3318,21 @@
     function applyCalValue(iso) {
         if (!calState) return;
         const eventId = calState.eventId;
+        const factId = calState.factId;
         const field = calState.field;
         closeCalendar();
+        if (factId) {
+            if (!iso) {
+                writeFactStamp(factId, '');
+                return;
+            }
+            const prev = stampFromIso(readFactStamp(factId));
+            const now = new Date();
+            const h = prev ? prev.h : now.getHours();
+            const m = prev ? prev.m : now.getMinutes();
+            writeFactStamp(factId, isoFromStamp(iso, h, m));
+            return;
+        }
         if (eventId) {
             const rec = (data.timeline || []).find(function (item) { return item.id === eventId; });
             if (rec) {
@@ -3285,23 +3505,30 @@
             return;
         }
         const eventId = anchor.getAttribute('data-tl-time') || '';
-        const rec = findTimelineEvent(eventId);
+        const factId = anchor.getAttribute('data-fact-time') || '';
+        if (factId && factStampLocked()) return;
+        const rec = factId ? null : findTimelineEvent(eventId);
         const field = anchor.getAttribute('data-tl-time-for') || 'time';
         const slotId = anchor.getAttribute('data-note-id') || '';
         let parsed = null;
-        if (field === 'moreTime' && rec) {
+        if (factId) {
+            const stamp = stampFromIso(readFactStamp(factId));
+            if (stamp) parsed = { h: stamp.h, m: stamp.m };
+        } else if (field === 'moreTime' && rec) {
             const slot = (rec.moreTimes || []).find(function (item) { return item.id === slotId; });
             parsed = parseTimeParts(slot && slot.value);
         } else {
             parsed = parseTimeParts(rec && rec[field]);
         }
         const now = new Date();
+        if (host && host.closeSheetPick) host.closeSheetPick();
         closeCalendar();
         closeTlInfoPop();
         closeTimePicker();
         timeState = {
             anchor: anchor,
             eventId: eventId,
+            factId: factId,
             field: field,
             slotId: slotId,
             h: parsed ? parsed.h : now.getHours(),
@@ -3408,6 +3635,18 @@
 
     function commitTimeValue(clear) {
         if (!timeState) return;
+        if (timeState.factId) {
+            const factId = timeState.factId;
+            const prev = stampFromIso(readFactStamp(factId));
+            const now = new Date();
+            const date = prev ? prev.date : calIso(now.getFullYear(), now.getMonth(), now.getDate());
+            if (clear) {
+                writeFactStamp(factId, isoFromStamp(date, 0, 0));
+                return;
+            }
+            writeFactStamp(factId, isoFromStamp(date, timeState.h, timeState.m));
+            return;
+        }
         const rec = findTimelineEvent(timeState.eventId);
         if (!rec) return;
         rememberTimeline('time:' + rec.id);
@@ -3788,7 +4027,7 @@
             tlFocusAfter = { id: id, field: kind };
         }
         renderTimeline();
-        tickTlLayout(22, id);
+        tickTlLayout(28, id);
         schedulePersist();
     }
 
@@ -3882,6 +4121,9 @@
                 '<button type="button" class="tl-ico" data-tl-time="' + esc(ev.id) + '" title="Time" aria-label="Choose time" aria-haspopup="dialog" aria-expanded="false">' +
                 '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg>' +
                 '</button>' +
+                '<button type="button" class="tl-ico' + (connectFrom === ev.id ? ' is-on' : '') + '" data-connect-event="' + esc(ev.id) + '" title="' + (connectFrom === ev.id ? 'Pick second card' : 'Connect cards') + '" aria-label="' + (connectFrom === ev.id ? 'Pick second card' : 'Connect cards') + '" aria-pressed="' + (connectFrom === ev.id ? 'true' : 'false') + '">' +
+                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5a3.8 3.8 0 0 0 5.4.4l1.6-1.6a3.8 3.8 0 1 0-5.4-5.4l-.9.9"/><path d="M14 10.5a3.8 3.8 0 0 0-5.4-.4L7 11.7a3.8 3.8 0 0 0 5.4 5.4l.9-.9"/></svg>' +
+                '</button>' +
                 '<button type="button" class="tl-ico" data-tl-mini="' + esc(ev.id) + '" title="' + (ev.mini ? 'Expand' : 'Minimize') + '" aria-label="' + (ev.mini ? 'Expand' : 'Minimize') + '" aria-expanded="' + (ev.mini ? 'false' : 'true') + '">' +
                 '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/><path class="tl-mini-v" d="M12 6v12"/></svg>' +
                 '</button>' +
@@ -3897,7 +4139,6 @@
                 media +
                 '<div class="tl-acts">' +
                 '<button type="button" class="tl-add-info" data-tl-info="' + esc(ev.id) + '" aria-haspopup="dialog" aria-expanded="false">+ Add information</button>' +
-                '<button type="button" data-connect-event="' + esc(ev.id) + '">' + (connectFrom === ev.id ? 'Pick…' : 'Connect cards') + '</button>' +
                 '</div></div></div></div>' +
                 '<div class="tl-rs" aria-hidden="true">' +
                 '<i data-tl-rs="n"></i><i data-tl-rs="s"></i><i data-tl-rs="e"></i><i data-tl-rs="w"></i>' +
@@ -3908,14 +4149,16 @@
             list.querySelectorAll('.tl-node').forEach(function (el) {
                 const rec = (data.timeline || []).find(function (item) { return item.id === el.getAttribute('data-event'); });
                 if (!rec) return;
-                if (!(rec.free && rec.pinY != null && isFinite(Number(rec.pinY)))) rec.pinY = cardTop(rec, el.offsetHeight);
+                if (!(rec.pinY != null && isFinite(Number(rec.pinY)))) rec.pinY = cardTop(rec, tlNodeH(el, rec));
                 placeTlCard(el, rec);
             });
             stackTimelineStems();
             drawTimelineAxis();
+            trackTimelineStems();
             bindTimelineFieldSizes(list);
             bindTimelineNodeSizes(list);
             applyTlFocusAfter(list);
+            tickTlLayout(12);
         });
         scheduleDatasheet();
     }
@@ -3972,7 +4215,20 @@
             tlStemRedraw = 0;
             stackTimelineStems();
             drawTimelineAxis();
+            trackTimelineStems();
         });
+    }
+
+    function trackTimelineStems() {
+        if (tlStemTrack) return;
+        const tick = function () {
+            tlStemTrack = 0;
+            drawTimelineAxis();
+            if (document.querySelector('#timelineList .tl-node.is-spawn, #timelineList .tl-node.is-moving, #timelineList .tl-node.is-resizing')) {
+                tlStemTrack = requestAnimationFrame(tick);
+            }
+        };
+        tlStemTrack = requestAnimationFrame(tick);
     }
 
     function bindTimelineNodeSizes(list) {
@@ -3987,7 +4243,7 @@
             });
             if (dirty) scheduleStemRedraw();
         });
-        list.querySelectorAll('.tl-node').forEach(function (el) { tlNodeObs.observe(el); });
+        list.querySelectorAll('.tl-node, .tl-node .tl-card').forEach(function (el) { tlNodeObs.observe(el); });
     }
 
     function formatWhen(ev) {
@@ -4031,14 +4287,29 @@
     }
 
     function tlCardBox(ev, el) {
-        const w = (el && el.offsetWidth) || tlCardW(ev);
-        const left = el ? (parseFloat(el.style.left) || el.offsetLeft || 0) : ((Number(ev.pinX) || 0) - w / 2);
-        const top = el ? (parseFloat(el.style.top) || el.offsetTop || 0) : (Number(ev.pinY) || 0);
         const card = el && el.querySelector('.tl-card');
-        const h = (card && card.offsetHeight) || (el && el.offsetHeight) || tlCardH(ev) || 120;
+        const w = Math.max(1, (card && card.offsetWidth) || (el && el.offsetWidth) || tlCardW(ev));
+        const h = Math.max(86, (card && card.offsetHeight) || tlNodeH(el, ev));
+        const left = el
+            ? (parseFloat(el.style.left) || el.offsetLeft || ((Number(ev.pinX) || 0) - w / 2))
+            : ((Number(ev.pinX) || 0) - w / 2);
+        const top = el
+            ? (parseFloat(el.style.top) || el.offsetTop || Number(ev.pinY) || 0)
+            : (Number(ev.pinY) || 0);
         const pin = left + w / 2;
-        const side = (ev.side === 1 || ev.side === -1) ? ev.side : ((top + h / 2) >= TL_AXIS_Y ? 1 : -1);
+        const side = tlFacingSide(top, h, ev && ev.side);
         return { id: ev.id, side: side, pin: pin, left: left, right: left + w, top: top, bottom: top + h };
+    }
+
+    function tlStemEnds(box, axisY) {
+        const side = box.side === 1 ? 1 : -1;
+        const glue = 5;
+        return {
+            side: side,
+            pin: box.pin,
+            tickY: side === 1 ? axisY + 22 : axisY - 22,
+            cardY: side === 1 ? box.top + glue : box.bottom - glue
+        };
     }
 
     function mergeTlBoxes(list) {
@@ -4086,18 +4357,15 @@
 
     function tlStemPoints(pin, startY, endY, selfId, boxes) {
         const down = endY > startY;
-        const lo = Math.min(startY, endY);
-        const hi = Math.max(startY, endY);
-        const dest = boxes.find(function (b) { return b.id === selfId; });
         const hits = boxes.filter(function (b) {
             if (b.id === selfId) return false;
             if (pin < b.left - 1 || pin > b.right + 1) return false;
-            return b.bottom > lo + 6 && b.top < hi - 6;
+            if (down) return b.top < endY - 8 && b.bottom > startY + 8;
+            return b.bottom > endY + 8 && b.top < startY - 8;
         });
         const merged = mergeTlBoxes(hits);
-        const pad = 14;
+        const pad = 16;
         const pts = [{ x: pin, y: startY }];
-        let lastAround = pin;
         merged.forEach(function (obs) {
             let enter;
             let leave;
@@ -4115,19 +4383,19 @@
             const rightX = obs.right + pad;
             let around = Math.abs(pin - leftX) <= Math.abs(rightX - pin) ? leftX : rightX;
             if (around < TL_ORIGIN_X - 8) around = rightX;
-            lastAround = around;
             pts.push({ x: pin, y: enter });
             pts.push({ x: around, y: enter });
             pts.push({ x: around, y: leave });
             pts.push({ x: pin, y: leave });
         });
-        if (lastAround !== pin && dest && Math.abs((pts[pts.length - 1] || {}).y - endY) < 28) {
-            pts.pop();
-            pts.push({ x: lastAround, y: endY });
+        const last = pts[pts.length - 1];
+        if (!last || last.x !== pin) pts.push({ x: pin, y: last ? last.y : startY });
+        const tail = pts[pts.length - 1];
+        if (!tail || Math.abs(tail.y - endY) > 0.5) pts.push({ x: pin, y: endY });
+        if (pts.length < 2) {
+            pts.push({ x: pin, y: startY });
             pts.push({ x: pin, y: endY });
-            return pts;
         }
-        pts.push({ x: pin, y: endY });
         return pts;
     }
 
@@ -4166,17 +4434,24 @@
             const el = nodes[ev.id];
             const box = el ? tlCardBox(ev, el) : null;
             const pin = box ? box.pin : (Number(ev.pinX) || x0 + 80);
-            parts.push('<line x1="' + pin + '" y1="' + (y - 22) + '" x2="' + pin + '" y2="' + (y + 22) + '" stroke="#fafafa" stroke-width="1.6"/>');
+            const leaving = !!(el && el.classList.contains('is-out'));
+            const outClass = leaving ? ' is-out' : '';
+            parts.push('<line class="tl-pin' + outClass + '" data-tl-pin="' + esc(ev.id) + '" pathLength="1" x1="' + pin + '" y1="' + (y - 22) + '" x2="' + pin + '" y2="' + (y + 22) + '" stroke="#fafafa" stroke-width="1.6"/>');
             if (box) {
-                const axisY = box.side === 1 ? y + 22 : y - 22;
-                const cardY = box.side === 1 ? box.top : box.bottom;
-                if ((box.side === 1 && cardY > axisY + 1) || (box.side === -1 && cardY < axisY - 1)) {
-                    const d = tlOrthoPath(tlStemPoints(pin, axisY, cardY, ev.id, boxes), 10);
-                    parts.push('<path d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>');
+                const ends = tlStemEnds(box, y);
+                let pts = tlStemPoints(ends.pin, ends.tickY, ends.cardY, ev.id, boxes);
+                if (pts.length < 2) {
+                    pts = [{ x: ends.pin, y: ends.tickY }, { x: ends.pin, y: ends.cardY }];
                 }
+                pts[0] = { x: ends.pin, y: ends.tickY };
+                pts[pts.length - 1] = { x: ends.pin, y: ends.cardY };
+                pts.reverse();
+                let d = tlOrthoPath(pts, 10);
+                if (!d) d = 'M' + ends.pin + ' ' + ends.cardY + ' L' + ends.pin + ' ' + ends.tickY;
+                parts.push('<path class="tl-stem' + outClass + '" data-tl-stem="' + esc(ev.id) + '"' + (leaving ? ' pathLength="1"' : '') + ' d="' + d + '" fill="none" stroke="#a1a1aa" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/>');
             }
             if (ev.date) {
-                parts.push('<text x="' + pin + '" y="' + (y - 40) + '" text-anchor="middle" fill="#a1a1aa" font-size="11">' + esc(formatDayLabel(ev.date)) + '</text>');
+                parts.push('<text class="tl-pin-date' + outClass + '" data-tl-pin-date="' + esc(ev.id) + '" x="' + pin + '" y="' + (y - 40) + '" text-anchor="middle" fill="#a1a1aa" font-size="11">' + esc(formatDayLabel(ev.date)) + '</text>');
             }
         });
         (data.timeline || []).forEach(function (ev) {
@@ -4188,7 +4463,10 @@
                 if (!boxA || !boxB) return;
                 const d = tlCardLinkPath(boxA, boxB);
                 if (!d) return;
-                parts.push('<path d="' + d + '" fill="none" stroke="#73737a" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" opacity="0.88" marker-end="url(#tl-card-arrow)"/>');
+                const elA = nodes[ev.id];
+                const elB = nodes[b.id];
+                const leaving = !!(elA && elA.classList.contains('is-out')) || !!(elB && elB.classList.contains('is-out'));
+                parts.push('<path class="tl-card-link' + (leaving ? ' is-out' : '') + '" data-tl-link-a="' + esc(ev.id) + '" data-tl-link-b="' + esc(b.id) + '"' + (leaving ? ' pathLength="1"' : '') + ' d="' + d + '" fill="none" stroke="#73737a" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" opacity="0.88" marker-end="url(#tl-card-arrow)"/>');
             });
         });
         svg.innerHTML = parts.join('');
@@ -4204,6 +4482,7 @@
     }
 
     function addEventAt(x, side, spawn) {
+        hideTimelineIsland();
         rememberTimeline();
         const pinX = clampTimelineX(x);
         const ev = {
@@ -4232,7 +4511,11 @@
         requestAnimationFrame(function () {
             const node = document.querySelector('[data-event="' + ev.id + '"]');
             if (node && spawn) {
-                node.addEventListener('animationend', function () { node.classList.remove('is-spawn'); }, { once: true });
+                node.addEventListener('animationend', function () {
+                    node.classList.remove('is-spawn');
+                    stackTimelineStems();
+                    drawTimelineAxis();
+                }, { once: true });
             }
             const title = node && node.querySelector('[data-tl-field="title"]');
             if (title) title.focus();
@@ -4355,22 +4638,30 @@
         schedulePersist();
     }
 
+    function markTimelineStemOut(id) {
+        const svg = $('timelineAxis');
+        if (!svg || !id) return;
+        const sel = '[data-tl-stem="' + id + '"], [data-tl-pin="' + id + '"], [data-tl-pin-date="' + id + '"], [data-tl-link-a="' + id + '"], [data-tl-link-b="' + id + '"]';
+        svg.querySelectorAll(sel).forEach(function (el) { el.classList.add('is-out'); });
+    }
+
     function deleteEvent(id) {
         const node = document.querySelector('#timelineList [data-event="' + id + '"]');
         if (node && node.classList.contains('is-out')) return;
         rememberTimeline();
         function commit() {
-        data.timeline = (data.timeline || []).filter(function (item) { return item.id !== id; });
-        data.timeline.forEach(function (item) {
-            item.links = (item.links || []).filter(function (link) { return link.to !== id; });
-        });
-        if (selectedEvent === id) selectedEvent = '';
-        if (connectFrom === id) connectFrom = '';
-        renderTimeline();
-        schedulePersist();
+            data.timeline = (data.timeline || []).filter(function (item) { return item.id !== id; });
+            data.timeline.forEach(function (item) {
+                item.links = (item.links || []).filter(function (link) { return link.to !== id; });
+            });
+            if (selectedEvent === id) selectedEvent = '';
+            if (connectFrom === id) connectFrom = '';
+            renderTimeline();
+            schedulePersist();
         }
         if (node && !reduceMotion()) {
             node.classList.add('is-out');
+            markTimelineStemOut(id);
             afterEase(node, commit);
             return;
         }
@@ -6513,6 +6804,653 @@
         });
     }
 
+    const CP_MAX = 2 * 1024 * 1024;
+    const CP_KINDS = {
+        txt: 1, md: 1, json: 1, html: 1, htm: 1, csv: 1, xml: 1
+    };
+    let cpBusy = false;
+    let cpBound = false;
+
+    function compilerState() {
+        if (!data.compiler || typeof data.compiler !== 'object') {
+            data.compiler = { files: [], hits: [], ready: false };
+        }
+        if (!Array.isArray(data.compiler.files)) data.compiler.files = [];
+        if (!Array.isArray(data.compiler.hits)) data.compiler.hits = [];
+        return data.compiler;
+    }
+
+    function cpKind(name, type) {
+        const ext = String(name || '').split('.').pop().toLowerCase();
+        if (CP_KINDS[ext]) return ext === 'htm' ? 'html' : ext;
+        const t = String(type || '').toLowerCase();
+        if (t.indexOf('json') >= 0) return 'json';
+        if (t.indexOf('html') >= 0) return 'html';
+        if (t.indexOf('csv') >= 0) return 'csv';
+        if (t.indexOf('xml') >= 0) return 'xml';
+        if (t.indexOf('markdown') >= 0) return 'md';
+        return 'txt';
+    }
+
+    function cpPushHit(hits, kind, value, note) {
+        const v = String(value || '').trim();
+        if (!v) return;
+        const key = kind + '\0' + v.toLowerCase();
+        if (hits._seen[key]) return;
+        hits._seen[key] = 1;
+        hits.push({ kind: kind, value: v, note: note || '' });
+    }
+
+    function cpScanText(hits, text, note) {
+        const src = String(text || '');
+        if (!src) return;
+        const email = src.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/gi) || [];
+        email.forEach(function (v) { cpPushHit(hits, 'email', v, note); });
+        const url = src.match(/\bhttps?:\/\/[^\s<>"'`]+/gi) || [];
+        url.forEach(function (v) {
+            const clean = v.replace(/[),.;]+$/, '');
+            cpPushHit(hits, 'url', clean, note);
+            try {
+                const host = new URL(clean).hostname.replace(/^www\./, '');
+                if (host && host.indexOf('.') > 0) cpPushHit(hits, 'domain', host, note);
+            } catch (error) {}
+        });
+        const ip = src.match(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g) || [];
+        ip.forEach(function (v) { cpPushHit(hits, 'ip', v, note); });
+        const phone = src.match(/(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g) || [];
+        phone.forEach(function (v) {
+            const digits = v.replace(/\D/g, '');
+            if (digits.length >= 10 && digits.length <= 15) cpPushHit(hits, 'phone', v, note);
+        });
+        const user = src.match(/(^|[^\w])@([A-Za-z0-9_]{3,32})\b/g) || [];
+        user.forEach(function (v) {
+            const h = v.replace(/^[^@]+/, '');
+            cpPushHit(hits, 'username', h, note);
+        });
+        const btc = src.match(/\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g) || [];
+        btc.forEach(function (v) { cpPushHit(hits, 'crypto', v, note); });
+        const eth = src.match(/\b0x[a-fA-F0-9]{40}\b/g) || [];
+        eth.forEach(function (v) { cpPushHit(hits, 'crypto', v, note); });
+        const labeled = src.match(/^\s*(name|full name|email|phone|address|username|company|domain|dob|date of birth|ip)\s*[:\-]\s*(.+)$/gim) || [];
+        labeled.forEach(function (line) {
+            const m = line.match(/^\s*([^:]+?)\s*[:\-]\s*(.+)$/);
+            if (!m) return;
+            const label = m[1].toLowerCase();
+            const val = m[2].trim();
+            if (/email/.test(label)) cpPushHit(hits, 'email', val, note);
+            else if (/phone/.test(label)) cpPushHit(hits, 'phone', val, note);
+            else if (/user/.test(label)) cpPushHit(hits, 'username', val, note);
+            else if (/address/.test(label)) cpPushHit(hits, 'address', val, note);
+            else if (/company/.test(label)) cpPushHit(hits, 'company', val, note);
+            else if (/domain/.test(label)) cpPushHit(hits, 'domain', val, note);
+            else if (/ip/.test(label)) cpPushHit(hits, 'ip', val, note);
+            else if (/dob|birth/.test(label)) cpPushHit(hits, 'dob', val, note);
+            else if (/name/.test(label)) cpPushHit(hits, 'name', val, note);
+        });
+    }
+
+    function cpParseCsv(text) {
+        const rows = [];
+        let row = [];
+        let cell = '';
+        let q = false;
+        const src = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        for (let i = 0; i < src.length; i++) {
+            const ch = src[i];
+            if (q) {
+                if (ch === '"' && src[i + 1] === '"') { cell += '"'; i++; }
+                else if (ch === '"') q = false;
+                else cell += ch;
+            } else if (ch === '"') q = true;
+            else if (ch === ',') { row.push(cell); cell = ''; }
+            else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+            else cell += ch;
+        }
+        if (cell || row.length) { row.push(cell); rows.push(row); }
+        return rows.filter(function (r) { return r.some(function (c) { return String(c).trim(); }); });
+    }
+
+    function cpFlatten(val, prefix, rows) {
+        if (val == null) {
+            rows.push({ key: prefix || '(root)', value: String(val) });
+            return;
+        }
+        if (typeof val !== 'object') {
+            rows.push({ key: prefix || '(value)', value: String(val) });
+            return;
+        }
+        if (Array.isArray(val)) {
+            if (!val.length) rows.push({ key: prefix || '(list)', value: '[]' });
+            val.forEach(function (item, i) {
+                cpFlatten(item, prefix ? prefix + '[' + i + ']' : '[' + i + ']', rows);
+            });
+            return;
+        }
+        const keys = Object.keys(val);
+        if (!keys.length) rows.push({ key: prefix || '(object)', value: '{}' });
+        keys.forEach(function (k) {
+            cpFlatten(val[k], prefix ? prefix + '.' + k : k, rows);
+        });
+    }
+
+    function cpTagWalk(node, counts, attrs) {
+        if (!node) return;
+        if (node.nodeType === 1) {
+            const tag = String(node.tagName || '').toLowerCase();
+            if (tag) counts[tag] = (counts[tag] || 0) + 1;
+            if (node.attributes) {
+                for (let i = 0; i < node.attributes.length; i++) {
+                    const a = node.attributes[i];
+                    attrs.push({ tag: tag, name: a.name, value: a.value });
+                }
+            }
+            const kids = node.childNodes || [];
+            for (let i = 0; i < kids.length; i++) cpTagWalk(kids[i], counts, attrs);
+        }
+    }
+
+    function cpHtml(raw, hits) {
+        const doc = new DOMParser().parseFromString(raw, 'text/html');
+        const counts = {};
+        const attrs = [];
+        cpTagWalk(doc.documentElement, counts, attrs);
+        const title = (doc.querySelector('title') && doc.querySelector('title').textContent) || '';
+        const metas = [];
+        doc.querySelectorAll('meta').forEach(function (el) {
+            const name = el.getAttribute('name') || el.getAttribute('property') || el.getAttribute('http-equiv') || '';
+            const content = el.getAttribute('content') || '';
+            if (name || content) metas.push({ key: name || '(meta)', value: content });
+        });
+        const headings = [];
+        doc.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function (el) {
+            const t = (el.textContent || '').trim();
+            if (t) headings.push({ key: el.tagName.toLowerCase(), value: t });
+        });
+        const links = [];
+        doc.querySelectorAll('a[href]').forEach(function (el) {
+            links.push({ text: (el.textContent || '').trim(), href: el.getAttribute('href') || '' });
+        });
+        const images = [];
+        doc.querySelectorAll('img').forEach(function (el) {
+            images.push({ text: el.getAttribute('alt') || '', href: el.getAttribute('src') || '' });
+        });
+        const tables = [];
+        doc.querySelectorAll('table').forEach(function (table) {
+            const grid = [];
+            table.querySelectorAll('tr').forEach(function (tr) {
+                const cells = [];
+                tr.querySelectorAll('th,td').forEach(function (td) { cells.push((td.textContent || '').trim()); });
+                if (cells.length) grid.push(cells);
+            });
+            if (grid.length) tables.push(grid);
+        });
+        const bodyText = ((doc.body && doc.body.innerText) || '').replace(/\n{3,}/g, '\n\n').trim();
+        cpScanText(hits, raw, 'html');
+        if (title) cpPushHit(hits, 'name', title, 'title');
+        return {
+            title: title,
+            metas: metas,
+            headings: headings,
+            links: links,
+            images: images,
+            tables: tables,
+            text: bodyText,
+            tags: Object.keys(counts).sort().map(function (k) { return { key: k, value: String(counts[k]) }; }),
+            attrs: attrs.slice(0, 400)
+        };
+    }
+
+    function cpXml(raw, hits) {
+        const doc = new DOMParser().parseFromString(raw, 'application/xml');
+        const err = doc.querySelector('parsererror');
+        const counts = {};
+        const attrs = [];
+        const texts = [];
+        function walk(node, path) {
+            if (!node || node.nodeType !== 1) return;
+            const tag = String(node.tagName || '').toLowerCase();
+            counts[tag] = (counts[tag] || 0) + 1;
+            const here = path ? path + '/' + tag : tag;
+            if (node.attributes) {
+                for (let i = 0; i < node.attributes.length; i++) {
+                    const a = node.attributes[i];
+                    attrs.push({ key: here + '@' + a.name, value: a.value });
+                    cpScanText(hits, a.value, 'xml attr');
+                }
+            }
+            const kids = Array.prototype.slice.call(node.children || []);
+            const text = Array.prototype.slice.call(node.childNodes || []).filter(function (n) {
+                return n.nodeType === 3 && String(n.textContent || '').trim();
+            }).map(function (n) { return n.textContent.trim(); }).join(' ');
+            if (text) {
+                texts.push({ key: here, value: text });
+                cpScanText(hits, text, 'xml');
+            }
+            kids.forEach(function (child) { walk(child, here); });
+        }
+        if (!err && doc.documentElement) walk(doc.documentElement, '');
+        cpScanText(hits, raw, 'xml');
+        return {
+            error: err ? ((err.textContent || 'Could not parse XML').slice(0, 240)) : '',
+            tags: Object.keys(counts).sort().map(function (k) { return { key: k, value: String(counts[k]) }; }),
+            attrs: attrs,
+            texts: texts
+        };
+    }
+
+    function cpJson(raw, hits) {
+        let parsed = null;
+        let error = '';
+        try { parsed = JSON.parse(raw); }
+        catch (e) { error = e.message || 'Invalid JSON'; }
+        const rows = [];
+        if (parsed != null) cpFlatten(parsed, '', rows);
+        rows.forEach(function (row) { cpScanText(hits, row.key + ' ' + row.value, 'json'); });
+        if (error) cpScanText(hits, raw, 'json');
+        return { error: error, rows: rows, pretty: parsed != null ? JSON.stringify(parsed, null, 2) : '' };
+    }
+
+    function cpMd(raw, hits) {
+        const headings = [];
+        const links = [];
+        const list = [];
+        String(raw || '').split(/\n/).forEach(function (line) {
+            const h = line.match(/^(#{1,6})\s+(.+)$/);
+            if (h) headings.push({ key: 'h' + h[1].length, value: h[2].trim() });
+            const li = line.match(/^\s*[-*+]\s+(.+)$/);
+            if (li) list.push(li[1]);
+            const link = line.match(/\[([^\]]+)\]\(([^)]+)\)/g) || [];
+            link.forEach(function (bit) {
+                const m = bit.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                if (m) links.push({ text: m[1], href: m[2] });
+            });
+        });
+        cpScanText(hits, raw, 'markdown');
+        return { headings: headings, links: links, list: list, text: raw };
+    }
+
+    function cpCsv(raw, hits) {
+        const grid = cpParseCsv(raw);
+        grid.forEach(function (row) {
+            row.forEach(function (cell) { cpScanText(hits, cell, 'csv'); });
+        });
+        return { tables: grid.length ? [grid] : [] };
+    }
+
+    function cpTxt(raw, hits) {
+        cpScanText(hits, raw, 'text');
+        const paras = String(raw || '').split(/\n{2,}/).map(function (p) { return p.trim(); }).filter(Boolean);
+        return { text: raw, paras: paras };
+    }
+
+    function compileOne(file, raw) {
+        const kind = cpKind(file.name, file.type);
+        const hits = [];
+        hits._seen = {};
+        let parsed;
+        if (kind === 'html') parsed = cpHtml(raw, hits);
+        else if (kind === 'xml') parsed = cpXml(raw, hits);
+        else if (kind === 'json') parsed = cpJson(raw, hits);
+        else if (kind === 'md') parsed = cpMd(raw, hits);
+        else if (kind === 'csv') parsed = cpCsv(raw, hits);
+        else parsed = cpTxt(raw, hits);
+        delete hits._seen;
+        return {
+            id: uid('cp'),
+            name: file.name || 'untitled',
+            kind: kind,
+            size: file.size || raw.length,
+            raw: raw,
+            parsed: parsed,
+            hits: hits
+        };
+    }
+
+    function mergeCompilerHits(files) {
+        const hits = [];
+        hits._seen = {};
+        files.forEach(function (file) {
+            (file.hits || []).forEach(function (hit) {
+                cpPushHit(hits, hit.kind, hit.value, hit.note || file.name);
+            });
+        });
+        delete hits._seen;
+        return hits;
+    }
+
+    function setCompilerBusy(on, title, hint) {
+        cpBusy = !!on;
+        const load = $('compilerLoad');
+        const drop = $('compilerDrop');
+        if (load) {
+            load.hidden = !on;
+            const t = $('compilerLoadTitle');
+            const h = $('compilerLoadHint');
+            if (t && title) t.textContent = title;
+            if (h && hint) h.textContent = hint;
+        }
+        if (drop) drop.setAttribute('aria-busy', on ? 'true' : 'false');
+    }
+
+    function hideCompilerDownload() {
+        const menu = $('compilerDownloadMenu');
+        if (menu) menu.hidden = true;
+    }
+
+    function compilerSummary() {
+        const st = compilerState();
+        const n = (st.files || []).length;
+        const hits = (st.hits || []).length;
+        const el = $('compilerCount');
+        if (!el) return;
+        if (!st.ready || !n) el.textContent = 'No file';
+        else el.textContent = n + (n === 1 ? ' file' : ' files') + ' · ' + hits + ' identifiers';
+        const dl = $('compilerDownloadBtn');
+        const ins = $('compilerInspectBtn');
+        if (dl) dl.disabled = !st.ready;
+        if (ins) ins.disabled = !st.ready;
+    }
+
+    function cpEsc(text) {
+        return esc(text);
+    }
+
+    function renderKv(rows) {
+        if (!rows || !rows.length) return '';
+        return '<dl class="cp-kv">' + rows.map(function (row) {
+            return '<dt>' + cpEsc(row.key) + '</dt><dd>' + cpEsc(row.value) + '</dd>';
+        }).join('') + '</dl>';
+    }
+
+    function renderTable(grid) {
+        if (!grid || !grid.length) return '';
+        const head = grid[0];
+        const body = grid.slice(1);
+        const useHead = head.every(function (c) { return String(c).length < 48; });
+        let html = '<div class="cp-table-wrap"><table class="cp-table">';
+        if (useHead) {
+            html += '<thead><tr>' + head.map(function (c) { return '<th>' + cpEsc(c) + '</th>'; }).join('') + '</tr></thead>';
+        }
+        const rows = useHead ? body : grid;
+        html += '<tbody>' + rows.map(function (row) {
+            return '<tr>' + row.map(function (c) { return '<td>' + cpEsc(c) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+        return html;
+    }
+
+    function renderHits(hits) {
+        if (!hits || !hits.length) return '';
+        return '<div class="cp-grid">' + hits.map(function (hit) {
+            return '<div class="cp-hit"><b>' + cpEsc(hit.kind) + '</b><span>' + cpEsc(hit.value) + '</span>' +
+                (hit.note ? '<i>' + cpEsc(hit.note) + '</i>' : '') + '</div>';
+        }).join('') + '</div>';
+    }
+
+    function renderCompilerFile(file) {
+        const p = file.parsed || {};
+        let body = '';
+        if (p.title) body += '<p class="cp-block">' + cpEsc(p.title) + '</p>';
+        if (p.error) body += '<p class="cp-block">' + cpEsc(p.error) + '</p>';
+        if (p.headings && p.headings.length) body += renderKv(p.headings);
+        if (p.metas && p.metas.length) body += '<p class="cp-label">Meta <em>' + p.metas.length + '</em></p>' + renderKv(p.metas);
+        if (p.rows && p.rows.length) body += renderKv(p.rows);
+        if (p.texts && p.texts.length) body += renderKv(p.texts);
+        if (p.links && p.links.length) {
+            body += '<ul class="cp-list">' + p.links.map(function (link) {
+                return '<li>' + cpEsc(link.text || link.href) + (link.href ? ' — ' + cpEsc(link.href) : '') + '</li>';
+            }).join('') + '</ul>';
+        }
+        if (p.images && p.images.length) {
+            body += '<ul class="cp-list">' + p.images.map(function (img) {
+                return '<li>' + cpEsc(img.text || 'image') + (img.href ? ' — ' + cpEsc(img.href) : '') + '</li>';
+            }).join('') + '</ul>';
+        }
+        if (p.list && p.list.length) {
+            body += '<ul class="cp-list">' + p.list.map(function (item) { return '<li>' + cpEsc(item) + '</li>'; }).join('') + '</ul>';
+        }
+        if (p.tables) p.tables.forEach(function (grid) { body += renderTable(grid); });
+        if (p.paras && p.paras.length) {
+            body += p.paras.map(function (para) { return '<p class="cp-block">' + cpEsc(para) + '</p>'; }).join('');
+        } else if (p.text && !p.pretty && file.kind !== 'html') {
+            body += '<pre class="cp-block">' + cpEsc(p.text) + '</pre>';
+        }
+        if (p.pretty) body += '<pre class="cp-src">' + cpEsc(p.pretty) + '</pre>';
+        if (p.tags && p.tags.length) {
+            body += '<p class="cp-label">Markup <em>kept</em></p>' + renderKv(p.tags);
+        }
+        if (p.attrs && p.attrs.length && file.kind !== 'xml') {
+            body += '<p class="cp-label">Attributes <em>' + p.attrs.length + '</em></p>' + renderKv(p.attrs.map(function (a) {
+                return { key: (a.tag ? a.tag + ' @' : '') + a.name, value: a.value };
+            }));
+        }
+        body += '<details class="cp-orig"><summary>Original</summary><pre class="cp-src">' + cpEsc(file.raw) + '</pre></details>';
+        return '<section class="cp-sec"><h3>' + cpEsc(file.name) + ' <em>' + cpEsc(file.kind) + '</em></h3>' + body + '</section>';
+    }
+
+    function renderCompiler() {
+        const drop = $('compilerDrop');
+        const result = $('compilerResult');
+        const st = compilerState();
+        compilerSummary();
+        if (!drop || !result) return;
+        if (!st.ready || !(st.files || []).length) {
+            drop.hidden = false;
+            result.hidden = true;
+            result.innerHTML = '';
+            return;
+        }
+        drop.hidden = true;
+        result.hidden = false;
+        const names = (st.files || []).map(function (f) { return f.name; }).join(', ');
+        const n = (st.hits || []).length;
+        result.innerHTML =
+            '<div class="cp-stack"><div class="cp-banner"><b>' + cpEsc(names) + '</b><span>' + n + (n === 1 ? ' identifier' : ' identifiers') + '</span></div>' +
+            (n ? '<section class="cp-sec"><h3>Identifiers</h3>' + renderHits(st.hits) + '</section>' : '') +
+            (st.files || []).map(renderCompilerFile).join('') + '</div>';
+    }
+
+    function readCompilerFile(file) {
+        return new Promise(function (resolve, reject) {
+            if (file.size > CP_MAX) {
+                reject(new Error(file.name + ' is larger than 2 MB'));
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function () { resolve(String(reader.result || '')); };
+            reader.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+            reader.readAsText(file);
+        });
+    }
+
+    function ingestCompilerFiles(list) {
+        const files = Array.prototype.slice.call(list || []).filter(Boolean);
+        if (!files.length || cpBusy) return;
+        hideCompilerDownload();
+        setCompilerBusy(true, 'Compiling', 'Lining up the file…');
+        const started = Date.now();
+        Promise.all(files.map(function (file) {
+            return readCompilerFile(file).then(function (raw) { return compileOne(file, raw); });
+        })).then(function (compiled) {
+            const wait = Math.max(0, 520 - (Date.now() - started));
+            setTimeout(function () {
+                const st = compilerState();
+                st.files = compiled;
+                st.hits = mergeCompilerHits(compiled);
+                st.ready = true;
+                st.at = new Date().toISOString();
+                setCompilerBusy(false);
+                renderCompiler();
+                schedulePersist();
+            }, wait);
+        }).catch(function (error) {
+            setCompilerBusy(false);
+            const drop = $('compilerDrop');
+            if (drop) {
+                const strong = drop.querySelector('strong');
+                if (strong) strong.textContent = error.message || 'Could not compile that file';
+            }
+        });
+    }
+
+    function openCompilerPicker() {
+        const input = $('compilerFile');
+        if (input) input.click();
+    }
+
+    function compilerExport(fmt) {
+        const st = compilerState();
+        if (!st.ready || !(st.files || []).length) return;
+        const files = st.files;
+        const hits = st.hits || [];
+        let name = (files[0] && files[0].name ? files[0].name.replace(/\.[^.]+$/, '') : 'compiled') + '-compiled';
+        let body = '';
+        let type = 'text/plain';
+        if (fmt === 'json') {
+            type = 'application/json';
+            body = JSON.stringify({ hits: hits, files: files.map(function (f) {
+                return { name: f.name, kind: f.kind, parsed: f.parsed, original: f.raw };
+            }) }, null, 2);
+            name += '.json';
+        } else if (fmt === 'csv') {
+            type = 'text/csv';
+            body = 'kind,value,note\n' + hits.map(function (h) {
+                return [h.kind, h.value, h.note].map(function (c) {
+                    const s = String(c || '');
+                    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+                }).join(',');
+            }).join('\n');
+            name += '.csv';
+        } else if (fmt === 'xml') {
+            type = 'application/xml';
+            body = '<?xml version="1.0" encoding="UTF-8"?>\n<compiled>\n  <identifiers>\n' +
+                hits.map(function (h) {
+                    return '    <hit kind="' + esc(h.kind) + '">' + esc(h.value) + '</hit>';
+                }).join('\n') + '\n  </identifiers>\n  <originals>\n' +
+                files.map(function (f) {
+                    return '    <file name="' + esc(f.name) + '" kind="' + esc(f.kind) + '"><![CDATA[' + String(f.raw || '').replace(/]]>/g, ']]]]><![CDATA[>') + ']]></file>';
+                }).join('\n') + '\n  </originals>\n</compiled>\n';
+            name += '.xml';
+        } else if (fmt === 'html') {
+            type = 'text/html';
+            body = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(name) + '</title></head><body>' +
+                '<h1>Compiled record</h1>' +
+                '<h2>Identifiers</h2><ul>' + hits.map(function (h) {
+                    return '<li><b>' + esc(h.kind) + '</b> ' + esc(h.value) + '</li>';
+                }).join('') + '</ul>' +
+                files.map(function (f) {
+                    return '<h2>' + esc(f.name) + '</h2><pre>' + esc(f.raw) + '</pre>';
+                }).join('') + '</body></html>';
+            name += '.html';
+        } else if (fmt === 'md') {
+            body = '# Compiled record\n\n## Identifiers\n\n' + hits.map(function (h) {
+                return '- **' + h.kind + ':** ' + h.value;
+            }).join('\n') + '\n\n' + files.map(function (f) {
+                return '## ' + f.name + '\n\n```' + f.kind + '\n' + f.raw + '\n```\n';
+            }).join('\n');
+            name += '.md';
+        } else {
+            body = 'Compiled record\n\nIdentifiers\n' + hits.map(function (h) {
+                return h.kind + ': ' + h.value;
+            }).join('\n') + '\n\n' + files.map(function (f) {
+                return '----- ' + f.name + ' -----\n' + f.raw;
+            }).join('\n\n');
+            name += '.txt';
+        }
+        const blob = new Blob([body], { type: type + ';charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    }
+
+    const CP_FIELD = {
+        email: 'email',
+        phone: 'phone',
+        username: 'username',
+        name: 'name',
+        address: 'address',
+        ip: 'ip',
+        domain: 'domain',
+        crypto: 'crypto',
+        dob: 'dob',
+        company: 'company',
+        url: ''
+    };
+
+    function inspectCompiler() {
+        const st = compilerState();
+        if (!st.ready) return;
+        const hits = st.hits || [];
+        const names = (st.files || []).map(function (f) { return f.name; }).join(', ');
+        if (host && host.addFact) {
+            hits.forEach(function (hit) {
+                const field = CP_FIELD[hit.kind];
+                if (!field) return;
+                host.addFact(field, hit.value, { source: 'compiler', method: 'file-compile' });
+            });
+            const note = 'Compiled ' + names + ' — ' + hits.length + ' identifier' + (hits.length === 1 ? '' : 's') + ' lined up for inspection.';
+            host.addFact('notes', note, { source: 'compiler', method: 'file-compile' });
+        }
+        if (typeof addEventAt === 'function') {
+            const ev = addEventAt(220, -1, false);
+            if (ev) {
+                ev.title = 'Compiled ' + (names || 'file');
+                ev.body = hits.slice(0, 12).map(function (h) { return h.kind + ': ' + h.value; }).join('\n');
+                ev.source = names;
+                ev.date = new Date().toISOString().slice(0, 10);
+            }
+        }
+        schedulePersist();
+        setPage('orbit');
+    }
+
+    function bindCompiler() {
+        if (cpBound) return;
+        const view = $('compilerView');
+        const drop = $('compilerDrop');
+        if (!view || !drop) return;
+        cpBound = true;
+        function over(event) {
+            event.preventDefault();
+            drop.classList.add('is-over');
+        }
+        function leave(event) {
+            event.preventDefault();
+            drop.classList.remove('is-over');
+        }
+        view.addEventListener('dragover', over);
+        view.addEventListener('dragenter', over);
+        view.addEventListener('dragleave', leave);
+        view.addEventListener('drop', function (event) {
+            event.preventDefault();
+            drop.classList.remove('is-over');
+            ingestCompilerFiles(event.dataTransfer && event.dataTransfer.files);
+        });
+        document.addEventListener('click', function (event) {
+            if (event.target.closest('#compilerUploadBtn, #compilerDropBtn')) {
+                openCompilerPicker();
+                return;
+            }
+            if (event.target.closest('#compilerDownloadBtn')) {
+                const menu = $('compilerDownloadMenu');
+                if (menu) menu.hidden = !menu.hidden;
+                return;
+            }
+            if (event.target.closest('[data-cp-fmt]')) {
+                compilerExport(event.target.getAttribute('data-cp-fmt'));
+                hideCompilerDownload();
+                return;
+            }
+            if (event.target.closest('#compilerInspectBtn')) {
+                inspectCompiler();
+                return;
+            }
+            if (!event.target.closest('.cp-dl')) hideCompilerDownload();
+        });
+    }
+
     function openDomainIntel(seed) {
         const hostValue = hostName(seed || data.intel.host || firstValue('domain'));
         const input = $('intelHost');
@@ -6896,22 +7834,8 @@
         return pdfClean(text).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
     }
 
-    var TIMES_W = {
-        32:250,33:333,34:408,35:500,36:500,37:833,38:778,39:333,40:333,41:333,42:500,43:564,44:250,45:333,46:250,47:278,
-        48:500,49:500,50:500,51:500,52:500,53:500,54:500,55:500,56:500,57:500,58:278,59:278,60:564,61:564,62:564,63:444,
-        64:921,65:722,66:667,67:667,68:722,69:611,70:556,71:722,72:722,73:333,74:389,75:722,76:611,77:889,78:722,79:722,
-        80:556,81:722,82:667,83:556,84:611,85:722,86:722,87:944,88:722,89:722,90:611,91:333,92:278,93:333,94:469,95:500,
-        96:333,97:444,98:500,99:444,100:500,101:444,102:333,103:500,104:500,105:278,106:278,107:500,108:278,109:778,110:500,111:500,
-        112:500,113:500,114:333,115:389,116:278,117:500,118:500,119:722,120:500,121:500,122:444,123:480,124:200,125:480,126:541
-    };
-
     function measurePdf(text, size) {
-        var w = 0;
-        var s = pdfClean(text);
-        for (var i = 0; i < s.length; i++) {
-            w += TIMES_W[s.charCodeAt(i)] || 500;
-        }
-        return w * size / 1000;
+        return pdfClean(text).length * size * 0.6;
     }
 
     function wrapPdf(text, maxW, size) {
@@ -7004,7 +7928,7 @@
     }
 
     var REPORT_HEAD = 'Open-source Reconnaissance Bureau of Intelligence';
-    var REPORT_HEAD_SIZE = 16;
+    var REPORT_HEAD_SIZE = 12;
     var REPORT_BANNER = 'AUTHORIZED USE ONLY -- INFORMATION SUBJECT TO VERIFICATION -- DO NOT TREAT UNVERIFIED FINDINGS AS ESTABLISHED FACT';
     var REPORT_NOTICE = [
         'This record is intended strictly for **authorized investigative, research, and analytical purposes**. Access, reproduction, disclosure, and distribution should be limited to individuals with a legitimate need to review the information contained herein.',
@@ -7017,6 +7941,13 @@
     var REPORT_CLOSE = [
         'This record is to be kept strictly confidential. It is issued for the use of the recipient only. Copying, forwarding, posting, printing for circulation, or any other reproduction, disclosure, or distribution of this file, in whole or in part, should be limited to individuals with a legitimate need to review it for **authorized investigative, research, and analytical purposes**. Recipients are required to store it securely and to destroy or return it when it is no longer required. Unauthorized disclosure of the particulars herein is to be avoided in every case.',
         'Nothing in this file should be treated as established fact unless independently verified. Information of material importance should be checked against its originating source, and where appropriate corroborated through additional independent and reliable sources, before any consequential action or conclusion is based upon it. This record should not be interpreted as establishing criminal activity, misconduct, intent, guilt, liability, or any other adverse conclusion. Analytical notes, suspected associations, and unresolved leads remain **information for consideration and further analysis** only.'
+    ];
+    var REPORT_CLOSE_TITLE = 'LIMITATION OF RELIANCE';
+    var REPORT_LIABILITY_TITLE = 'LIABILITY AND DISTRIBUTION DISCLAIMER';
+    var REPORT_LIABILITY = [
+        'This disclaimer serves as formal notice that the creator(s), developer(s), and contributors of OrbINT assume no responsibility or liability for the use, misuse, disclosure, reproduction, distribution, or dissemination of this document or the information contained within it once it has been generated, exported, downloaded, shared, or otherwise transferred outside of their control.',
+        'Responsibility for the lawful handling, verification, security, and distribution of this document rests solely with the individual or organization possessing or using it. The creator(s) of OrbINT shall not be held responsible for any unauthorized disclosure, improper use, reliance upon unverified information, or consequences arising from actions taken by users or third parties.',
+        'Generation of this document does not constitute verification, endorsement, or certification of the information contained herein.'
     ];
     var NICE_LABEL = {
         name: 'Name',
@@ -7051,12 +7982,42 @@
         Rectangle: 1, Capsule: 1, Document: 1, Line: 1, Arrow: 1, Embed: 1, 'Web Embed': 1
     };
 
-    function noteSource(origin) {
-        return '[' + origin + ']';
+    var CONF_LABEL = { confirmed: 'Confirmed', probable: 'Probable', possible: 'Possible', unconfirmed: 'Unconfirmed' };
+    var METHOD_LABEL = {
+        'open-web': 'Open web',
+        'public-records': 'Public records',
+        'subscriber-db': 'Subscriber DB',
+        interview: 'Interview',
+        'legal-process': 'Legal process'
+    };
+
+    function factBaseId(id) {
+        return String(id || '').replace(/:\d+$/, '').split(/[:_]/)[0];
+    }
+
+    function isRedactField(id) {
+        var base = factBaseId(id);
+        return /^(name|dob|age|phone|email|address|city|username|password|ip|plate|vin|crypto|image|notes)$/i.test(base)
+            || /(password|passwd|pin|ssn|seed|privatekey|apikey|session|passport|secret|token)/i.test(String(id || ''));
+    }
+
+    function prettyConfidence(value) {
+        return CONF_LABEL[value] || prettyPdfValue(value);
+    }
+
+    function prettyMethod(value) {
+        return METHOD_LABEL[value] || prettyPdfValue(value);
+    }
+
+    function prettyCaptured(iso) {
+        var d = new Date(iso);
+        if (!Number.isFinite(d.getTime())) return prettyPdfValue(iso);
+        return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) +
+            '  ' + d.toLocaleString([], { hour: 'numeric', minute: '2-digit' });
     }
 
     function reportFactLabel(item) {
-        var base = NICE_LABEL[item.id] || item.label || 'Item';
+        var base = NICE_LABEL[factBaseId(item.id)] || item.label || 'Item';
         return item.platformLabel ? item.platformLabel + ' / ' + base : base;
     }
 
@@ -7065,15 +8026,24 @@
         var used = {};
         var out = [];
         function take(item) {
-            if (item.id === 'notes') return;
+            if (factBaseId(item.id) === 'notes') return;
             var value = prettyPdfValue(item.value);
             if (!value) return;
-            out.push({ label: reportFactLabel(item), value: value });
+            out.push({
+                id: item.id,
+                label: reportFactLabel(item),
+                value: value,
+                source: prettyPdfValue(item.source),
+                confidence: prettyConfidence(item.confidence),
+                method: prettyMethod(item.method),
+                captured: item.capturedAt ? prettyCaptured(item.capturedAt) : '',
+                redact: isRedactField(item.id)
+            });
             used[item.id + '\0' + item.value] = true;
         }
         FIELD_ORDER.forEach(function (id) {
             facts.forEach(function (item) {
-                if (item.id === id && !used[item.id + '\0' + item.value]) take(item);
+                if (factBaseId(item.id) === id && !used[item.id + '\0' + item.value]) take(item);
             });
         });
         facts.forEach(function (item) {
@@ -7082,27 +8052,70 @@
         return out;
     }
 
-    function pushReportNote(notes, origin, text) {
+    function reportChronology() {
+        return numberedTimeline().map(function (ev) {
+            var title = prettyPdfValue(ev.title || '');
+            if (SKIP_TITLES[title]) title = '';
+            return {
+                date: prettyPdfValue(ev.date || ''),
+                time: prettyPdfValue(ev.time || ''),
+                title: title,
+                body: prettyPdfValue(ev.body || ''),
+                source: prettyPdfValue(ev.source || '')
+            };
+        }).filter(function (row) {
+            return row.date || row.time || row.body || row.title;
+        });
+    }
+
+    function redactKey(id, value) {
+        return String(id || '') + '|' + String(value || '').slice(0, 120);
+    }
+
+    function redactHtml(id, value) {
+        var text = String(value || '');
+        if (!text) return '<span class="ds-empty">--</span>';
+        if (!isRedactField(id)) return esc(text);
+        var key = redactKey(id, text);
+        var open = (typeof isRedactOpen === 'function' ? isRedactOpen(key) : (typeof dsRevealed !== 'undefined' && dsRevealed.has(key))) ? ' is-open' : '';
+        return '<button type="button" class="ds-redact' + open + '" data-redact="' + esc(key) + '" aria-label="Reveal redacted value">' +
+            '<span class="ds-redact-bar" aria-hidden="true"></span>' +
+            '<span class="ds-redact-val">' + esc(text) + '</span>' +
+            '</button>';
+    }
+
+    function redactPhotoHtml(src, wide) {
+        if (!src) return '';
+        var key = redactKey('image', src);
+        var open = (typeof isRedactOpen === 'function' ? isRedactOpen(key) : (typeof dsRevealed !== 'undefined' && dsRevealed.has(key))) ? ' is-open' : '';
+        return '<button type="button" class="ds-redact ds-redact-photo' + open + (wide ? ' is-wide' : '') + '" data-redact="' + esc(key) + '" aria-label="Reveal photograph">' +
+            '<span class="ds-redact-bar" aria-hidden="true"></span>' +
+            '<img src="' + esc(src) + '" alt="">' +
+            '</button>';
+    }
+
+    function pushReportNote(notes, text) {
         var t = prettyPdfValue(text);
         if (!t) return;
-        notes.push({ label: noteSource(origin), text: t });
+        if (notes.some(function (item) { return item.text === t; })) return;
+        notes.push({ text: t });
     }
 
     function reportNotes() {
         var notes = [];
         filedFacts().forEach(function (item) {
             if (item.id === 'notes' || /^notes?$/i.test(item.label || '')) {
-                pushReportNote(notes, 'OrbINT', item.value);
+                pushReportNote(notes, item.value);
             }
         });
-        pushReportNote(notes, 'OrbINT', profile().analysis);
+        pushReportNote(notes, profile().analysis);
         numberedTimeline().forEach(function (ev) {
             var title = String(ev.title || '').trim();
             if (SKIP_TITLES[title]) title = '';
             function addTl(text) {
                 var t = prettyPdfValue(text);
                 if (!t) return;
-                pushReportNote(notes, 'Timeline', title ? title + '. ' + t : t);
+                pushReportNote(notes, title ? title + '. ' + t : t);
             }
             addTl(ev.body);
             (ev.moreNotes || []).forEach(function (note) {
@@ -7110,7 +8123,7 @@
             });
         });
         (data.evidence || []).forEach(function (item) {
-            pushReportNote(notes, 'OrbINT', item && item.note);
+            pushReportNote(notes, item && item.note);
         });
         ((data.whiteboard && data.whiteboard.nodes) || []).forEach(function (node) {
             if (!node || node.type !== 'note') return;
@@ -7120,32 +8133,51 @@
             var bits = [];
             if (title) bits.push(title);
             if (body) bits.push(body);
-            pushReportNote(notes, 'Whiteboard', bits.join('. '));
+            pushReportNote(notes, bits.join('. '));
         });
         return notes;
     }
 
+    function reportCaseMeta() {
+        var rec = (profile() && profile().case) || {};
+        var status = pdfSafe(rec.status || 'open');
+        return {
+            number: pdfSafe(rec.number || ''),
+            offense: pdfSafe(rec.offense || ''),
+            status: status ? status.charAt(0).toUpperCase() + status.slice(1) : '',
+            investigator: pdfSafe(rec.investigator || ''),
+            openedAt: rec.openedAt ? prettyCaptured(rec.openedAt) : ''
+        };
+    }
+
     function reportDocument() {
+        var rec = reportCaseMeta();
         return {
             subject: subjectName(),
             dateLong: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
             notice: REPORT_NOTICE,
             close: REPORT_CLOSE,
+            closeTitle: REPORT_CLOSE_TITLE,
+            liabilityTitle: REPORT_LIABILITY_TITLE,
+            liability: REPORT_LIABILITY,
             banner: REPORT_BANNER,
+            case: rec,
             rows: reportOrderedFacts(),
             notes: reportNotes(),
+            chronology: reportChronology(),
             photos: collectReportPhotos()
         };
     }
 
-    function loadGreyPhoto(src) {
+    function loadReportPhoto(src, opts) {
+        opts = typeof opts === 'number' ? { max: opts } : (opts || {});
         return new Promise(function (resolve) {
             if (!src) { resolve(null); return; }
             function paint(img) {
                 try {
                     var nw = img.naturalWidth || img.width || 1;
                     var nh = img.naturalHeight || img.height || 1;
-                    var max = 360;
+                    var max = opts.max || 360;
                     var scale = Math.min(1, max / Math.max(nw, nh));
                     var w = Math.max(1, Math.round(nw * scale));
                     var h = Math.max(1, Math.round(nh * scale));
@@ -7154,17 +8186,17 @@
                     canvas.height = h;
                     var ctx = canvas.getContext('2d');
                     if (!ctx) { resolve(null); return; }
-                    ctx.filter = 'grayscale(100%) contrast(0.9) brightness(1.06)';
-                    ctx.drawImage(img, 0, 0, w, h);
-                    ctx.filter = 'none';
-                    ctx.fillStyle = 'rgba(118,118,118,0.22)';
+                    if (opts.paper) {
+                        ctx.fillStyle = opts.paper;
                     ctx.fillRect(0, 0, w, h);
+                    }
+                    ctx.drawImage(img, 0, 0, w, h);
                     canvas.toBlob(function (blob) {
                         if (!blob) { resolve(null); return; }
                         blob.arrayBuffer().then(function (buf) {
                             resolve({ bytes: new Uint8Array(buf), w: w, h: h });
                         }).catch(function () { resolve(null); });
-                    }, 'image/jpeg', 0.7);
+                    }, 'image/jpeg', 0.86);
                 } catch (err) { resolve(null); }
             }
             function fromUrl(url, cors) {
@@ -7223,7 +8255,7 @@
     function downloadReport() {
         var photos = collectReportPhotos();
         var jobs = photos.slice(0, 8).map(function (item) {
-            return loadGreyPhoto(item.src).then(function (jpeg) {
+            return loadReportPhoto(item.src).then(function (jpeg) {
                 item.jpeg = jpeg;
                 return item;
             });
@@ -7243,30 +8275,31 @@
         const LEFT = 72;
         const WIDTH = 612 - LEFT - 72;
         const NARROW = 420;
-        const BOTTOM = 64;
-        const BODY = 11;
-        const LEAD = 15.4;
+        const BOTTOM = 72;
+        const BODY = 10;
 
         function newPage(kind) {
             if (kind === true) kind = 'cover';
             if (kind === false) kind = 'cont';
             var cover = kind === 'cover';
-            var record = kind === 'record';
-            var page = { ops: ['__PAGE_NO__'], y: cover ? 700 : 720, first: cover, kind: kind, images: [] };
-            if (!cover && !record) {
-                var run = pdfSafe(subject);
-                if (run) {
-                var w = measurePdf(run, 9);
-                page.ops.push('0.35 0.35 0.35 rg BT /F3 9 Tf 0 Tc 0 Tw ' + ((612 - w) / 2).toFixed(2) + ' 748 Td (' + pdfEscape(run) + ') Tj ET');
-                }
-            }
+            var page = { ops: ['__PAGE_FOOT__'], y: 728, first: cover, kind: kind, images: [] };
+            var rec = doc.case || {};
+            var left = rec.number ? 'CASE ' + rec.number : 'CASE FILE';
+            var mid = 'RECORD';
+            var right = pdfSafe(dateLong);
+            paint(page, '/F1', 9, LEFT, 758, left, '0.15 0.15 0.15');
+            paint(page, '/F2', 9, (612 - measurePdf(mid, 9)) / 2, 758, mid, '0 0 0');
+            paint(page, '/F1', 9, LEFT + WIDTH - measurePdf(right, 9), 758, right, '0.15 0.15 0.15');
+            page.ops.push('0 0 0 RG 0.9 w ' + LEFT.toFixed(2) + ' 746 m ' + (LEFT + WIDTH).toFixed(2) + ' 746 l S');
+            page.ops.push('0 0 0 RG 0.4 w ' + LEFT.toFixed(2) + ' 743 m ' + (LEFT + WIDTH).toFixed(2) + ' 743 l S');
+            page.y = 728;
             return page;
         }
 
         function ensure(page, need) {
             if (page.y - need < BOTTOM) {
                 pages.push(page);
-                return newPage(page.kind === 'cover' ? 'cover' : 'cont');
+                return newPage(page.kind === 'cover' ? 'record' : 'cont');
             }
             return page;
         }
@@ -7340,7 +8373,13 @@
             if (line.length) lines.push(line);
             lines.forEach(function (ln, i) {
                 page = ensure(page, lead + 2);
-                var ops = [(opts.gray || '0.12 0.12 0.12') + ' rg BT 0 Tc 0 Tw ' + x.toFixed(2) + ' ' + page.y.toFixed(2) + ' Td'];
+                var lineW = 0;
+                ln.forEach(function (tok) {
+                    var chunk = tok.space ? tok.text.replace(/\s+/g, ' ') : tok.text;
+                    if (chunk) lineW += measurePdf(chunk, size);
+                });
+                var drawX = opts.center ? (612 - lineW) / 2 : x;
+                var ops = [(opts.gray || '0.12 0.12 0.12') + ' rg BT 0 Tc 0 Tw ' + drawX.toFixed(2) + ' ' + page.y.toFixed(2) + ' Td'];
                 ln.forEach(function (tok) {
                     var chunk = tok.space ? tok.text.replace(/\s+/g, ' ') : tok.text;
                     if (!chunk) return;
@@ -7355,41 +8394,85 @@
         }
 
         function heading(page, text) {
-            page = ensure(page, 28);
-            page.y -= 8;
-            paint(page, '/F2', 12, LEFT, page.y, text, '0 0 0');
-            page.y -= 18;
+            page = ensure(page, 20);
+            page.y -= 3;
+            paint(page, '/F2', 11, LEFT, page.y, pdfSafe(text).toUpperCase(), '0 0 0');
+            page.y -= 4;
+            page.ops.push('0 0 0 RG 0.7 w ' + LEFT.toFixed(2) + ' ' + page.y.toFixed(2) + ' m ' + (LEFT + WIDTH).toFixed(2) + ' ' + page.y.toFixed(2) + ' l S');
+            page.y -= 10;
             return page;
         }
 
-        function runIn(page, label, value) {
-            var size = BODY;
-            var rowLead = 17;
-            var labelText = pdfSafe(label);
-            var right = LEFT + WIDTH;
-            var labelW = measurePdf(labelText, size);
-            var maxVal = Math.max(90, WIDTH - labelW - 28);
-            var lines = wrapPdf(value, maxVal, size);
-            if (!lines.length) lines = [''];
-            page = ensure(page, rowLead + 2);
-            paint(page, '/F1', size, LEFT, page.y, labelText, '0.1 0.1 0.1');
-            var v0w = measurePdf(lines[0] || '', size);
-            var valueX = right - v0w;
-            var dotsStart = LEFT + labelW + 4;
-            var dotsEnd = valueX - 2;
-            var dotW = measurePdf('.', size);
-            var nDots = (dotW && dotsEnd > dotsStart) ? Math.max(0, Math.floor((dotsEnd - dotsStart) / dotW) + 1) : 0;
-            if (nDots >= 2) paint(page, '/F1', size, dotsStart, page.y, Array(nDots + 1).join('.'), '0.55 0.55 0.55');
-            paint(page, '/F1', size, valueX, page.y, lines[0] || '', '0.1 0.1 0.1');
-            page.y -= rowLead;
-            for (var i = 1; i < lines.length; i++) {
-                page = ensure(page, rowLead);
-                var lw = measurePdf(lines[i], size);
-                paint(page, '/F1', size, right - lw, page.y, lines[i], '0.1 0.1 0.1');
-                page.y -= rowLead;
-            }
-            page.y -= 3;
+        function centerHeading(page, text) {
+            page = center(page, pdfSafe(text).toUpperCase(), 11, '/F2', 6, '0 0 0', 0);
+            var rw = 168;
+            var rx = (612 - rw) / 2;
+            page.ops.push('0 0 0 RG 0.7 w ' + rx.toFixed(2) + ' ' + page.y.toFixed(2) + ' m ' + (rx + rw).toFixed(2) + ' ' + page.y.toFixed(2) + ' l S');
+            page.y -= 12;
             return page;
+        }
+
+        function closeParaH(text, after) {
+            return wrapPdf(String(text || '').replace(/\*\*/g, ''), WIDTH, 9).length * 12.5 + (after || 8);
+        }
+
+        function paintFill(page, x, width, label, value, size) {
+            size = size || 10;
+            var lab = pdfSafe(label);
+            var val = pdfSafe(value == null || value === '' ? '--' : value);
+            var lines = wrapPdf(val, Math.max(72, width * 0.5), size);
+            if (!lines.length) lines = ['--'];
+            var v0 = lines[0];
+            var labW = measurePdf(lab, size);
+            var valW = measurePdf(v0, size);
+            var valX = x + width - valW;
+            paint(page, '/F2', size, x, page.y, lab, '0.12 0.12 0.12');
+            if (valX > x + labW + 10) {
+                var dots = '';
+                var room = valX - x - labW - 8;
+                while (measurePdf(dots + '.', 8) < room) dots += '.';
+                if (dots) paint(page, '/F1', 8, x + labW + 4, page.y, dots, '0.5 0.5 0.5');
+            }
+            paint(page, '/F1', size, Math.max(x + labW + 6, valX), page.y, v0, '0.12 0.12 0.12');
+            return lines;
+        }
+
+        function fillLine(page, label, value, opts) {
+            opts = opts || {};
+            var size = opts.size || 10;
+            var lead = opts.lead || 12;
+            var indent = opts.indent || 0;
+            var width = opts.width != null ? opts.width : (WIDTH - indent);
+            var x = LEFT + indent;
+            page = ensure(page, lead + 2);
+            var lines = paintFill(page, x, width, label, value, size);
+            page.y -= lead;
+            var i;
+            for (i = 1; i < lines.length; i++) {
+                page = ensure(page, lead);
+                paint(page, '/F1', size, x + width - measurePdf(lines[i], size), page.y, lines[i], '0.12 0.12 0.12');
+                page.y -= lead;
+            }
+            return page;
+        }
+
+        function pairLine(page, leftL, leftV, rightL, rightV, width) {
+            width = width != null ? width : WIDTH;
+            var col = (width - 14) / 2;
+            page = ensure(page, 12);
+            var y = page.y;
+            paintFill(page, LEFT, col, leftL, leftV, 10);
+            paintFill(page, LEFT + col + 14, col, rightL, rightV, 10);
+            page.y = y - 12;
+            return page;
+        }
+
+        function kvLine(page, label, value, indent) {
+            return fillLine(page, label, value, { indent: indent || 0 });
+        }
+
+        function runIn(page, label, value) {
+            return fillLine(page, label, value);
         }
 
         function rule(page) {
@@ -7416,65 +8499,140 @@
             return page;
         }
 
+        function placePhotoAt(page, jpeg, x, yTop, maxW, maxH) {
+            if (!jpeg || !jpeg.bytes || !jpeg.bytes.length) return { w: 0, h: 0 };
+            var aspect = jpeg.h / Math.max(1, jpeg.w);
+            var w = maxW;
+            var h = w * aspect;
+            if (h > maxH) { h = maxH; w = h / aspect; }
+            var y = yTop - h;
+            var name = 'Im' + (page.images.length + 1);
+            page.images.push({ name: name, bytes: jpeg.bytes, w: jpeg.w, h: jpeg.h });
+            page.ops.push('q ' + w.toFixed(2) + ' 0 0 ' + h.toFixed(2) + ' ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' cm /' + name + ' Do Q');
+            page.ops.push('0.42 0.42 0.42 RG 0.5 w ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re S');
+            return { w: w, h: h };
+        }
+
         var portrait = (photos || []).find(function (item) { return item && item.jpeg && item.jpeg.bytes; }) || null;
         var morePhotos = (photos || []).filter(function (item) { return item && item.jpeg && item.jpeg.bytes && item !== portrait; });
         var rows = doc.rows;
         var notes = doc.notes;
+        var rec = doc.case || {};
+        var chrono = doc.chronology || [];
 
         let pageObj = newPage('cover');
-        pageObj = center(pageObj, REPORT_HEAD, REPORT_HEAD_SIZE, '/F2', 8, '0 0 0', 0);
-        pageObj.y -= 28;
+        var head = REPORT_HEAD.toUpperCase();
+        var headW = measurePdf(head, REPORT_HEAD_SIZE);
+        var coverH = REPORT_HEAD_SIZE + 18 + 10 + 16;
         doc.notice.forEach(function (para, i) {
-            pageObj = flowRich(pageObj, para, { size: 11, lead: 16, after: i === doc.notice.length - 1 ? 14 : 11 });
+            coverH += wrapPdf(String(para || '').replace(/\*\*/g, ''), WIDTH, 10).length * 13.5 + (i === doc.notice.length - 1 ? 12 : 8);
         });
-        wrapPdf(doc.banner, NARROW, 9).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 9, '/F2', 4, '0 0 0', 0.4);
+        coverH += wrapPdf(doc.banner, WIDTH, 9).length * 12;
+        var coverTop = 728;
+        var coverBot = 84;
+        pageObj.y = Math.min(coverTop, (coverTop + coverBot + coverH) / 2);
+        paint(pageObj, '/F2', REPORT_HEAD_SIZE, (612 - headW) / 2, pageObj.y, head, '0 0 0', 0);
+        pageObj.y -= REPORT_HEAD_SIZE + 18;
+        pageObj = center(pageObj, 'INVESTIGATIVE NOTICE', 10, '/F2', 16, '0 0 0', 0);
+        doc.notice.forEach(function (para, i) {
+            pageObj = flowRich(pageObj, para, { size: 10, lead: 13.5, after: i === doc.notice.length - 1 ? 12 : 8, center: true });
+        });
+        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
+            pageObj = center(pageObj, ln, 9, '/F2', 3, '0 0 0', 0);
         });
         pages.push(pageObj);
+
         pageObj = newPage('record');
-        wrapPdf(String(subject || 'UNKNOWN').toUpperCase(), NARROW, 16).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 16, '/F2', 6, '0 0 0', 0.7);
-        });
-        pageObj.y -= 6;
-        if (portrait) pageObj = placePhoto(pageObj, portrait.jpeg, 168, 210);
-        pageObj = center(pageObj, dateLong, 11, '/F3', 14, '0.2 0.2 0.2');
-        pageObj = rule(pageObj);
-
-        if (!rows.length && !notes.length && !portrait) {
-            pageObj = flow(pageObj, 'No particulars have been recorded for this person.', { after: 8 });
+        pageObj = heading(pageObj, 'I. Case file');
+        var caseTop = pageObj.y;
+        var textW = WIDTH;
+        var photoBox = { w: 0, h: 0 };
+        if (portrait) {
+            photoBox = placePhotoAt(pageObj, portrait.jpeg, LEFT + WIDTH - 92, caseTop, 92, 118);
+            textW = WIDTH - photoBox.w - 14;
         }
-        rows.forEach(function (row) {
-            pageObj = runIn(pageObj, row.label, row.value);
+        pageObj = pairLine(pageObj, 'Case no.', rec.number || '--', 'Status', rec.status || '--', textW);
+        pageObj = pairLine(pageObj, 'Offense', rec.offense || '--', 'Investigator', rec.investigator || '--', textW);
+        pageObj = pairLine(pageObj, 'Subject', subject || 'UNKNOWN', 'Recorded', dateLong, textW);
+        if (rec.openedAt) pageObj = fillLine(pageObj, 'Opened', rec.openedAt, { width: textW, lead: 12 });
+        if (photoBox.h) pageObj.y = Math.min(pageObj.y, caseTop - photoBox.h - 8);
+        pageObj.y -= 4;
+
+        pageObj = heading(pageObj, 'II. Particulars');
+        if (!rows.length) {
+            pageObj = flow(pageObj, 'No particulars have been recorded.', { size: 10, after: 6 });
+        }
+        rows.forEach(function (row, idx) {
+            var title = String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(row.label).toUpperCase();
+            var meta = [row.confidence, row.method, row.captured].filter(Boolean).join('   ');
+            var valLines = wrapPdf(row.value || '--', WIDTH * 0.5, 10);
+            var need = 16 + (valLines.length - 1) * 12 + (meta ? 11 : 0) + (row.source ? 12 : 0);
+            pageObj = ensure(pageObj, Math.min(need, 220));
+            pageObj = fillLine(pageObj, title, row.value || '--', { lead: 12 });
+            if (meta) {
+                pageObj = ensure(pageObj, 11);
+                paint(pageObj, '/F3', 9, LEFT + 18, pageObj.y, pdfSafe(meta), '0.28 0.28 0.28');
+                pageObj.y -= 11;
+            }
+            if (row.source) pageObj = fillLine(pageObj, 'Note', row.source, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+            pageObj.y -= 3;
         });
 
-        if (morePhotos.length) {
-            pageObj.y -= 6;
-            pageObj = heading(pageObj, 'Photographs');
+        if (chrono.length) {
+            pageObj = heading(pageObj, 'III. Chronology');
+            chrono.forEach(function (row, idx) {
+                var when = [row.date, row.time].filter(Boolean).join('  ') || '--';
+                pageObj = ensure(pageObj, 28);
+                if (row.title) {
+                    pageObj = fillLine(pageObj, String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(when), row.title, { lead: 12 });
+                } else {
+                    pageObj = ensure(pageObj, 13);
+                    paint(pageObj, '/F2', 10, LEFT, pageObj.y, String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(when), '0.12 0.12 0.12');
+                    pageObj.y -= 12;
+                }
+                if (row.body) pageObj = fillLine(pageObj, 'Entry', row.body, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+                if (row.source) pageObj = fillLine(pageObj, 'Source', row.source, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+                pageObj.y -= 3;
+            });
+        }
+
+        if (morePhotos.length || (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption))) {
+            pageObj = heading(pageObj, 'IV. Photographs');
             morePhotos.forEach(function (item) {
-                pageObj = placePhoto(pageObj, item.jpeg, 220, 200);
+                pageObj = placePhoto(pageObj, item.jpeg, 180, 160);
                 if (item.caption) {
-                    pageObj = flow(pageObj, item.caption, { center: true, size: 9, font: '/F3', width: NARROW, after: 12, gray: '0.25 0.25 0.25' });
+                    pageObj = flow(pageObj, item.caption, { center: true, size: 9, font: '/F3', width: NARROW, after: 10, gray: '0.25 0.25 0.25' });
                 }
             });
-        } else if (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption)) {
-            pageObj = runIn(pageObj, 'Photograph', portrait.caption);
+            if (!morePhotos.length && portrait && portrait.caption) pageObj = kvLine(pageObj, 'Photograph', portrait.caption);
         }
 
         if (notes.length) {
-            pageObj.y -= 4;
-            pageObj = heading(pageObj, 'Notes');
+            pageObj = heading(pageObj, 'V. Notes');
             notes.forEach(function (item) {
-                pageObj = runIn(pageObj, item.label, item.text);
+                pageObj = flow(pageObj, item.text, { size: 10, lead: 13, after: 8 });
             });
         }
 
-        pageObj.y -= 8;
-        pageObj = rule(pageObj);
-        doc.close.forEach(function (para, i) {
-            pageObj = flowRich(pageObj, para, { size: 10.5, lead: 15.4, after: i === doc.close.length - 1 ? 12 : 10 });
+        pages.push(pageObj);
+        pageObj = newPage('close');
+        var closeH = closeParaH(doc.close[0], 16) + 29 + closeParaH(doc.close[1], 18) + 29;
+        doc.liability.forEach(function (para, i) {
+            closeH += closeParaH(para, i === doc.liability.length - 1 ? 14 : 10);
+        });
+        closeH += wrapPdf(doc.banner, WIDTH, 9).length * 12;
+        var usableTop = 728;
+        var usableBot = 84;
+        pageObj.y = Math.min(usableTop, (usableTop + usableBot + closeH) / 2);
+        pageObj = flowRich(pageObj, doc.close[0], { size: 9, lead: 12.5, after: 16, center: true });
+        pageObj = centerHeading(pageObj, doc.closeTitle);
+        pageObj = flowRich(pageObj, doc.close[1], { size: 9, lead: 12.5, after: 18, center: true });
+        pageObj = centerHeading(pageObj, doc.liabilityTitle);
+        doc.liability.forEach(function (para, i) {
+            pageObj = flowRich(pageObj, para, { size: 9, lead: 12.5, after: i === doc.liability.length - 1 ? 14 : 10, center: true });
         });
         wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
-            pageObj = center(pageObj, ln, 9, '/F2', 4, '0 0 0', 0.4);
+            pageObj = center(pageObj, ln, 9, '/F2', 3, '0 0 0', 0);
         });
 
         pages.push(pageObj);
@@ -7483,7 +8641,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        var fileBase = String(subject || 'file').replace(/[^\w\-]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+        var fileBase = String(rec.number || subject || 'file').replace(/[^\w\-]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
         a.download = (fileBase || 'file') + '.pdf';
         document.body.appendChild(a);
         a.click();
@@ -7500,12 +8658,12 @@
     function reportPreviewMarkup() {
         var doc = reportDocument();
         var WIDTH = 468;
-        var NARROW = 420;
-        var MAX = 668;
-        var subject = pdfSafe(doc.subject || 'UNKNOWN').toUpperCase();
+        var MAX = 580;
+        var rec = doc.case || {};
         var photos = doc.photos || [];
         var portrait = photos[0] || null;
         var morePhotos = photos.slice(1);
+        var chrono = doc.chronology || [];
         var pages = [];
         var cur = [];
         var used = 0;
@@ -7521,103 +8679,165 @@
         }
 
         function add(html, h) {
-            h = h || 20;
-            if (!lockCover && used + h > MAX && cur.length) flush();
+            h = Math.max(8, Math.ceil(h || 20));
+            if (!lockCover && cur.length && used + h > MAX) flush();
             cur.push(html);
             used += h;
         }
 
-        function kv(label, value) {
-            var lines = wrapPdf(value, 250, 11);
-            if (!lines.length) lines = [''];
-            var h = 20 + Math.max(0, lines.length - 1) * 17;
-            var html = '<div class="ds-kv"><span class="ds-k">' + esc(label) + '</span><span class="ds-leader" aria-hidden="true"></span><span class="ds-v">' + esc(lines[0]) + '</span></div>';
-            for (var i = 1; i < lines.length; i++) {
-                html += '<div class="ds-kv is-cont"><span class="ds-v">' + esc(lines[i]) + '</span></div>';
-            }
+        function fillHtml(label, valueHtml) {
+            return '<div class="ds-fill"><span class="ds-fill-k">' + esc(label) + '</span><span class="ds-fill-dots" aria-hidden="true"></span><span class="ds-fill-v">' + valueHtml + '</span></div>';
+        }
+
+        function pairHtml(a, b) {
+            return '<div class="ds-pair">' + fillHtml(a[0], a[1]) + fillHtml(b[0], b[1]) + '</div>';
+        }
+
+        function addRows(pairs) {
+            var html = '';
+            var h = 0;
+            pairs.forEach(function (pair) {
+                html += fillHtml(pair[0], pair[1]);
+                h += 13 * Math.max(1, wrapPdf(String(pair[2] != null ? pair[2] : '').replace(/<[^>]*>/g, ' ') || '--', 220, 10).length);
+            });
             add(html, h);
         }
 
-        function photoFig(src, wide) {
-            if (!src) return;
-            add('<figure class="ds-fig' + (wide ? ' is-wide' : '') + '"><img src="' + esc(src) + '" alt=""></figure>', wide ? 214 : 224);
+        function addFact(row, idx) {
+            var title = String(idx + 1).padStart(2, '0') + '  ' + String(row.label || '').toUpperCase();
+            var html = '<div class="ds-item">' + fillHtml(title, redactHtml(row.id, row.value));
+            var h = 16;
+            var bits = [row.confidence, row.method, row.captured].filter(Boolean);
+            if (bits.length) {
+                html += '<div class="ds-meta">' + esc(bits.join('  ·  ')) + '</div>';
+                h += 11;
+            }
+            if (row.source) {
+                html += fillHtml('Note', esc(row.source));
+                h += 13 * Math.max(1, wrapPdf(row.source, 280, 9).length);
+            }
+            html += '</div>';
+            add(html, h + 4);
         }
 
-        add('<div class="ds-c ds-banner">' + esc(REPORT_HEAD) + '</div>', 24);
-        add('<div class="ds-after-head"></div>', 28);
+        function section(title) {
+            add('<h3 class="ds-h">' + esc(title) + '</h3>', 22);
+        }
+
+        add('<div class="ds-cover"><div class="ds-c ds-banner"><span>' + esc(REPORT_HEAD.toUpperCase()) + '</span></div>', 22);
+        add('<div class="ds-c ds-kicker">INVESTIGATIVE NOTICE</div>', 20);
         doc.notice.forEach(function (para, i) {
             var last = i === doc.notice.length - 1;
-            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 11).length * 16 + (last ? 14 : 11);
+            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 10).length * 14 + (last ? 12 : 8);
             add('<p class="ds-p' + (last ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>', h);
-        });
-        wrapPdf(doc.banner, NARROW, 9).forEach(function (ln) {
-            add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 13);
-        });
-        lockCover = false;
-        flush();
-        wrapPdf(subject, NARROW, 16).forEach(function (ln) {
-            add('<div class="ds-c ds-subject">' + esc(ln) + '</div>', 22);
-        });
-        add('<div class="ds-gap"></div>', 6);
-        if (portrait && portrait.src) photoFig(portrait.src, false);
-        add('<div class="ds-c ds-date">' + esc(doc.dateLong) + '</div>', 25);
-        add('<hr class="ds-rule">', 16);
-
-        if (!doc.rows.length && !doc.notes.length && !portrait) {
-            add('<p class="ds-p">No particulars have been recorded for this person.</p>', 24);
-        }
-        doc.rows.forEach(function (row) { kv(row.label, row.value); });
-
-        if (morePhotos.length) {
-            add('<h3 class="ds-h">Photographs</h3>', 28);
-            morePhotos.forEach(function (item) {
-                photoFig(item.src, true);
-                if (item.caption) {
-                    wrapPdf(item.caption, NARROW, 9).forEach(function (ln) {
-                        add('<div class="ds-cap">' + esc(ln) + '</div>', 13);
-                    });
-                }
-            });
-        } else if (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption)) {
-            kv('Photograph', portrait.caption);
-        }
-
-        if (doc.notes.length) {
-            add('<h3 class="ds-h">Notes</h3>', 28);
-            doc.notes.forEach(function (item) { kv(item.label, item.text); });
-        }
-
-        add('<hr class="ds-rule">', 24);
-        doc.close.forEach(function (para, i) {
-            var last = i === doc.close.length - 1;
-            var h = wrapPdf(para.replace(/\*\*/g, ''), WIDTH, 10.5).length * 15.4 + (last ? 12 : 10);
-            add('<p class="ds-p is-close' + (last ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>', h);
         });
         wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
             add('<div class="ds-c ds-foot">' + esc(ln) + '</div>', 13);
         });
+        add('</div>', 1);
+        lockCover = false;
         flush();
 
-        var inner = pages.map(function (page, i) {
+        section('I. Case file');
+        (function () {
+            var meta = pairHtml(
+                ['Case no.', rec.number ? esc(rec.number) : '<span class="ds-empty">--</span>'],
+                ['Status', rec.status ? esc(rec.status) : '<span class="ds-empty">--</span>']
+            ) + pairHtml(
+                ['Offense', rec.offense ? esc(rec.offense) : '<span class="ds-empty">--</span>'],
+                ['Investigator', rec.investigator ? esc(rec.investigator) : '<span class="ds-empty">--</span>']
+            ) + pairHtml(
+                ['Subject', redactHtml('name', doc.subject || 'UNKNOWN')],
+                ['Recorded', esc(doc.dateLong)]
+            ) + (rec.openedAt ? fillHtml('Opened', esc(rec.openedAt)) : '');
+            var html = '<div class="ds-case"><div class="ds-case-meta">' + meta + '</div>';
+            if (portrait && portrait.src) html += redactPhotoHtml(portrait.src, false);
+            html += '</div>';
+            add(html, portrait && portrait.src ? 128 : 48);
+        }());
+
+        section('II. Particulars');
+        if (!doc.rows.length) add('<p class="ds-p">No particulars have been recorded.</p>', 18);
+        doc.rows.forEach(function (row, idx) {
+            addFact(row, idx);
+        });
+
+        if (chrono.length) {
+            section('III. Chronology');
+            chrono.forEach(function (row, idx) {
+                var when = [row.date, row.time].filter(Boolean).join('  ') || '--';
+                var html = '<div class="ds-item">' + (row.title
+                    ? fillHtml(String(idx + 1).padStart(2, '0') + '  ' + when, esc(row.title))
+                    : '<div class="ds-fill"><span class="ds-fill-k">' + esc(String(idx + 1).padStart(2, '0') + '  ' + when) + '</span></div>');
+                var h = 16;
+                if (row.body) {
+                    html += fillHtml('Entry', redactHtml('notes', row.body));
+                    h += 12;
+                }
+                if (row.source) {
+                    html += fillHtml('Source', esc(row.source));
+                    h += 12;
+                }
+                html += '</div>';
+                add(html, h + 4);
+            });
+        }
+
+        if (morePhotos.length || (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption))) {
+            section('IV. Photographs');
+            morePhotos.forEach(function (item) {
+                add(redactPhotoHtml(item.src, true), 220);
+                if (item.caption) add('<div class="ds-cap">' + esc(item.caption) + '</div>', 14);
+            });
+            if (!morePhotos.length && portrait && portrait.caption) {
+                addRows([['Photograph', esc(portrait.caption), portrait.caption]]);
+            }
+        }
+
+        if (doc.notes.length) {
+            section('V. Notes');
+            doc.notes.forEach(function (item) {
+                var h = wrapPdf(item.text, WIDTH, 10).length * 13 + 8;
+                add('<p class="ds-p ds-note">' + redactHtml('notes', item.text) + '</p>', h);
+            });
+        }
+
+        flush();
+        nextKind = 'close';
+        var closeHtml = '<div class="ds-close">';
+        closeHtml += '<p class="ds-p is-close">' + reportRichHtml(doc.close[0]) + '</p>';
+        closeHtml += '<h3 class="ds-h">' + esc(doc.closeTitle) + '</h3>';
+        closeHtml += '<p class="ds-p is-close">' + reportRichHtml(doc.close[1]) + '</p>';
+        closeHtml += '<h3 class="ds-h">' + esc(doc.liabilityTitle) + '</h3>';
+        doc.liability.forEach(function (para, i) {
+            closeHtml += '<p class="ds-p is-close' + (i === doc.liability.length - 1 ? ' is-last' : '') + '">' + reportRichHtml(para) + '</p>';
+        });
+        wrapPdf(doc.banner, WIDTH, 9).forEach(function (ln) {
+            closeHtml += '<div class="ds-c ds-foot">' + esc(ln) + '</div>';
+        });
+        closeHtml += '</div>';
+        add(closeHtml, 520);
+        flush();
+
+        var n = pages.length || 1;
+        return '<div class="ds-fit">' + pages.map(function (page, i) {
             var kind = page.kind || (page.first ? 'cover' : 'cont');
-            var head = kind === 'cont' ? '<div class="ds-runhead">' + esc(pdfSafe(doc.subject)) + '</div>' : '';
-            var cls = kind === 'cover' ? ' is-first' : (kind === 'record' ? ' is-record' : '');
-            return '<article class="ds-page' + cls + '">' + head + page.html + '<div class="ds-pageno">' + (i + 1) + '</div></article>';
-        }).join('');
-        return '<div class="ds-fit"><div class="ds-stage">' + inner + '</div></div>';
+            var cls = kind === 'cover' ? ' is-first' : (kind === 'record' ? ' is-record' : (kind === 'close' ? ' is-close-page' : ''));
+            var head = '<div class="ds-headband"><span>' + esc(rec.number ? 'CASE ' + rec.number : 'CASE FILE') + '</span><span>RECORD</span><span>' + esc(doc.dateLong) + '</span></div>';
+            var foot = '<div class="ds-footband"><span>AUTHORIZED USE ONLY</span><span>PAGE ' + (i + 1) + ' OF ' + n + '</span></div>';
+            return '<div class="ds-sheet"><article class="ds-page' + cls + '">' + head + '<div class="ds-body">' + page.html + '</div>' + foot + '</article></div>';
+        }).join('') + '</div>';
     }
 
     function sizeDatasheet() {
         var view = $('datasheetView');
         var fit = view && view.querySelector('.ds-fit');
-        var stage = view && view.querySelector('.ds-stage');
-        if (!view || !fit || !stage) return;
-        var n = stage.querySelectorAll('.ds-page').length || 1;
-        var gap = 28;
+        if (!view || !fit) return;
+        var n = fit.querySelectorAll('.ds-page').length || 1;
         var avail = Math.max(280, view.clientWidth - 48);
-        var s = Math.min(1.22, Math.max(0.42, avail / 612));
-        stage.style.setProperty('--ds-scale', String(s));
-        fit.style.height = (n * 792 * s + (n - 1) * gap * s + 8) + 'px';
+        var s = Math.min(1.15, Math.max(0.42, avail / 612));
+        fit.style.setProperty('--ds-scale', String(s));
+        fit.style.height = (n * 792 * s + (n - 1) * 28 * s + 8) + 'px';
     }
 
     function buildPdf(pages) {
@@ -7638,18 +8858,22 @@
         var objects = new Array(nextId - 1);
         objects[0] = '<< /Type /Catalog /Pages 2 0 R >>';
         objects[1] = '<< /Type /Pages /Kids [ ' + pageDictIds.map(function (id) { return id + ' 0 R'; }).join(' ') + ' ] /Count ' + nPages + ' /MediaBox [0 0 612 792] >>';
-        objects[2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>';
-        objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>';
-        objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>';
+        objects[2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>';
+        objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>';
+        objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique >>';
         pages.forEach(function (pageObj, idx) {
             var xobj = (pageObj.images || []).map(function (im) {
                 return '/' + im.name + ' ' + im.objId + ' 0 R';
             }).join(' ');
             var res = '/Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>' + (xobj ? ' /XObject << ' + xobj + ' >>' : '');
-            var label = String(idx + 1);
-            var numW = measurePdf(label, 9);
-            var pageNo = '0.35 0.35 0.35 rg BT /F1 9 Tf 0 Tc 0 Tw ' + ((612 - numW) / 2).toFixed(2) + ' 46 Td (' + label + ') Tj ET';
-            var streamBytes = latin1Pdf(pageObj.ops.join('\n').replace(/__PAGE_NO__/g, pageNo));
+            var left = 'AUTHORIZED USE ONLY';
+            var right = 'PAGE ' + (idx + 1) + ' OF ' + nPages;
+            var rightX = 540 - measurePdf(right, 9);
+            var pageFoot =
+                '0 0 0 RG 0.8 w 72 62 m 540 62 l S\n' +
+                '0.15 0.15 0.15 rg BT /F1 9 Tf 0 Tc 0 Tw 72 50 Td (' + pdfEscape(left) + ') Tj ET\n' +
+                '0.15 0.15 0.15 rg BT /F1 9 Tf 0 Tc 0 Tw ' + rightX.toFixed(2) + ' 50 Td (' + pdfEscape(right) + ') Tj ET';
+            var streamBytes = latin1Pdf(pageObj.ops.join('\n').replace(/__PAGE_FOOT__/g, pageFoot).replace(/__PAGE_NO__/g, pageFoot));
             objects[pageDictIds[idx] - 1] = '<< /Type /Page /Parent 2 0 R /Resources << ' + res + ' >> /Contents ' + contentIds[idx] + ' 0 R >>';
             objects[contentIds[idx] - 1] = { dict: '<< /Length ' + streamBytes.length + ' >>', stream: streamBytes };
             (pageObj.images || []).forEach(function (im) {
@@ -7696,7 +8920,7 @@
         view.addEventListener('mousedown', stopMiddleAutoscroll, true);
         view.addEventListener('auxclick', stopMiddleAutoscroll);
         view.addEventListener('pointerdown', function (event) {
-            if (event.target.closest('#timelineMenu, #timelineIsland, #timelineTips, #calPop, #timePop, #tlInfoPop')) return;
+            if (event.target.closest('#timelineMenu, #timelineIsland, #calPop, #timePop, #tlInfoPop')) return;
             hideTimelineMenu();
             if (event.target.closest('.board-bar, .work-ghost')) return;
             if (!event.target.closest('[data-tl-rs]')) {
@@ -7732,8 +8956,8 @@
                 if (timelineConnectOn) {
                     event.preventDefault();
                     toggleConnect(id);
-                        return;
-                    }
+                    return;
+                }
                 selectedEvent = id;
                 stage.querySelectorAll('.tl-node').forEach(function (el) {
                     el.classList.toggle('is-on', el.getAttribute('data-event') === id);
@@ -7780,6 +9004,7 @@
             const world = timelineWorldAt(event.clientX, event.clientY);
             const cam = world.cam;
             if (nearTlAxis(world) && !timelineConnectOn) {
+                hideTimelineIsland();
                 drag = { mode: 'mark', x: event.clientX, y: event.clientY, ox: cam.x, oy: cam.y, worldX: world.x, worldY: world.y };
                 view.setPointerCapture(event.pointerId);
                 return;
@@ -7829,7 +9054,7 @@
                     if (live) live.classList.add('is-resizing');
                 }
                 const rec = (data.timeline || []).find(function (n) { return n.id === drag.id; });
-            if (!rec) return;
+                if (!rec) return;
                 applyTlResize(rec, drag, (event.clientX - drag.x) / z, (event.clientY - drag.y) / z);
                 const el = stage.querySelector('[data-event="' + drag.id + '"]');
                 if (el) {
@@ -7890,7 +9115,7 @@
         view.addEventListener('wheel', function (event) {
             event.preventDefault();
             const cam = timelineCam();
-                const rect = view.getBoundingClientRect();
+            const rect = view.getBoundingClientRect();
             const prev = cam.z || 1;
             const next = Math.min(3.2, Math.max(0.2, prev * (event.deltaY > 0 ? 0.92 : 1.08)));
             const px = event.clientX - rect.left;
@@ -7920,7 +9145,7 @@
             reader.readAsDataURL(file);
         });
         view.addEventListener('contextmenu', function (event) {
-            if (event.target.closest('#timelineMenu, #timelineIsland, #timelineTips, .board-bar')) return;
+            if (event.target.closest('#timelineMenu, #timelineIsland, .board-bar')) return;
             event.preventDefault();
             const node = event.target.closest('.tl-node');
             if (node) showTimelineCardMenu(event.clientX, event.clientY, node.getAttribute('data-event'));
@@ -7941,13 +9166,13 @@
             onTlInfoClick(event);
             return;
         }
-        const calBtn = event.target.closest('[data-tl-cal], #eventDateBtn') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-cal], #eventDateBtn');
+        const calBtn = event.target.closest('[data-tl-cal], [data-fact-cal], #eventDateBtn') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-cal], #eventDateBtn');
         if (calBtn) {
             event.preventDefault();
             openCalendar(calBtn);
             return;
         }
-        const timeBtn = event.target.closest('[data-tl-time]') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-time]');
+        const timeBtn = event.target.closest('[data-tl-time], [data-fact-time]') || tlHitFromPoint(event.clientX, event.clientY, '[data-tl-time]');
         if (timeBtn) {
             event.preventDefault();
             openTimePicker(timeBtn);
@@ -8084,16 +9309,6 @@
             connectFrom = '';
             applyTimelineCam();
             renderTimeline();
-            return;
-        }
-        if (event.target.closest('#timelineTipsClose') || (event.target.closest('#timelineTipsBtn') && $('timelineTips') && $('timelineTips').classList.contains('is-open'))) {
-            event.preventDefault();
-            setTimelineTips(false);
-            return;
-        }
-        if (event.target.closest('#timelineTipsBtn, #timelineTips')) {
-            event.preventDefault();
-            setTimelineTips(true);
             return;
         }
         if (event.target.closest('#timelineConnectBtn, [data-tl-connect]')) {
@@ -8543,6 +9758,7 @@
                     rec[key] = tlEditableBlank(field) ? '' : field.innerText;
                 }
                 schedulePersist();
+                scheduleStemRedraw();
             }
         }
         if (event.target.id === 'boardSizeW' || event.target.id === 'boardSizeH') {
@@ -8641,11 +9857,6 @@
         if (event.key === 'Escape' && infoState) {
             event.preventDefault();
             closeTlInfoPop();
-            return;
-        }
-        if (event.key === 'Escape' && $('timelineTips') && $('timelineTips').classList.contains('is-open')) {
-            event.preventDefault();
-            setTimelineTips(false);
             return;
         }
         if (event.key === 'Escape' && document.querySelector('#boardStage [data-wb-text].is-edit')) {
@@ -8851,6 +10062,11 @@
     }
 
     function onFile(event) {
+        if (event.target.id === 'compilerFile') {
+            ingestCompilerFiles(event.target.files);
+            event.target.value = '';
+            return;
+        }
         if (event.target.id === 'timelineImageFile') {
         const file = event.target.files && event.target.files[0];
             const id = timelinePhotoId;
@@ -8909,7 +10125,7 @@
         document.addEventListener('change', onFile, true);
         bindBoardPointers();
         bindTimelinePointers();
-        setTimelineTips(timelineTipsWanted());
+        bindCompiler();
         document.addEventListener('pointermove', function (event) {
             if (event.pointerType === 'touch') return;
             setBoardDrift(event.clientX, event.clientY);
@@ -8928,7 +10144,7 @@
                 saved = localStorage.getItem('orbint-page') || settingValue('startPage', 'orbit') || 'orbit';
             }
         } catch (error) {}
-        if (['orbit', 'timeline', 'whiteboard', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
+        if (['orbit', 'timeline', 'whiteboard', 'compiler', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
         setPage(saved);
         renderAll();
         window.addEventListener('resize', function () {
@@ -8973,6 +10189,7 @@
             return true;
         }
         if (page === 'datasheet') return true;
+        if (page === 'compiler') return true;
         return false;
     }
 
@@ -9000,6 +10217,7 @@
         syncBoardHistory: syncBoardHistory,
         pages: PAGES,
         renderDatasheet: renderDatasheet,
-        scheduleDatasheet: scheduleDatasheet
+        scheduleDatasheet: scheduleDatasheet,
+        ingestCompilerFiles: ingestCompilerFiles
     };
 })();

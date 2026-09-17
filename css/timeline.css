@@ -9,8 +9,8 @@
 
 .tl-island {
     position: absolute;
-    z-index: 18;
-    top: 14px;
+    z-index: 24;
+    top: 16px;
     left: 50%;
     display: flex;
     align-items: center;
@@ -18,9 +18,9 @@
     width: max-content;
     max-width: min(92vw, 420px);
     padding: 8px 16px 8px 10px;
-    border: 1px solid #1f1f23;
+    border: 1px solid #2a2a2e;
     border-radius: 999px;
-    background: #070709;
+    background: #111113;
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
     color: #e4e4e7;
     font-size: 13px;
@@ -28,13 +28,12 @@
     letter-spacing: -0.02em;
     line-height: 1.2;
     pointer-events: none;
-    cursor: pointer;
     user-select: none;
-    transform: translateX(-50%) scale(0.38, 0.52);
+    transform: translateX(-50%) translateY(-8px) scale(0.88);
     transform-origin: top center;
     opacity: 0;
     visibility: hidden;
-    transition: transform 0.44s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease, visibility 0.28s ease;
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.42s linear;
 }
 
 
@@ -42,8 +41,11 @@
     pointer-events: none;
     opacity: 1;
     visibility: visible;
-    transform: translateX(-50%) scale(1);
+    transform: translateX(-50%) translateY(0) scale(1);
 }
+
+
+.tl-island.is-connect { pointer-events: auto; cursor: pointer; }
 
 
 .tl-island.is-connect.is-on { pointer-events: auto; }
@@ -53,7 +55,7 @@
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
-    transform: translateX(-50%) scale(0.42, 0.56);
+    transform: translateX(-50%) translateY(-8px) scale(0.88);
 }
 
 
@@ -67,11 +69,12 @@
     height: 22px;
     flex: none;
     border-radius: 50%;
-    background: #141418;
+    background: #18181b;
     color: #a1a1aa;
 }
 
 
+.tl-island .tl-island-ico-hint,
 .tl-island.is-on .tl-island-ico-hint { display: grid; }
 
 
@@ -81,6 +84,7 @@
 .tl-island.is-connect .tl-island-ico-link { display: grid; }
 
 
+.tl-island.is-connect .tl-island-ico,
 .tl-island.is-connect.is-on .tl-island-ico {
     animation: tl-island-pulse 1.8s ease-in-out infinite;
 }
@@ -103,14 +107,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     opacity: 0;
-    transform: translateY(5px);
-    transition: opacity 0.24s ease 0.08s, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
+    transform: translateY(4px);
+    transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.08s, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
 }
 
 
 .tl-island.is-on .tl-island-text {
     opacity: 1;
     transform: none;
+}
+
+
+.tl-island.is-out .tl-island-text {
+    opacity: 0;
+    transform: translateY(-3px);
+    transition-delay: 0s;
 }
 
 
@@ -181,11 +192,17 @@ html.reduce-motion .tl-island.is-on .tl-island-ico { animation: none; }
 }
 
 
+#timelineList {
+    position: relative;
+    z-index: 1;
+}
+
+
 #timelineAxis {
     position: absolute;
     left: 0;
     top: 0;
-    z-index: 8;
+    z-index: 16;
     overflow: visible;
     pointer-events: none;
 }
@@ -193,7 +210,7 @@ html.reduce-motion .tl-island.is-on .tl-island-ico { animation: none; }
 
 .tl-follow {
     position: absolute;
-    z-index: 6;
+    z-index: 17;
     width: 14px;
     height: 14px;
     margin: -7px 0 0 -7px;
@@ -253,7 +270,7 @@ html.reduce-motion .tl-follow { animation: none; }
 .tl-node.is-on { z-index: 4; }
 
 
-.tl-node.is-spawn { animation: tl-grow 0.46s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tl-node.is-spawn { animation: tl-grow 0.56s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 
 .tl-node.is-spawn[data-side="-1"] { transform-origin: 50% 100%; }
@@ -271,18 +288,12 @@ html.reduce-motion .tl-node.is-spawn { animation: none; }
 }
 
 
-.tl-stem,
-.tl-card-link,
-.tl-pin {
-    stroke-dasharray: 1;
-    stroke-dashoffset: 0;
-}
-
-
 .tl-stem.is-out,
 .tl-card-link.is-out,
 .tl-pin.is-out,
 .tl-pin-date.is-out {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
     animation: tl-stem-shrink 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 

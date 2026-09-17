@@ -370,7 +370,9 @@
                 hidden: Array.isArray(raw.hidden) ? raw.hidden : (Array.isArray(source.hidden) ? source.hidden : []),
                 layout: raw.layout || source.layout || null,
                 peerHomes: normalizePeerHomes(raw.peerHomes || source.peerHomes),
-                investigation: raw.investigation || source.investigation || null
+                investigation: raw.investigation || source.investigation || null,
+                case: Object.assign({}, emptyCaseMeta(), raw.case || source.case || {}),
+                audit: Array.isArray(raw.audit) ? raw.audit : (Array.isArray(source.audit) ? source.audit : [])
             };
         }
 
@@ -589,7 +591,10 @@
             backdrop.hidden = !next || !drawerQuery.matches || phone;
             backdrop.classList.toggle('visible', next && drawerQuery.matches && !phone);
             const toggle = document.getElementById('profileToggle');
-            if (toggle) toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+                toggle.classList.toggle('is-on', next);
+            }
             const dockPort = document.getElementById('dockPortfolio');
             if (dockPort) dockPort.setAttribute('aria-expanded', next ? 'true' : 'false');
             if (phone && !next && typeof kickOrbit === 'function') kickOrbit();
@@ -634,8 +639,8 @@
             const extra = {};
             const base = fieldBase(fieldId);
             if (isPlatformField(fieldId)) {
-                const node = document.querySelector('.node[data-field="' + fieldId + '"]');
-                if (node && node.dataset.platform) extra.platform = node.dataset.platform;
+                const platform = fieldPlatformId(fieldId);
+                if (platform) extra.platform = platform;
             } else if (base === 'image' && looksLikeImageSrc(value)) {
                 extra.preview = value;
                 extra.media = value;
@@ -647,7 +652,28 @@
             return extra;
         }
 
+        function patchFactMeta(id, key, value) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+            if (!id || !key) return;
+            profile.facts[id] = profile.facts[id] || [];
+            let current = profile.facts[id][profile.facts[id].length - 1];
+            if (!current) {
+                current = { value: '', addedAt: new Date().toISOString() };
+                profile.facts[id].push(current);
+            }
+            if (key === 'capturedAt') {
+                if (value) current.capturedAt = String(value).trim();
+                else delete current.capturedAt;
+            } else {
+                if (value) current[key] = String(value).trim();
+                else delete current[key];
+                if (!current.capturedAt) current.capturedAt = new Date().toISOString();
+            }
+            saveProfile();
+        }
+
         function writeLatestFact(id, value, extra) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
             const clean = String(value || '').trim();
             profile.facts[id] = profile.facts[id] || [];
             if (!clean) {
@@ -673,6 +699,7 @@
             }
             if (isNullField(id)) setFieldNull(id, false, true);
             let current = profile.facts[id][profile.facts[id].length - 1];
+            const prevValue = current ? String(current.value || '') : '';
             if (!current) {
                 current = { value: clean, addedAt: new Date().toISOString() };
                 profile.facts[id].push(current);
@@ -684,6 +711,9 @@
                 const platform = fieldPlatformId(id);
                 if (platform) current.platform = platform;
             }
+            if (!current.capturedAt) current.capturedAt = new Date().toISOString();
+            if (investigatorModeOn() && !current.method) current.method = 'open-web';
+            if (prevValue !== clean) appendCaseAudit('fact', id, String(clean).slice(0, 80));
             saveProfile();
             refreshProfileChrome();
             syncLinkedField(id, clean);
@@ -1661,7 +1691,27 @@
         function profileSheetEditing() {
             const el = document.activeElement;
             if (!el || !el.closest) return false;
-            return el.id === 'subjectNameInput' || !!el.closest('#factsList [data-sheet-field]');
+            return el.id === 'subjectNameInput' || !!el.closest('#factsList [data-sheet-field], .fact-prov, .fact-detail, .case-file, .sheet-pick, #sheetPickMenu');
+        }
+
+        const openFactDetails = new Set();
+
+        function factDetailsOpen(id) {
+            return openFactDetails.has(id);
+        }
+
+        function toggleFactDetails(id) {
+            if (!id) return;
+            if (openFactDetails.has(id)) openFactDetails.delete(id);
+            else openFactDetails.add(id);
+            const item = document.querySelector('.fact-item[data-fact-item="' + id + '"]');
+            if (!item) return;
+            const on = openFactDetails.has(id);
+            item.classList.toggle('is-open', on);
+            const panel = item.querySelector('.fact-detail');
+            const btn = item.querySelector('[data-fact-more]');
+            if (panel) panel.setAttribute('aria-hidden', on ? 'false' : 'true');
+            if (btn) btn.setAttribute('aria-expanded', on ? 'true' : 'false');
         }
 
         function dossierFieldRowHtml(field) {
@@ -1669,40 +1719,142 @@
             const value = sheetFieldValue(field);
             const isNotes = base === 'notes';
             const secret = isSecretField(field.id);
-            const open = secret && secretIsOpen(field.id);
+            const secretOpen = secret && secretIsOpen(field.id);
             const platformField = isPlatformField(field.id);
             const platformId = platformField ? fieldPlatformId(field.id) : '';
             const platform = platformId ? platformById(platformId) : null;
             let control;
+            const reveal = secret
+                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, secretOpen)) + '" title="' + (secretOpen ? 'Hide' : 'Show') + '">' + (secretOpen ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
+                : '';
             if (isNotes) {
                 control = '<textarea class="sheet-area" data-sheet-field="' + field.id + '" rows="2" placeholder="' + escapeHtml(field.placeholder || '') + '">' + escapeHtml(value) + '</textarea>';
             } else if (platformField) {
+                const passInput = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !secretOpen ? 'password' : 'text') + '" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
                 control =
                     '<button type="button" class="sheet-platform" data-sheet-platform="' + field.id + '"' + (platform ? ' hidden' : '') + '>Select site</button>' +
                     '<div class="sheet-platform-value"' + (platform ? '' : ' hidden') + '>' +
                         (platform
-                            ? '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" title="' + escapeHtml(platform.label) + '" aria-label="Change platform">' + platformMark(platform) + '</button>'
-                            : '') +
-                        '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !open ? 'password' : 'text') + '" placeholder="' + escapeHtml(platformFieldPlaceholder(field.id)) + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">' +
+                            ? '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" title="Change site" aria-label="Change site">' + platformMark(platform) + '</button>'
+                            : '<button type="button" class="sheet-platform-mark" data-sheet-platform="' + field.id + '" hidden title="Change site" aria-label="Change site"></button>') +
+                        (secret ? '<span class="sheet-secret">' + passInput + reveal + '</span>' : passInput) +
                     '</div>';
             } else {
-                control = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !open ? 'password' : 'text') + '" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder || '') + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
+                const input = '<input class="sheet-input" data-sheet-field="' + field.id + '" type="' + (secret && !secretOpen ? 'password' : 'text') + '" inputmode="' + (base === 'phone' ? 'tel' : 'text') + '" placeholder="' + escapeHtml(field.placeholder || '') + '" value="' + escapeHtml(value) + '" spellcheck="false" autocomplete="off">';
+                control = secret ? '<span class="sheet-secret">' + input + reveal + '</span>' : input;
             }
-            const reveal = secret
-                ? '<button type="button" class="fact-reveal" data-secret-reveal="' + field.id + '" aria-label="' + escapeHtml(secretAriaLabel(field.id, open)) + '" title="' + (open ? 'Hide' : 'Show') + '">' + (open ? EYE_OFF_ICON : EYE_OPEN_ICON) + '</button>'
-                : '';
             const maps = isMapsField(field.id) ? mapsButtonHtml(field.id) : '';
             const filled = !!String(value || '').trim() && (!platformField || !!platform);
             const find = '<button type="button" class="fact-find' + (filled ? ' ready' : '') + '" data-search-field="' + field.id + '" aria-label="' + (filled ? 'Search deeper' : 'How to find this') + '" title="' + (filled ? 'Search deeper' : 'How to find this') + '">' + (filled ? DEEP_ICON : FIND_ICON) + '</button>';
-            return '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
+            const drop = '<button type="button" class="fact-drop" data-sheet-hide="' + field.id + '" aria-label="Delete" title="Delete">×</button>';
+            const fact = lastFactRecord(field.id);
+            const detailsOpen = factDetailsOpen(field.id);
+            const hasMeta = !!(fact && (fact.source || fact.confidence || fact.method || fact.capturedAt));
+            const more = '<button type="button" class="fact-more' + (hasMeta ? ' has-meta' : '') + '" data-fact-more="' + field.id + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '" aria-label="Details" title="Details">' + SHEET_CHEVRON + '</button>';
+            return '<div class="fact-item' + (detailsOpen ? ' is-open' : '') + '" data-fact-item="' + field.id + '">' +
+                '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
                 '<span class="fact-label">' + escapeHtml(field.label) + '</span>' +
-                control +
+                '<div class="fact-control">' + control + '</div>' +
                 '<div class="fact-tools">' +
                     maps +
-                    reveal +
+                    more +
                     find +
+                    drop +
+                '</div>' +
+                '</div>' +
+                factDetailHtml(field.id, fact, detailsOpen) +
+                '</div>';
+        }
+
+        const SHEET_CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+        function sheetPickButton(kind, value, extras) {
+            const label = sheetPickLabel(kind, value);
+            const empty = value ? '' : ' is-empty';
+            return '<button type="button" class="sheet-pick' + empty + '" data-sheet-pick="' + kind + '" data-value="' + escapeHtml(value || '') + '" ' + (extras || '') + ' aria-haspopup="listbox" aria-expanded="false"><span>' + escapeHtml(label) + '</span>' + SHEET_CHEVRON + '</button>';
+        }
+
+        function factDetailHtml(fieldId, fact, open) {
+            const source = (fact && fact.source) || '';
+            const confidence = (fact && fact.confidence) || '';
+            const method = (fact && fact.method) || '';
+            const captured = factStampIso(fact);
+            const locked = window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly();
+            const lock = locked ? ' disabled' : '';
+            const stamp = factStampHtml(fieldId, captured, lock);
+            const dup = '<button type="button" class="fact-dup" data-sheet-dup="' + fieldId + '" aria-label="Duplicate" title="Duplicate">' + DUP_ICON + '<span>Duplicate</span></button>';
+            return '<div class="fact-detail" data-fact-detail="' + fieldId + '" aria-hidden="' + (open ? 'false' : 'true') + '">' +
+                '<div class="fact-detail-body">' +
+                '<input class="fact-source" data-fact-meta="source" data-sheet-meta="' + fieldId + '" type="text" placeholder="Note" value="' + escapeHtml(source) + '" spellcheck="true" autocomplete="off" aria-label="Note">' +
+                '<div class="fact-detail-row">' +
+                    '<div class="fact-picks">' +
+                        sheetPickButton('confidence', confidence, 'data-sheet-meta="' + fieldId + '" aria-label="Confidence"') +
+                        sheetPickButton('method', method, 'data-sheet-meta="' + fieldId + '" aria-label="Collection method"') +
+                        dup +
+                        stamp +
+                    '</div>' +
+                '</div>' +
                 '</div>' +
                 '</div>';
+        }
+
+        function lastFactRecord(id) {
+            const list = (profile.facts && profile.facts[id]) || [];
+            return list.length ? list[list.length - 1] : null;
+        }
+
+        function factStampIso(fact) {
+            if (!fact) return '';
+            return fact.capturedAt || fact.addedAt || '';
+        }
+
+        function factStampHtml(fieldId, captured, lock) {
+            const empty = captured ? '' : ' is-empty';
+            return '<div class="fact-stamp">' +
+                '<button type="button" class="fact-captured' + empty + '" data-fact-cal="' + fieldId + '" aria-haspopup="dialog" aria-expanded="false" aria-label="Change date" title="Change date"' + lock + '>' +
+                    escapeHtml(captured ? formatCapturedDate(captured) : 'Date') +
+                '</button>' +
+                '<span class="fact-stamp-sep" aria-hidden="true">·</span>' +
+                '<button type="button" class="fact-captured fact-captured-time' + empty + '" data-fact-time="' + fieldId + '" aria-haspopup="dialog" aria-expanded="false" aria-label="Change time" title="Change time"' + lock + '>' +
+                    escapeHtml(captured ? formatCapturedTime(captured) : 'Time') +
+                '</button>' +
+                '</div>';
+        }
+
+        function paintFactCaptured(id) {
+            if (!id) return;
+            const iso = factStampIso(lastFactRecord(id));
+            const root = document.querySelector('#factsList [data-fact-item="' + id + '"]');
+            if (!root) return;
+            const dateBtn = root.querySelector('[data-fact-cal]');
+            const timeBtn = root.querySelector('[data-fact-time]');
+            if (dateBtn) {
+                dateBtn.textContent = iso ? formatCapturedDate(iso) : 'Date';
+                dateBtn.classList.toggle('is-empty', !iso);
+            }
+            if (timeBtn) {
+                timeBtn.textContent = iso ? formatCapturedTime(iso) : 'Time';
+                timeBtn.classList.toggle('is-empty', !iso);
+            }
+        }
+
+        function formatCapturedDate(iso) {
+            const d = new Date(iso);
+            if (!Number.isFinite(d.getTime())) return 'Date';
+            return d.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+        }
+
+        function formatCapturedTime(iso) {
+            const d = new Date(iso);
+            if (!Number.isFinite(d.getTime())) return 'Time';
+            return d.toLocaleString([], { hour: 'numeric', minute: '2-digit' });
+        }
+
+        function formatCaptured(iso) {
+            const day = formatCapturedDate(iso);
+            const time = formatCapturedTime(iso);
+            if (day === 'Date' || time === 'Time') return '';
+            return day + ' · ' + time;
         }
 
         function dossierHtml() {
@@ -1747,7 +1899,7 @@
                 amount = Math.floor(secs / (365 * 86400));
                 unit = amount === 1 ? 'year' : 'years';
             }
-            return 'Last updated: ' + amount + ' ' + unit + ' ago';
+            return 'OrbINT.net last updated: ' + amount + ' ' + unit + ' ago';
         }
 
         function paintSiteUpdated() {
@@ -1853,6 +2005,24 @@
             if (completeness) completeness.style.width = ((filled / caseTotal) * 100) + '%';
             if (coverageLabel) coverageLabel.textContent = filled + ' of ' + caseTotal + ' filed';
 
+            const rec = Object.assign({}, emptyCaseMeta(), (profile && profile.case) || {});
+            const num = document.getElementById('caseNumber');
+            const offense = document.getElementById('caseOffense');
+            const status = document.getElementById('caseStatus');
+            const who = document.getElementById('caseInvestigator');
+            if (num && document.activeElement !== num) num.value = rec.number || '';
+            if (offense && document.activeElement !== offense) offense.value = rec.offense || '';
+            const offensePick = document.getElementById('caseOffensePick');
+            if (offensePick) offensePick.dataset.value = rec.offense || '';
+            if (status && document.activeElement !== status) {
+                const val = rec.status || 'open';
+                status.dataset.value = val;
+                status.classList.toggle('is-empty', !val);
+                const lab = document.getElementById('caseStatusLabel') || status.querySelector('span');
+                if (lab) lab.textContent = sheetPickLabel('status', val);
+            }
+            if (who && document.activeElement !== who) who.value = rec.investigator || '';
+
             const face = document.getElementById('targetFace');
             if (face) {
                 face.classList.add('visible');
@@ -1917,6 +2087,56 @@
             renderPeerHubs();
             if (window.OrbINTCase && typeof OrbINTCase.scheduleDatasheet === 'function') OrbINTCase.scheduleDatasheet();
             else if (window.OrbINTCase && typeof OrbINTCase.renderDatasheet === 'function') OrbINTCase.renderDatasheet();
+        }
+
+        function nextEmptyClone(sourceId) {
+            const base = fieldBase(sourceId);
+            if (!base) return '';
+            const ids = [];
+            groupsForProfile().forEach(function (group) {
+                (group.fields || []).forEach(function (id) { ids.push(id); });
+            });
+            const at = ids.indexOf(sourceId);
+            if (at < 0) return '';
+            let i;
+            for (i = at + 1; i < ids.length; i++) {
+                if (fieldBase(ids[i]) !== base) break;
+                if (typeof hiddenFields !== 'undefined' && hiddenFields.has(ids[i])) continue;
+                const field = fieldById(ids[i]);
+                if (!field || skipSheetField(field)) continue;
+                const fact = latestFact(ids[i]);
+                if (!String((fact && fact.value) || '').trim()) return ids[i];
+            }
+            return '';
+        }
+
+        function focusSheetField(id) {
+            if (!id) return;
+            activeField = id;
+            const pick = document.querySelector('#factsList [data-sheet-platform="' + id + '"]');
+            const input = document.querySelector('#factsList [data-sheet-field="' + id + '"]');
+            const el = (input && !input.hidden) ? input : (pick && !pick.hidden ? pick : input || pick);
+            if (!el) return;
+            requestAnimationFrame(function () {
+                el.focus();
+                const item = el.closest('.fact-item');
+                if (item && item.scrollIntoView) item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            });
+        }
+
+        function commitSheetEnter(fieldId) {
+            if (window.OrbINTShare && OrbINTShare.readonly && OrbINTShare.readonly()) return;
+            const field = fieldById(fieldId);
+            if (!field || skipSheetField(field)) return;
+            if (fieldBase(fieldId) === 'notes') return;
+            const fact = latestFact(fieldId);
+            if (!String((fact && fact.value) || '').trim()) return;
+            const emptyId = nextEmptyClone(fieldId);
+            if (emptyId) {
+                focusSheetField(emptyId);
+                return;
+            }
+            if (typeof duplicateField === 'function') duplicateField(fieldId, { focus: 'sheet' });
         }
 
         function beginNameEdit() {
@@ -2098,11 +2318,11 @@
             layer.dataset.stamp = stamp;
             layer.innerHTML = rows.map((row) => {
                 const mark = row.face
-                    ? '<img class="peer-hub-face" alt="" data-peer-face="' + escapeHtml(row.id) + '">'
-                    : '<span class="peer-hub-letter">' + escapeHtml(profileLetter(row.name)) + '</span>';
+                    ? '<img class="peer-hub-face" alt="" data-peer="' + escapeHtml(row.id) + '" data-peer-face="' + escapeHtml(row.id) + '">'
+                    : '<span class="peer-hub-letter" data-peer="' + escapeHtml(row.id) + '">' + escapeHtml(profileLetter(row.name)) + '</span>';
                 return '<div class="peer-hub" data-peer="' + escapeHtml(row.id) + '" title="' + escapeHtml(row.name) + '" role="button" tabindex="0" aria-label="' + escapeHtml(row.name) + '">' +
                     mark +
-                    '<span class="peer-hub-name">' + escapeHtml(row.name) + '</span>' +
+                    '<span class="peer-hub-name" data-peer="' + escapeHtml(row.id) + '">' + escapeHtml(row.name) + '</span>' +
                     '</div>';
             }).join('');
             rows.forEach((row) => {
@@ -2153,15 +2373,16 @@
         }
 
         function peerBodyFromEl(el) {
-            if (!el || !el.dataset.peer) return null;
-            let body = peerBodies.find((entry) => entry.id === el.dataset.peer);
+            const hubEl = el && (el.classList && el.classList.contains('peer-hub') ? el : (el.closest && el.closest('.peer-hub')));
+            if (!hubEl || !hubEl.dataset.peer) return null;
+            let body = peerBodies.find((entry) => entry.id === hubEl.dataset.peer);
             if (body) {
-                body.el = el;
+                body.el = hubEl;
                 return body;
             }
             body = {
-                id: el.dataset.peer,
-                el: el,
+                id: hubEl.dataset.peer,
+                el: hubEl,
                 x: null,
                 y: null,
                 vx: 0,
@@ -2661,7 +2882,9 @@
         }
 
         function skipSheetField(field) {
-            return skipProfileRow(field);
+            if (skipProfileRow(field)) return true;
+            if (typeof investigatorHidesField === 'function' && investigatorHidesField(field)) return true;
+            return false;
         }
 
         function subjectAddressLines() {
@@ -2719,7 +2942,7 @@
             return '<a class="' + className + '" href="' + (ready ? escapeHtml(href) : '#') + '"' +
                 (ready ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') +
                 ' data-open-maps="' + fieldId + '" aria-label="Open in Google Maps" title="Google Maps">' +
-                PIN_ICON + '<span>Maps</span></a>';
+                PIN_ICON + '</a>';
         }
 
         function mapsButtonHtml(fieldId) {
@@ -3136,7 +3359,7 @@
                 const showMaps = isMapsField(phoneFieldId) && !needsPlatform;
                 mapsBtn.hidden = !showMaps;
                 applyMapsControlState(mapsBtn, phoneFieldId);
-                mapsBtn.innerHTML = PIN_ICON + '<span>Maps</span>';
+                mapsBtn.innerHTML = PIN_ICON;
             }
             if (upload) {
                 if (img) {
@@ -3314,9 +3537,18 @@
             if (!row) return;
             const pick = row.querySelector('.sheet-platform');
             const wrap = row.querySelector('.sheet-platform-value');
-            const mark = row.querySelector('.sheet-platform-mark');
+            let mark = row.querySelector('.sheet-platform-mark');
             const input = row.querySelector('[data-sheet-field]');
             const platform = platformById(fieldPlatformId(fieldId));
+            if (wrap && !mark) {
+                mark = document.createElement('button');
+                mark.type = 'button';
+                mark.className = 'sheet-platform-mark';
+                mark.setAttribute('data-sheet-platform', fieldId);
+                mark.title = 'Change site';
+                mark.setAttribute('aria-label', 'Change site');
+                wrap.insertBefore(mark, wrap.firstChild);
+            }
             if (pick) {
                 pick.hidden = !!platform;
                 pick.textContent = 'Select site';
@@ -3325,21 +3557,40 @@
             if (mark) {
                 if (platform) {
                     mark.innerHTML = platformMark(platform);
-                    mark.title = platform.label;
-                    mark.setAttribute('aria-label', 'Change ' + platform.label);
+                    mark.title = 'Change site · ' + platform.label;
+                    mark.setAttribute('aria-label', 'Change site');
                     mark.hidden = false;
                 } else {
                     mark.hidden = true;
+                    mark.innerHTML = '';
                 }
             }
             if (input) input.hidden = !platform;
         }
 
+        let platformMenuAnchor = null;
+
+        function restorePlatformMenuHost() {
+            const menu = document.getElementById('platformMenu');
+            const stage = document.getElementById('mapStage');
+            if (!menu) return;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.zIndex = '';
+            if (stage && menu.parentNode !== stage) stage.appendChild(menu);
+        }
+
         function closePlatformMenu() {
             const menu = document.getElementById('platformMenu');
-            if (!menu) return;
-            menu.hidden = true;
+            platformMenuAnchor = null;
+            if (menu) {
+                menu.hidden = true;
+                menu.classList.remove('is-sheet');
+            }
             document.querySelectorAll('.node.menu-open:not(.tz-open)').forEach((node) => node.classList.remove('menu-open'));
+            document.querySelectorAll('[data-sheet-platform].is-open').forEach((el) => el.classList.remove('is-open'));
+            restorePlatformMenuHost();
         }
 
         function closeTimezoneMenu() {
@@ -3467,9 +3718,32 @@
 
         function placePlatformMenu() {
             const menu = document.getElementById('platformMenu');
-            const node = document.querySelector('.node.menu-open');
+            if (!menu || menu.hidden) return;
             const stage = document.getElementById('mapStage');
-            if (!menu || menu.hidden || !node || !stage) return;
+            const node = document.querySelector('.node.menu-open:not(.tz-open):not(.cc-open)');
+            const el = platformMenuAnchor || document.querySelector('[data-sheet-platform].is-open') || node;
+            if (!el) return;
+            const sheet = !!(el.closest && el.closest('#profilePanel, #factsList, .profile-panel, .phone-sheet, .phone-bar'));
+            if (sheet || (stage && !stage.contains(el))) {
+                if (menu.parentNode !== document.body) document.body.appendChild(menu);
+                const r = el.getBoundingClientRect();
+                const w = menu.offsetWidth || 260;
+                const h = menu.offsetHeight || 280;
+                let left = r.left;
+                let top = r.bottom + 6;
+                if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+                if (left < 8) left = 8;
+                if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+                menu.classList.add('is-sheet');
+                menu.style.position = 'fixed';
+                menu.style.zIndex = '90';
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
+                return;
+            }
+            restorePlatformMenuHost();
+            menu.classList.remove('is-sheet');
+            if (!node || !stage) return;
             const nodeRect = node.getBoundingClientRect();
             const mapRect = stage.getBoundingClientRect();
             const left = Math.min(nodeRect.left - mapRect.left, mapRect.width - 272);
@@ -3502,19 +3776,25 @@
         }
 
         function applyPlatformChoice(fieldId, platformId) {
+            if (!fieldId || !platformId) return;
             const node = document.querySelector('.node[data-field="' + fieldId + '"]') || document.querySelector('.node.menu-open:not(.tz-open):not(.cc-open)');
-            if (!node || !fieldId) return;
             const input = document.getElementById('field-' + fieldId);
-            const filled = !!(input && String(input.value || '').trim());
+            const sheetInput = document.querySelector('#factsList [data-sheet-field="' + fieldId + '"]');
+            const filled = !!(
+                (input && String(input.value || '').trim()) ||
+                (sheetInput && String(sheetInput.value || '').trim())
+            );
             setFieldPlatform(fieldId, platformId);
-            setUsernameStep(node, platformId, filled);
+            if (node) setUsernameStep(node, platformId, filled);
+            else syncSheetPlatform(fieldId);
             if (filled && input) saveInputAsIs(input);
             if (isPhone()) syncPhoneField();
             closePlatformMenu();
-            if (input) input.focus();
             activeField = fieldId;
             renderProfile();
             recordHistory(false);
+            const next = document.querySelector('#factsList [data-sheet-field="' + fieldId + '"]') || input;
+            if (next) next.focus();
         }
 
         function applyCustomPlatformPick(label) {
@@ -3527,9 +3807,18 @@
             return true;
         }
 
-        function openPlatformMenu(node) {
+        function openPlatformMenu(target, anchor) {
             const menu = document.getElementById('platformMenu');
             if (!menu) return;
+            const fieldId = (typeof target === 'string')
+                ? target
+                : ((target && target.dataset && target.dataset.field) ||
+                    (anchor && (anchor.getAttribute('data-sheet-platform') || (anchor.dataset && anchor.dataset.sheetPlatform))) ||
+                    '');
+            if (!fieldId) return;
+            const node = (target && target.classList && target.classList.contains('node'))
+                ? target
+                : document.querySelector('.node[data-field="' + fieldId + '"]');
             closeSearchMenu();
             closeTimezoneMenu();
             closeCountryCodeMenu();
@@ -3547,9 +3836,15 @@
                     '</button>' +
                     platforms.map(platformOptionHtml).join('') +
                 '</div>';
-            menu.dataset.field = node.dataset.field || '';
+            menu.dataset.field = fieldId;
             menu.hidden = false;
-            node.classList.add('menu-open');
+            document.querySelectorAll('.node.menu-open:not(.tz-open)').forEach((item) => {
+                if (item !== node) item.classList.remove('menu-open');
+            });
+            document.querySelectorAll('[data-sheet-platform].is-open').forEach((item) => item.classList.remove('is-open'));
+            if (node) node.classList.add('menu-open');
+            platformMenuAnchor = anchor || target || node;
+            if (platformMenuAnchor && platformMenuAnchor.classList) platformMenuAnchor.classList.add('is-open');
             placePlatformMenu();
             const search = menu.querySelector('.platform-search');
             const form = menu.querySelector('#platformCustomForm');
