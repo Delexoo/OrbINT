@@ -1749,8 +1749,7 @@
             const drop = '<button type="button" class="fact-drop" data-sheet-hide="' + field.id + '" aria-label="Delete" title="Delete">×</button>';
             const fact = lastFactRecord(field.id);
             const detailsOpen = factDetailsOpen(field.id);
-            const hasMeta = !!(fact && (fact.source || fact.confidence || fact.method || fact.capturedAt));
-            const more = '<button type="button" class="fact-more' + (hasMeta ? ' has-meta' : '') + '" data-fact-more="' + field.id + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '" aria-label="Details" title="Details">' + SHEET_CHEVRON + '</button>';
+            const more = '<button type="button" class="fact-more" data-fact-more="' + field.id + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '" aria-label="Details" title="Details">' + SHEET_CHEVRON + '</button>';
             return '<div class="fact-item' + (detailsOpen ? ' is-open' : '') + '" data-fact-item="' + field.id + '">' +
                 '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
                 '<span class="fact-label">' + escapeHtml(field.label) + '</span>' +

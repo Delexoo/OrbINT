@@ -6,11 +6,15 @@
 }
 
 
-.ds-view {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding: 28px 24px 120px;
+@media (max-width: 820px) {
+    .ds-view {
+        padding: 12px 8px 120px;
+        overflow-x: hidden;
+    }
+    .ds-fit {
+        width: 100%;
+        align-items: center;
+    }
 }
 
 

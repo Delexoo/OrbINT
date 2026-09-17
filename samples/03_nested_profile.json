@@ -1,0 +1,35 @@
+{
+  "profile": {
+    "display_name": "CipherMoth",
+    "identity": {
+      "name": "Elena Marrow",
+      "birth_date": "2002-09-03",
+      "region": "Pacific Northwest"
+    },
+    "contact": {
+      "emails": [
+        "ciphermoth@example.com",
+        "e.marrow@example.org"
+      ],
+      "phone": "+1-555-010-3434"
+    },
+    "accounts": [
+      {
+        "service": "github",
+        "username": "ciphermoth"
+      },
+      {
+        "service": "reddit",
+        "username": "mothcipher"
+      },
+      {
+        "service": "discord",
+        "username": "cipher.moth"
+      }
+    ],
+    "confidence": {
+      "identity_match": "medium",
+      "location": "low"
+    }
+  }
+}

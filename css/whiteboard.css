@@ -1717,13 +1717,18 @@ html.reduce-motion .board-shift { transform: none !important; transition: none; 
 
 @media (max-width: 820px) {
 
-        .board-bar { top: 6px; left: 6px; right: 6px; }
+        .board-bar {
+            top: 8px;
+            left: 6px;
+            right: 6px;
+            gap: 6px;
+        }
 
         .page-whiteboard .work-top { display: none; }
 
         .board-toolbar { top: 8px; }
 
-        .board-props { top: 58px; left: 8px; width: 176px; }
+        .board-props { top: 58px; left: 8px; width: min(176px, calc(100% - 16px)); }
 }
 
 @media (max-width: 900px) {

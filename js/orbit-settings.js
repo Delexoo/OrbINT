@@ -39,6 +39,8 @@
             stealthTab: false,
             largeType: false,
             investigatorMode: true,
+            showGitHub: true,
+            showDonate: true,
             shareApiUrl: 'http://127.0.0.1:8788',
             collabWsUrl: 'http://127.0.0.1:8788'
         };
@@ -62,6 +64,7 @@
                     if (saved.hideBackground == null && saved.boardGrid === false) next.hideBackground = true;
                     if (next.logicBombPeriod === '4w') next.logicBombPeriod = '1m';
                     if (next.logicBombPeriod === '18m') next.logicBombPeriod = '12m';
+                    if (next.startPage === 'compiler') next.startPage = 'harvester';
                     return next;
                 }
             } catch (error) {}
@@ -203,7 +206,7 @@
                     { value: 'orbit', label: 'Orbit' },
                     { value: 'timeline', label: 'Timeline' },
                     { value: 'whiteboard', label: 'Whiteboard' },
-                    { value: 'compiler', label: 'Compiler' },
+                    { value: 'harvester', label: 'Harvester' },
                     { value: 'datasheet', label: 'Case File' }
                 ]
             }
@@ -383,8 +386,18 @@
 
         function syncBombTag() {
             const tag = document.getElementById('bombTag');
-            if (!tag) return;
-            tag.hidden = !appSettings.logicBomb;
+            const git = tag && tag.querySelector('.bomb-split-git');
+            const pay = tag && tag.querySelector('.bomb-split-pay');
+            const showGit = appSettings.showGitHub !== false;
+            const showPay = appSettings.showDonate !== false;
+            if (git) git.hidden = !showGit;
+            if (pay) pay.hidden = !showPay;
+            if (tag) {
+                tag.hidden = !showGit && !showPay;
+                tag.classList.toggle('is-solo', !!(showGit !== showPay) && (showGit || showPay));
+            }
+            const phone = document.getElementById('phoneDonate');
+            if (phone) phone.hidden = !showPay;
         }
 
         function syncSettingsForm() {
@@ -400,6 +413,8 @@
                 setLargeType: 'largeType',
                 setRememberPage: 'rememberPage',
                 setHideBg: 'hideBackground',
+                setShowGitHub: 'showGitHub',
+                setShowDonate: 'showDonate',
                 setExportNoPhotos: 'exportNoPhotos',
                 setInvestigator: 'investigatorMode'
             };

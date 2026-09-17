@@ -65,17 +65,17 @@
             } catch (e) {}
         })();
     </script>
-    <script src="investigation.js?v=218" defer></script>
-    <script src="app.js?v=218" defer></script>
+    <script src="investigation.js?v=247" defer></script>
+    <script src="app.js?v=247" defer></script>
     <style>
         html[data-orbint-wipe] body { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="css/base.css?v=218">
-    <link rel="stylesheet" href="css/orbit.css?v=218">
-    <link rel="stylesheet" href="css/timeline.css?v=218">
-    <link rel="stylesheet" href="css/whiteboard.css?v=218">
-    <link rel="stylesheet" href="css/compiler.css?v=218">
-    <link rel="stylesheet" href="css/datasheet.css?v=218">
+    <link rel="stylesheet" href="css/base.css?v=247">
+    <link rel="stylesheet" href="css/orbit.css?v=247">
+    <link rel="stylesheet" href="css/timeline.css?v=247">
+    <link rel="stylesheet" href="css/whiteboard.css?v=247">
+    <link rel="stylesheet" href="css/harvester.css?v=247">
+    <link rel="stylesheet" href="css/datasheet.css?v=247">
 
 </head>
 <body data-page="orbit">
@@ -617,16 +617,21 @@
     </section>
     <!-- /pages/whiteboard.html -->
 
-    <!-- pages/compiler.html -->
-    <section class="work-page page-compiler" id="page-compiler" hidden>
-        <div class="cp-view" id="compilerView">
-            <div class="cp-bar" role="toolbar" aria-label="Compiler">
-                <span class="work-count" id="compilerCount">No file</span>
+    <!-- pages/harvester.html -->
+    <section class="work-page page-harvester" id="page-harvester" hidden>
+        <div class="cp-view" id="harvesterView">
+            <div class="cp-bar" role="toolbar" aria-label="Harvester">
+                <div class="cp-modes" id="harvesterCount" role="radiogroup" aria-label="Document view">
+                    <button type="button" role="radio" aria-checked="true" data-cp-view="split" title="Split view">Split</button>
+                    <button type="button" role="radio" aria-checked="false" data-cp-view="original" title="Original document">Original</button>
+                    <button type="button" role="radio" aria-checked="false" data-cp-view="stripped" title="Stripped">Stripped</button>
+                </div>
                 <span class="cp-rule" aria-hidden="true"></span>
-                <button type="button" id="compilerUploadBtn">Upload</button>
+                <button type="button" id="harvesterUploadBtn">Upload</button>
+                <button type="button" id="harvesterNewBtn">New</button>
                 <div class="cp-dl">
-                    <button type="button" id="compilerDownloadBtn" disabled>Download</button>
-                    <div class="export-menu" id="compilerDownloadMenu" hidden>
+                    <button type="button" id="harvesterDownloadBtn" disabled>Download</button>
+                    <div class="export-menu" id="harvesterDownloadMenu" hidden>
                         <button type="button" data-cp-fmt="txt">Plain text</button>
                         <button type="button" data-cp-fmt="md">Markdown</button>
                         <button type="button" data-cp-fmt="json">JSON</button>
@@ -635,24 +640,28 @@
                         <button type="button" data-cp-fmt="xml">XML</button>
                     </div>
                 </div>
-                <button type="button" id="compilerInspectBtn" disabled>Inspect</button>
+                <button type="button" id="harvesterCopyBtn" disabled>Copy</button>
+                <button type="button" id="harvesterInspectBtn" disabled title="Use these details in the case">Use details</button>
+                <button type="button" id="harvesterClearBtn" disabled>Clear</button>
             </div>
-            <div class="cp-drop" id="compilerDrop">
-                <strong>Drop a file</strong>
-                <span>Tags and symbols stay in the record.</span>
+            <div class="cp-drop" id="harvesterDrop">
+                <strong>Drop a file, or write one here. The harvester keeps names, dates, usernames, accounts, passwords, and times.</strong>
                 <span class="cp-kinds">.txt · .md · .json · .html · .csv · .xml</span>
-                <button type="button" class="work-ghost" id="compilerDropBtn">Choose files</button>
+                <span class="cp-drop-acts">
+                    <button type="button" class="work-ghost" id="harvesterDropBtn">Choose files</button>
+                    <button type="button" class="work-ghost" id="harvesterDropNewBtn">New file</button>
+                </span>
             </div>
-            <div class="cp-result" id="compilerResult" hidden></div>
-            <div class="cp-load" id="compilerLoad" hidden>
+            <div class="cp-result" id="harvesterResult" hidden></div>
+            <div class="cp-load" id="harvesterLoad" hidden>
                 <span class="cp-spin" aria-hidden="true"></span>
-                <strong id="compilerLoadTitle">Compiling</strong>
-                <span id="compilerLoadHint">Lining up the file…</span>
+                <strong id="harvesterLoadTitle">Harvesting</strong>
+                <span id="harvesterLoadHint">Lining up the file…</span>
             </div>
         </div>
-        <input id="compilerFile" type="file" accept=".txt,.md,.json,.html,.htm,.csv,.xml,text/plain,text/markdown,application/json,text/html,text/csv,text/xml,application/xml" multiple hidden>
+        <input id="harvesterFile" type="file" accept=".txt,.md,.json,.html,.htm,.csv,.xml,text/plain,text/markdown,application/json,text/html,text/csv,text/xml,application/xml" multiple hidden>
     </section>
-    <!-- /pages/compiler.html -->
+    <!-- /pages/harvester.html -->
 
     <!-- pages/datasheet.html -->
     <section class="work-page page-datasheet" id="page-datasheet" hidden>
@@ -999,7 +1008,7 @@
                     <label class="set-row">
                         <span>
                             <b>Remember last page</b>
-                            <small>Reopen Orbit, Timeline, Whiteboard, Compiler, or Case File where you left off.</small>
+                            <small>Reopen Orbit, Timeline, Whiteboard, Harvester, or Case File where you left off.</small>
                         </span>
                         <span class="set-switch"><input id="setRememberPage" type="checkbox"><i></i></span>
                     </label>
@@ -1009,6 +1018,20 @@
                             <small>Hide the dotted grid on Orbit, Timeline, and Whiteboard.</small>
                         </span>
                         <span class="set-switch"><input id="setHideBg" type="checkbox"><i></i></span>
+                    </label>
+                    <label class="set-row">
+                        <span>
+                            <b>GitHub</b>
+                            <small>Show the GitHub button above the dock.</small>
+                        </span>
+                        <span class="set-switch"><input id="setShowGitHub" type="checkbox"><i></i></span>
+                    </label>
+                    <label class="set-row">
+                        <span>
+                            <b>Donate</b>
+                            <small>Show the donate button above the dock.</small>
+                        </span>
+                        <span class="set-switch"><input id="setShowDonate" type="checkbox"><i></i></span>
                     </label>
                     <div class="set-field">
                         <span>
@@ -1286,7 +1309,14 @@
     <a class="donate" id="donate" href="https://buy.stripe.com/9B63cu3RE2ouaKgcHLcjS00" target="_blank" rel="noopener noreferrer" hidden>Donate</a>
 
     <div class="dock-anchor">
-    <button type="button" class="bomb-tag" id="bombTag" hidden>Logic bomb active</button>
+    <div class="bomb-split" id="bombTag">
+        <a class="bomb-split-git" href="https://github.com/Delexoo/OrbINT" target="_blank" rel="noopener noreferrer" data-tip="GitHub" aria-label="Open OrbINT on GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        </a>
+        <a class="bomb-split-pay" href="https://buy.stripe.com/9B63cu3RE2ouaKgcHLcjS00" target="_blank" rel="noopener noreferrer" data-tip="Donate" aria-label="Donate with Stripe">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.72-4.36-9.33-8.08C.79 10.38.92 7.22 3.14 5.4 5.16 3.72 7.84 4.08 9.45 5.72L12 8.3l2.55-2.58c1.61-1.64 4.29-2 6.31-.32 2.22 1.82 2.35 4.98.47 7.52C18.72 16.64 12 21 12 21z"/></svg>
+        </a>
+    </div>
     <div class="dock" id="dock">
         <button class="dock-portfolio" type="button" id="dockPortfolio" data-tip="Casebook" aria-label="Casebook" aria-expanded="false" aria-controls="profilePanel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8l2 3h3v13H5V7h3z"/><path d="M8 4v3h8"/></svg>

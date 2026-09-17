@@ -1155,8 +1155,8 @@
     }
 
     function onFile(event) {
-        if (event.target.id === 'compilerFile') {
-            ingestCompilerFiles(event.target.files);
+        if (event.target.id === 'harvesterFile') {
+            ingestHarvesterFiles(event.target.files);
             event.target.value = '';
             return;
         }
@@ -1218,7 +1218,7 @@
         document.addEventListener('change', onFile, true);
         bindBoardPointers();
         bindTimelinePointers();
-        bindCompiler();
+        bindHarvester();
         document.addEventListener('pointermove', function (event) {
             if (event.pointerType === 'touch') return;
             setBoardDrift(event.clientX, event.clientY);
@@ -1237,7 +1237,8 @@
                 saved = localStorage.getItem('orbint-page') || settingValue('startPage', 'orbit') || 'orbit';
             }
         } catch (error) {}
-        if (['orbit', 'timeline', 'whiteboard', 'compiler', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
+        if (saved === 'compiler') saved = 'harvester';
+        if (['orbit', 'timeline', 'whiteboard', 'harvester', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
         setPage(saved);
         renderAll();
         window.addEventListener('resize', function () {
@@ -1282,7 +1283,7 @@
             return true;
         }
         if (page === 'datasheet') return true;
-        if (page === 'compiler') return true;
+        if (page === 'harvester') return true;
         return false;
     }
 
@@ -1311,5 +1312,5 @@
         pages: PAGES,
         renderDatasheet: renderDatasheet,
         scheduleDatasheet: scheduleDatasheet,
-        ingestCompilerFiles: ingestCompilerFiles
+        ingestHarvesterFiles: ingestHarvesterFiles
     };

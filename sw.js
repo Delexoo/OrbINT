@@ -1,4 +1,4 @@
-const CACHE = 'orbint-app-v218';
+const CACHE = 'orbint-app-v239';
 const PRECACHE = [
     './',
     './index.html',
@@ -9,7 +9,7 @@ const PRECACHE = [
     './css/orbit.css',
     './css/timeline.css',
     './css/whiteboard.css',
-    './css/compiler.css',
+    './css/harvester.css',
     './css/datasheet.css',
     './manifest.webmanifest',
     './icons/app-180.png',

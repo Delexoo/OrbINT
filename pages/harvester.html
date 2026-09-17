@@ -1,0 +1,43 @@
+    <section class="work-page page-harvester" id="page-harvester" hidden>
+        <div class="cp-view" id="harvesterView">
+            <div class="cp-bar" role="toolbar" aria-label="Harvester">
+                <div class="cp-modes" id="harvesterCount" role="radiogroup" aria-label="Document view">
+                    <button type="button" role="radio" aria-checked="true" data-cp-view="split" title="Split view">Split</button>
+                    <button type="button" role="radio" aria-checked="false" data-cp-view="original" title="Original document">Original</button>
+                    <button type="button" role="radio" aria-checked="false" data-cp-view="stripped" title="Stripped">Stripped</button>
+                </div>
+                <span class="cp-rule" aria-hidden="true"></span>
+                <button type="button" id="harvesterUploadBtn">Upload</button>
+                <button type="button" id="harvesterNewBtn">New</button>
+                <div class="cp-dl">
+                    <button type="button" id="harvesterDownloadBtn" disabled>Download</button>
+                    <div class="export-menu" id="harvesterDownloadMenu" hidden>
+                        <button type="button" data-cp-fmt="txt">Plain text</button>
+                        <button type="button" data-cp-fmt="md">Markdown</button>
+                        <button type="button" data-cp-fmt="json">JSON</button>
+                        <button type="button" data-cp-fmt="html">HTML</button>
+                        <button type="button" data-cp-fmt="csv">CSV</button>
+                        <button type="button" data-cp-fmt="xml">XML</button>
+                    </div>
+                </div>
+                <button type="button" id="harvesterCopyBtn" disabled>Copy</button>
+                <button type="button" id="harvesterInspectBtn" disabled title="Use these details in the case">Use details</button>
+                <button type="button" id="harvesterClearBtn" disabled>Clear</button>
+            </div>
+            <div class="cp-drop" id="harvesterDrop">
+                <strong>Drop a file, or write one here. The harvester keeps names, dates, usernames, accounts, passwords, and times.</strong>
+                <span class="cp-kinds">.txt · .md · .json · .html · .csv · .xml</span>
+                <span class="cp-drop-acts">
+                    <button type="button" class="work-ghost" id="harvesterDropBtn">Choose files</button>
+                    <button type="button" class="work-ghost" id="harvesterDropNewBtn">New file</button>
+                </span>
+            </div>
+            <div class="cp-result" id="harvesterResult" hidden></div>
+            <div class="cp-load" id="harvesterLoad" hidden>
+                <span class="cp-spin" aria-hidden="true"></span>
+                <strong id="harvesterLoadTitle">Harvesting</strong>
+                <span id="harvesterLoadHint">Lining up the file…</span>
+            </div>
+        </div>
+        <input id="harvesterFile" type="file" accept=".txt,.md,.json,.html,.htm,.csv,.xml,text/plain,text/markdown,application/json,text/html,text/csv,text/xml,application/xml" multiple hidden>
+    </section>

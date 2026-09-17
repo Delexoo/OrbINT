@@ -1,0 +1,18 @@
+alias=RedLattice
+real_name = Camille Frost
+mail:redlattice@example.com
+secondary-mail :: cam.frost@example.org
+
+usernames {
+ github -> redlattice
+ reddit -> u/red_lattice
+ discord -> red.lattice
+}
+
+location? = "Midwest US"
+created account: 2019/07/04
+
+NOTES///
+username overlap = strong
+location = weak
+job = unknown

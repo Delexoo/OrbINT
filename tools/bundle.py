@@ -6,9 +6,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CASE_ORDER = ["core", "datasheet", "timeline", "whiteboard", "compiler", "intel", "report", "boot"]
+CASE_ORDER = ["core", "datasheet", "timeline", "whiteboard", "harvester", "intel", "report", "boot"]
 APP_ORDER = ["orbit-settings", "orbit-fields", "orbit-library", "crypto-share", "orbit-map"]
-PAGES = ["orbit", "timeline", "whiteboard", "compiler", "datasheet", "chrome"]
+PAGES = ["orbit", "timeline", "whiteboard", "harvester", "datasheet", "chrome"]
 HEADER_RE = re.compile(r"^/\*.*?\*/\n", re.S)
 
 
@@ -50,7 +50,7 @@ def bundle() -> None:
         CASE_ORDER,
         ROOT / "investigation.js",
         True,
-        "/* Assembled from js/{core,datasheet,timeline,whiteboard,compiler,intel,report,boot}.js\n"
+        "/* Assembled from js/{core,datasheet,timeline,whiteboard,harvester,intel,report,boot}.js\n"
         "   Edit those files, then run: python tools/bundle.py */\n",
     )
     assemble(

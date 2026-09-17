@@ -40,6 +40,8 @@
             stealthTab: false,
             largeType: false,
             investigatorMode: true,
+            showGitHub: true,
+            showDonate: true,
             shareApiUrl: 'http://127.0.0.1:8788',
             collabWsUrl: 'http://127.0.0.1:8788'
         };
@@ -63,6 +65,7 @@
                     if (saved.hideBackground == null && saved.boardGrid === false) next.hideBackground = true;
                     if (next.logicBombPeriod === '4w') next.logicBombPeriod = '1m';
                     if (next.logicBombPeriod === '18m') next.logicBombPeriod = '12m';
+                    if (next.startPage === 'compiler') next.startPage = 'harvester';
                     return next;
                 }
             } catch (error) {}
@@ -204,7 +207,7 @@
                     { value: 'orbit', label: 'Orbit' },
                     { value: 'timeline', label: 'Timeline' },
                     { value: 'whiteboard', label: 'Whiteboard' },
-                    { value: 'compiler', label: 'Compiler' },
+                    { value: 'harvester', label: 'Harvester' },
                     { value: 'datasheet', label: 'Case File' }
                 ]
             }
@@ -384,8 +387,18 @@
 
         function syncBombTag() {
             const tag = document.getElementById('bombTag');
-            if (!tag) return;
-            tag.hidden = !appSettings.logicBomb;
+            const git = tag && tag.querySelector('.bomb-split-git');
+            const pay = tag && tag.querySelector('.bomb-split-pay');
+            const showGit = appSettings.showGitHub !== false;
+            const showPay = appSettings.showDonate !== false;
+            if (git) git.hidden = !showGit;
+            if (pay) pay.hidden = !showPay;
+            if (tag) {
+                tag.hidden = !showGit && !showPay;
+                tag.classList.toggle('is-solo', !!(showGit !== showPay) && (showGit || showPay));
+            }
+            const phone = document.getElementById('phoneDonate');
+            if (phone) phone.hidden = !showPay;
         }
 
         function syncSettingsForm() {
@@ -401,6 +414,8 @@
                 setLargeType: 'largeType',
                 setRememberPage: 'rememberPage',
                 setHideBg: 'hideBackground',
+                setShowGitHub: 'showGitHub',
+                setShowDonate: 'showDonate',
                 setExportNoPhotos: 'exportNoPhotos',
                 setInvestigator: 'investigatorMode'
             };
@@ -2310,7 +2325,7 @@
             if (window.__orbintToolkitWait) return window.__orbintToolkitWait;
             window.__orbintToolkitWait = new Promise(function (resolve) {
                 const s = document.createElement('script');
-                s.src = 'osint-tools.js?v=218';
+                s.src = 'osint-tools.js?v=232';
                 s.onload = function () {
                     try { window.dispatchEvent(new Event('orbint-toolkit-ready')); } catch (error) {}
                     resolve(window.OSINT_TOOLKIT || null);
@@ -6312,8 +6327,7 @@
             const drop = '<button type="button" class="fact-drop" data-sheet-hide="' + field.id + '" aria-label="Delete" title="Delete">×</button>';
             const fact = lastFactRecord(field.id);
             const detailsOpen = factDetailsOpen(field.id);
-            const hasMeta = !!(fact && (fact.source || fact.confidence || fact.method || fact.capturedAt));
-            const more = '<button type="button" class="fact-more' + (hasMeta ? ' has-meta' : '') + '" data-fact-more="' + field.id + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '" aria-label="Details" title="Details">' + SHEET_CHEVRON + '</button>';
+            const more = '<button type="button" class="fact-more" data-fact-more="' + field.id + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '" aria-label="Details" title="Details">' + SHEET_CHEVRON + '</button>';
             return '<div class="fact-item' + (detailsOpen ? ' is-open' : '') + '" data-fact-item="' + field.id + '">' +
                 '<div class="fact-row sheet' + (isNotes ? ' wrap' : '') + (secret ? ' secret' : '') + (maps ? ' place' : '') + (platformField ? ' platform' : '') + (activeField === field.id ? ' active' : '') + '" data-focus="' + field.id + '">' +
                 '<span class="fact-label">' + escapeHtml(field.label) + '</span>' +
@@ -9795,6 +9809,7 @@
                     });
                 }
                 add(document.getElementById('dock'), 28);
+                add(document.getElementById('bombTag'), 16);
                 add(document.getElementById('donate'), 22);
                 add(document.getElementById('workNav') || document.getElementById('pageSwitch'), 22);
                 return boxes;
@@ -11285,7 +11300,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=218', './osint-tools.js', './osint-tools.js?v=218', './investigation.js', './investigation.js?v=218', './css/base.css?v=218', './css/orbit.css?v=218', './css/timeline.css?v=218', './css/whiteboard.css?v=218', './css/compiler.css?v=218', './css/datasheet.css?v=218', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=247', './osint-tools.js', './osint-tools.js?v=247', './investigation.js', './investigation.js?v=247', './css/base.css?v=247', './css/orbit.css?v=247', './css/timeline.css?v=247', './css/whiteboard.css?v=247', './css/harvester.css?v=247', './css/datasheet.css?v=247', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));
@@ -12064,12 +12079,6 @@
             if (sheet && !sheet.hidden) closeSettings();
             else openSettings();
         });
-        const bombTag = document.getElementById('bombTag');
-        if (bombTag) bombTag.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            openSettings();
-        });
         const resetSheet = document.getElementById('resetConfirm');
         document.getElementById('resetCancel').addEventListener('click', closeResetConfirm);
         document.getElementById('resetConfirmBtn').addEventListener('click', applyResetCase);
@@ -12115,6 +12124,8 @@
             setLargeType: 'largeType',
             setRememberPage: 'rememberPage',
             setHideBg: 'hideBackground',
+            setShowGitHub: 'showGitHub',
+            setShowDonate: 'showDonate',
             setExportNoPhotos: 'exportNoPhotos',
             setInvestigator: 'investigatorMode'
         };

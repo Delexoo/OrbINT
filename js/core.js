@@ -4,7 +4,7 @@
         { id: 'orbit', label: 'OrbINT', kicker: 'Workspace', blurb: 'Orbit-style profile for names, usernames, emails, phones, domains, companies, and other identifiers.' },
         { id: 'timeline', label: 'Timeline', kicker: 'Chronology', blurb: 'Events and discoveries in order — who, when, evidence, and source.' },
         { id: 'whiteboard', label: 'Whiteboard', kicker: 'Diagram', blurb: 'Flowchart shapes and case cards on one board, including investigation playbooks.' },
-        { id: 'compiler', label: 'Compiler', kicker: 'Processor', blurb: 'Upload messy files. Keep every tag and symbol — the compiler only rearranges them so the facts are easier to read.' },
+        { id: 'harvester', label: 'Harvester', kicker: 'Processor', blurb: 'Upload messy files in any layout. The harvester keeps names, dates, usernames, accounts, passwords, and times — and cuts the rest.' },
         { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' }
     ];
 
@@ -307,7 +307,7 @@
             timelineView: { x: 48, y: 40, z: 1 },
             evidence: [],
             whiteboard: { x: 0, y: 0, z: 1, nodes: [], links: [], grid: true },
-            compiler: { files: [], hits: [], ready: false },
+            harvester: { files: [], hits: [], ready: false, view: 'split', split: 50 },
             flowchart: { preset: 'username', checks: {}, notes: {} },
             intel: { host: '' }
         };
@@ -2230,11 +2230,21 @@
                 next.flowchart.notes = raw.flowchart.notes && typeof raw.flowchart.notes === 'object' ? raw.flowchart.notes : {};
             }
             next.intel.host = (raw.intel && raw.intel.host) || '';
-            if (raw.compiler && typeof raw.compiler === 'object') {
-                next.compiler.files = Array.isArray(raw.compiler.files) ? raw.compiler.files : [];
-                next.compiler.hits = Array.isArray(raw.compiler.hits) ? raw.compiler.hits : [];
-                next.compiler.ready = !!raw.compiler.ready;
-                next.compiler.at = raw.compiler.at || '';
+            const harvestedIn = (raw.harvester && typeof raw.harvester === 'object')
+                ? raw.harvester
+                : (raw.compiler && typeof raw.compiler === 'object')
+                    ? raw.compiler
+                    : null;
+            if (harvestedIn) {
+                next.harvester.files = Array.isArray(harvestedIn.files) ? harvestedIn.files : [];
+                next.harvester.hits = Array.isArray(harvestedIn.hits) ? harvestedIn.hits : [];
+                next.harvester.ready = !!harvestedIn.ready;
+                next.harvester.at = harvestedIn.at || '';
+                next.harvester.view = harvestedIn.view === 'original' || harvestedIn.view === 'stripped'
+                    ? harvestedIn.view
+                    : 'split';
+                const split = Number(harvestedIn.split);
+                next.harvester.split = isFinite(split) ? Math.min(78, Math.max(22, split)) : 50;
             }
         }
         data = next;
@@ -2292,6 +2302,7 @@
     function setPage(id) {
         if (id === 'flowchart') id = 'whiteboard';
         if (id === 'analytics' || id === 'evidence') id = 'orbit';
+        if (id === 'compiler') id = 'harvester';
         const next = PAGES.some(function (item) { return item.id === id; }) ? id : 'orbit';
         const prev = page;
         if (page === 'whiteboard' && next !== 'whiteboard') {
@@ -2359,7 +2370,7 @@
             syncTimelineIsland();
         }
         if (page === 'whiteboard') renderWhiteboard();
-        if (page === 'compiler') renderCompiler();
+        if (page === 'harvester') renderHarvester();
         if (page === 'datasheet') renderDatasheet();
         try {
             if (window.OrbINTSettings && OrbINTSettings.get('rememberPage') === false) {
@@ -2382,7 +2393,7 @@
             orbit: 'Add field',
             timeline: 'Add event',
             whiteboard: 'Add shape',
-            compiler: 'Upload file'
+            harvester: 'Upload file'
         };
         const label = labels[page] || labels.orbit;
         if (add) {
@@ -2420,8 +2431,8 @@
             });
             return true;
         }
-        if (page === 'compiler') {
-            openCompilerPicker();
+        if (page === 'harvester') {
+            openHarvesterPicker();
             return true;
         }
         return false;
@@ -2538,7 +2549,7 @@
         renderPageSwitch();
         renderTimeline();
         renderWhiteboard();
-        renderCompiler();
+        renderHarvester();
         renderDatasheet();
     }
 

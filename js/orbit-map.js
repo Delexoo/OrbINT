@@ -767,6 +767,7 @@
                     });
                 }
                 add(document.getElementById('dock'), 28);
+                add(document.getElementById('bombTag'), 16);
                 add(document.getElementById('donate'), 22);
                 add(document.getElementById('workNav') || document.getElementById('pageSwitch'), 22);
                 return boxes;
@@ -2257,7 +2258,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=218', './osint-tools.js', './osint-tools.js?v=218', './investigation.js', './investigation.js?v=218', './css/base.css?v=218', './css/orbit.css?v=218', './css/timeline.css?v=218', './css/whiteboard.css?v=218', './css/compiler.css?v=218', './css/datasheet.css?v=218', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=247', './osint-tools.js', './osint-tools.js?v=247', './investigation.js', './investigation.js?v=247', './css/base.css?v=247', './css/orbit.css?v=247', './css/timeline.css?v=247', './css/whiteboard.css?v=247', './css/harvester.css?v=247', './css/datasheet.css?v=247', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));
@@ -3036,12 +3037,6 @@
             if (sheet && !sheet.hidden) closeSettings();
             else openSettings();
         });
-        const bombTag = document.getElementById('bombTag');
-        if (bombTag) bombTag.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            openSettings();
-        });
         const resetSheet = document.getElementById('resetConfirm');
         document.getElementById('resetCancel').addEventListener('click', closeResetConfirm);
         document.getElementById('resetConfirmBtn').addEventListener('click', applyResetCase);
@@ -3087,6 +3082,8 @@
             setLargeType: 'largeType',
             setRememberPage: 'rememberPage',
             setHideBg: 'hideBackground',
+            setShowGitHub: 'showGitHub',
+            setShowDonate: 'showDonate',
             setExportNoPhotos: 'exportNoPhotos',
             setInvestigator: 'investigatorMode'
         };

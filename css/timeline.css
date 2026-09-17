@@ -3,6 +3,11 @@
 @media (max-width: 820px) {
 
         body[data-page="timeline"] #dockConnect { display: grid !important; }
+
+        .tl-island {
+            top: 8px;
+            max-width: calc(100vw - 16px);
+        }
 }
 
 

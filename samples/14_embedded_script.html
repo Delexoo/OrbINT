@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Data Record</title>
+</head>
+<body>
+  <h1>EchoVale</h1>
+  <div id="output"></div>
+
+  <script>
+    const record = {
+      name: "Sienna Cross",
+      alias: "EchoVale",
+      email: "echovale@example.com",
+      region: "Utah",
+      handles: {
+        github: "echo-vale",
+        discord: "echovale",
+        reddit: "u/echo_vale"
+      },
+      verified: false
+    };
+
+    document.getElementById("output").textContent =
+      JSON.stringify(record, null, 2);
+  </script>
+</body>
+</html>

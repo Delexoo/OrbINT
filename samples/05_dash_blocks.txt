@@ -1,0 +1,21 @@
+-- IDENTITY --
+KiteSignal / Morgan Vale
+born: 2000-11-28
+city: Example Heights
+state: OR
+
+-- DIGITAL --
+mail: kitesignal@example.net
+gh: kite-signal
+dc: KiteSignal#0000
+reddit: /u/kitesignal
+
+-- DEVICES --
+laptop = Linux
+desktop = Windows
+browser = Firefox
+
+-- FLAGS --
+[?] current city
+[+] username correlation
+[-] employment not confirmed

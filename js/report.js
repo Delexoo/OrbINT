@@ -1019,7 +1019,7 @@
         var fit = view && view.querySelector('.ds-fit');
         if (!view || !fit) return;
         var n = fit.querySelectorAll('.ds-page').length || 1;
-        var avail = Math.max(280, view.clientWidth - 48);
+        var avail = Math.max(240, view.clientWidth - (view.clientWidth < 820 ? 16 : 48));
         var s = Math.min(1.15, Math.max(0.42, avail / 612));
         fit.style.setProperty('--ds-scale', String(s));
         fit.style.height = (n * 792 * s + (n - 1) * 28 * s + 8) + 'px';
