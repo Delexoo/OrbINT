@@ -10624,7 +10624,7 @@
             if (/^https?:\/\//i.test(href) && !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(href)) {
                 return href.replace(/\/index\.html$/i, '/');
             }
-            return 'https://delexoo.github.io/OrbINT/';
+            return 'https://orbint.net/';
         }
 
         const QR_EXP = new Uint8Array(512);

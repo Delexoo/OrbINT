@@ -8,7 +8,7 @@
 
 A local desk for collecting, organizing, and managing open-source reconnaissance.
 
-[Open OrbINT](https://delexoo.github.io/OrbINT/)
+[Open OrbINT](https://orbint.net/)
 
 <img src="media/orbint.gif" alt="OrbINT in use" width="720">
 
@@ -31,7 +31,7 @@ It runs entirely in the browser. There is no account, no remote database, and no
 
 ## How it works
 
-1. Open the [live app](https://delexoo.github.io/OrbINT/), or clone this repository and open `index.html`.
+1. Open the [live app](https://orbint.net/), or clone this repository and open `index.html`.
 2. Name the subject in the hub.
 3. Click a field, enter a value, and use the magnifying glass to search from it.
 4. Keep a timeline and a whiteboard as the case develops.
