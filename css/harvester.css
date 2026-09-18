@@ -29,10 +29,12 @@
     border-radius: 12px;
     background: rgba(12, 12, 14, 0.94);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    overflow: visible;
     user-select: none;
 }
 
 .cp-modes {
+    position: relative;
     display: inline-flex;
     align-items: center;
     height: 36px;
@@ -41,10 +43,29 @@
     border: 1px solid var(--line);
     border-radius: 9px;
     background: #0a0a0c;
+    isolation: isolate;
 }
+
+.cp-mode-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    height: 30px;
+    width: 0;
+    border-radius: 6px;
+    background: #1c1c20;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    pointer-events: none;
+    z-index: 0;
+    transition: left 0.34s cubic-bezier(0.22, 1, 0.36, 1), width 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cp-mode-thumb.is-instant { transition: none; }
 
 .cp-modes button {
     appearance: none;
+    position: relative;
+    z-index: 1;
     height: 30px;
     padding: 0 11px;
     border: 0;
@@ -56,17 +77,22 @@
     font-weight: 600;
     letter-spacing: -0.01em;
     white-space: nowrap;
+    transition: color 0.22s ease;
 }
 
 .cp-modes button:hover {
     color: var(--text);
-    background: #141416;
 }
 
 .cp-modes button.is-on,
 .cp-modes button[aria-checked="true"] {
-    background: #1c1c20;
+    background: transparent;
     color: var(--text);
+}
+
+.cp-modes:not(:has(.cp-mode-thumb)) button.is-on,
+.cp-modes:not(:has(.cp-mode-thumb)) button[aria-checked="true"] {
+    background: #1c1c20;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
@@ -93,6 +119,58 @@
     color: var(--text);
     cursor: pointer;
     font-size: 13px;
+}
+
+.cp-bar > button.cp-ico,
+.cp-bar .cp-dl > button.cp-ico {
+    position: relative;
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+}
+
+.cp-bar > button.cp-ico svg,
+.cp-bar .cp-dl > button.cp-ico svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+.cp-bar > button.cp-ico.is-copied,
+.cp-bar .cp-dl > button.cp-ico.is-copied {
+    color: var(--accent);
+}
+
+.cp-bar > button.cp-ico::after,
+.cp-bar .cp-dl > button.cp-ico::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 6px);
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #18181b;
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 4;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.cp-bar > button.cp-ico:hover::after,
+.cp-bar > button.cp-ico:focus-visible::after,
+.cp-bar .cp-dl > button.cp-ico:hover::after,
+.cp-bar .cp-dl > button.cp-ico:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
 }
 
 .cp-bar > button:hover,
@@ -361,8 +439,11 @@
 }
 
 .cp-pane-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
-    padding: 5px 12px;
+    padding: 4px 8px 4px 12px;
     border-bottom: 1px solid var(--line);
     background: var(--bg);
     color: var(--faint);
@@ -370,6 +451,71 @@
     font-weight: 500;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+.cp-pane-name { flex: 1; min-width: 0; }
+
+.cp-pane-copy {
+    appearance: none;
+    position: relative;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.cp-pane-copy svg {
+    width: 12px;
+    height: 12px;
+    display: block;
+}
+
+.cp-pane-copy:hover { background: #18181b; color: var(--text); }
+
+.cp-pane-copy:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.cp-pane-copy.is-copied { color: var(--accent); }
+
+.cp-pane-copy::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 4px);
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #18181b;
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 5;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.cp-pane-copy:hover::after,
+.cp-pane-copy:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
 }
 
 .cp-orig-pane .cp-pane-label { box-shadow: inset 2px 0 0 #fca5a5; }
@@ -749,6 +895,24 @@ body.cp-splitting * {
     }
 }
 
+@keyframes cp-slide-next {
+    from { opacity: 0; transform: translateX(28px); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes cp-slide-prev {
+    from { opacity: 0; transform: translateX(-28px); }
+    to { opacity: 1; transform: none; }
+}
+
+.cp-stack.cp-slide-next {
+    animation: cp-slide-next 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cp-stack.cp-slide-prev {
+    animation: cp-slide-prev 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .cp-in .cp-diff-head {
     animation: cp-ease-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -770,6 +934,9 @@ body.cp-splitting * {
 
 @media (prefers-reduced-motion: reduce) {
     .cp-spin { animation: none; }
+    .cp-mode-thumb { transition: none; }
+    .cp-stack.cp-slide-next,
+    .cp-stack.cp-slide-prev,
     .cp-in .cp-diff-head,
     .cp-in thead,
     .cp-in .cp-pane-label,
@@ -778,6 +945,9 @@ body.cp-splitting * {
 }
 
 html.reduce-motion .cp-spin { animation: none; }
+html.reduce-motion .cp-mode-thumb { transition: none; }
+html.reduce-motion .cp-stack.cp-slide-next,
+html.reduce-motion .cp-stack.cp-slide-prev,
 html.reduce-motion .cp-in .cp-diff-head,
 html.reduce-motion .cp-in thead,
 html.reduce-motion .cp-in .cp-pane-label,

@@ -2258,7 +2258,7 @@
                 ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
                 : Promise.resolve();
             const bustHttp = function () {
-                const files = ['./', './index.html', './app.js', './app.js?v=255', './osint-tools.js', './osint-tools.js?v=255', './investigation.js', './investigation.js?v=255', './css/base.css?v=255', './css/orbit.css?v=255', './css/timeline.css?v=255', './css/whiteboard.css?v=255', './css/harvester.css?v=255', './css/datasheet.css?v=255', './sw.js', './manifest.webmanifest'];
+                const files = ['./', './index.html', './app.js', './app.js?v=263', './osint-tools.js', './osint-tools.js?v=263', './investigation.js', './investigation.js?v=263', './css/base.css?v=263', './css/orbit.css?v=263', './css/timeline.css?v=263', './css/whiteboard.css?v=263', './css/harvester.css?v=263', './css/datasheet.css?v=263', './sw.js', './manifest.webmanifest'];
                 return Promise.all(files.map(function (path) {
                     return fetch(path, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
                 }));

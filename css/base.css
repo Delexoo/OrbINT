@@ -1773,7 +1773,7 @@ body.resizing-sidebar * {
         }
 
         body.panel-open .work-nav {
-            background: rgba(12, 12, 14, 0.98);
+            display: none !important;
         }
 
         .page-switch {
@@ -1790,10 +1790,6 @@ body.resizing-sidebar * {
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-x: contain;
             touch-action: pan-x;
-        }
-
-        body.panel-open .page-switch {
-            display: flex !important;
         }
 
         .page-switch button {

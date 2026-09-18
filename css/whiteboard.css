@@ -202,6 +202,7 @@
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
     pointer-events: auto;
     isolation: isolate;
+    overflow: visible;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -382,6 +383,34 @@
     height: 18px;
     margin: 0 4px;
     background: var(--line);
+}
+
+.board-toolbar > button[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 6px);
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #18181b;
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 8;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.board-toolbar > button[data-tip]:hover::after,
+.board-toolbar > button[data-tip]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
 }
 
 

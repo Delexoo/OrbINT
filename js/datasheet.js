@@ -97,9 +97,13 @@
         dsMarkup = html;
         const y = view.scrollTop;
         view.innerHTML = html;
+        applyDatasheetSpoilers();
         sizeDatasheet();
         view.scrollTop = y;
-        applyDatasheetSpoilers();
+        requestAnimationFrame(function () {
+            sizeDatasheet();
+            view.scrollTop = y;
+        });
     }
 
     function scheduleDatasheet() {

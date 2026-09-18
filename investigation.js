@@ -2300,6 +2300,7 @@
             }
             el.hidden = item.id !== activeId;
         });
+        if (activeId === 'datasheet') sizeDatasheet();
     }
 
     function setPage(id) {
@@ -2672,9 +2673,13 @@
         dsMarkup = html;
         const y = view.scrollTop;
         view.innerHTML = html;
+        applyDatasheetSpoilers();
         sizeDatasheet();
         view.scrollTop = y;
-        applyDatasheetSpoilers();
+        requestAnimationFrame(function () {
+            sizeDatasheet();
+            view.scrollTop = y;
+        });
     }
 
     function scheduleDatasheet() {
@@ -6915,6 +6920,7 @@
     let cpBusy = false;
     let cpBound = false;
     let cpReveal = false;
+    let cpModeThumbReady = false;
     const cpEditTimers = {};
 
     function harvesterState() {
@@ -7897,15 +7903,44 @@
         return view === 'original' || view === 'stripped' ? view : 'split';
     }
 
+    function syncCpModeThumb(instant) {
+        const wrap = $('harvesterCount');
+        if (!wrap) return;
+        let thumb = wrap.querySelector('.cp-mode-thumb');
+        if (!thumb) {
+            thumb = document.createElement('span');
+            thumb.className = 'cp-mode-thumb';
+            thumb.setAttribute('aria-hidden', 'true');
+            wrap.insertBefore(thumb, wrap.firstChild);
+            instant = true;
+        }
+        const on = wrap.querySelector('[aria-checked="true"]') || wrap.querySelector('.is-on');
+        if (!on) return;
+        const w = on.offsetWidth;
+        if (!(w > 0)) return;
+        const snap = instant || !cpModeThumbReady || reduceMotion();
+        if (snap) thumb.classList.add('is-instant');
+        else thumb.classList.remove('is-instant');
+        thumb.style.left = on.offsetLeft + 'px';
+        thumb.style.width = w + 'px';
+        cpModeThumbReady = true;
+        if (snap && !reduceMotion()) {
+            void thumb.offsetWidth;
+            thumb.classList.remove('is-instant');
+        }
+    }
+
     function setHarvesterView(view) {
         const next = view === 'original' || view === 'stripped' ? view : 'split';
         const st = harvesterState();
-        if (st.view === next) {
+        const prev = harvesterView();
+        if (prev === next) {
             harvesterSummary();
             return;
         }
+        const order = ['split', 'original', 'stripped'];
         st.view = next;
-        renderHarvester();
+        renderHarvester({ slide: order.indexOf(next) - order.indexOf(prev) });
         schedulePersist();
     }
 
@@ -7920,6 +7955,7 @@
                 btn.setAttribute('aria-checked', on ? 'true' : 'false');
                 btn.classList.toggle('is-on', on);
             });
+            requestAnimationFrame(function () { syncCpModeThumb(false); });
         }
         const dl = $('harvesterDownloadBtn');
         const cpy = $('harvesterCopyBtn');
@@ -8190,8 +8226,22 @@
         }).join('');
     }
 
+    function cpPaneCopySvg() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="13" rx="1.6"/><path d="M5 15V5a1.6 1.6 0 0 1 1.6-1.6H15"/></svg>';
+    }
+
+    function cpPaneLabel(file, side, label) {
+        const i = file && file._i != null ? file._i : 0;
+        const tip = 'Copy ' + label.toLowerCase();
+        return '<div class="cp-pane-label">' +
+            '<span class="cp-th-pip" aria-hidden="true"></span>' +
+            '<span class="cp-pane-name">' + label + '</span>' +
+            '<button type="button" class="cp-ico cp-pane-copy" data-cp-pane-copy="' + side + '" data-cp-file="' + i + '" data-tip="' + tip + '" aria-label="' + tip + '">' +
+            cpPaneCopySvg() + '</button></div>';
+    }
+
     function renderStrippedTable(file) {
-        return '<div class="cp-pane-label"><span class="cp-th-pip" aria-hidden="true"></span>Stripped</div>' +
+        return cpPaneLabel(file, 'stripped', 'Stripped') +
             '<div class="cp-strip-rows">' + renderStrippedBody(file) + '</div>';
     }
 
@@ -8202,7 +8252,7 @@
             cpFileChrome(file, '<span class="cp-diff-stat"><span class="cp-diff-plus">+' + c.plus + '</span><span class="cp-diff-minus">−' + c.minus + '</span></span>') +
             '<div class="cp-diff-body">' +
             '<div class="cp-orig-pane">' +
-            '<div class="cp-pane-label"><span class="cp-th-pip" aria-hidden="true"></span>Original</div>' +
+            cpPaneLabel(file, 'original', 'Original') +
             renderEditor(file) + '</div>' +
             '<div class="cp-ext-pane">' + renderStrippedTable(file) + '</div>' +
             '<div class="cp-split-gutter" role="separator" aria-orientation="vertical" aria-label="Resize original and stripped" title="Drag to resize" aria-valuemin="22" aria-valuemax="78" aria-valuenow="' + Math.round(harvesterSplitPct()) + '" tabindex="0"></div>' +
@@ -8243,7 +8293,7 @@
         return '<section class="cp-diff is-single is-original" data-cp-card="' + i + '" aria-label="Original document">' +
             cpFileChrome(file, '<span class="cp-diff-stat">' + lines + (lines === 1 ? ' line' : ' lines') + '</span>') +
             '<div class="cp-orig-pane">' +
-            '<div class="cp-pane-label"><span class="cp-th-pip" aria-hidden="true"></span>Original</div>' +
+            cpPaneLabel(file, 'original', 'Original') +
             renderEditor(file) + '</div></section>';
     }
 
@@ -8263,7 +8313,7 @@
         return renderSplitDiff(file);
     }
 
-    function renderHarvester() {
+    function renderHarvester(opts) {
         const drop = $('harvesterDrop');
         const result = $('harvesterResult');
         const st = harvesterState();
@@ -8279,7 +8329,9 @@
         result.hidden = false;
         const reveal = cpReveal && !reduceMotion();
         cpReveal = false;
-        result.innerHTML = '<div class="cp-stack' + (reveal ? ' cp-in' : '') + '">' + (st.files || []).map(renderHarvesterFile).join('') + '</div>';
+        const slide = opts && opts.slide && !reduceMotion() && !reveal;
+        const slideClass = slide ? (opts.slide > 0 ? ' cp-slide-next' : ' cp-slide-prev') : '';
+        result.innerHTML = '<div class="cp-stack' + (reveal ? ' cp-in' : '') + slideClass + '">' + (st.files || []).map(renderHarvesterFile).join('') + '</div>';
         if (reveal) {
             result.querySelectorAll('.cp-strip-row').forEach(function (row, i) {
                 row.style.setProperty('--cp-i', String(i));
@@ -8450,7 +8502,7 @@
         const drop = $('harvesterDrop');
         if (drop) {
             const strong = drop.querySelector('strong');
-            if (strong) strong.textContent = 'Drop or write a file. Keeps names, dates, accounts, passwords, times, age, and other key data.';
+            if (strong) strong.textContent = 'Drop or write a file.';
         }
         renderHarvester();
         schedulePersist();
@@ -8516,6 +8568,22 @@
 
     function cpMarkCopied(btn, ok) {
         if (!btn) return;
+        if (btn.classList.contains('cp-ico')) {
+            if (!btn.getAttribute('data-cp-idle')) {
+                btn.setAttribute('data-cp-idle', btn.getAttribute('data-tip') || btn.getAttribute('aria-label') || 'Copy');
+            }
+            const idle = btn.getAttribute('data-cp-idle');
+            btn.setAttribute('aria-label', ok ? 'Copied' : 'Copy failed');
+            btn.setAttribute('data-tip', ok ? 'Copied' : 'Copy failed');
+            btn.classList.toggle('is-copied', !!ok);
+            clearTimeout(btn._cpCopyT);
+            btn._cpCopyT = setTimeout(function () {
+                btn.setAttribute('aria-label', idle);
+                btn.setAttribute('data-tip', idle);
+                btn.classList.remove('is-copied');
+            }, 1500);
+            return;
+        }
         const idle = btn.getAttribute('data-cp-idle') || 'Copy';
         btn.setAttribute('data-cp-idle', idle);
         btn.textContent = ok ? 'Copied' : 'Copy failed';
@@ -8563,6 +8631,27 @@
         } catch (error) {
             return false;
         }
+    }
+
+    function harvesterPaneText(fileIndex, side) {
+        const st = harvesterState();
+        const file = st.files && st.files[fileIndex];
+        if (!file) return '';
+        if (side === 'original') {
+            const ta = document.querySelector('.cp-editor[data-cp-file="' + fileIndex + '"]');
+            return ta ? String(ta.value || '') : String(file.raw || '');
+        }
+        return cpBuildSplit(file.raw, file.hits || []).filter(function (row) {
+            return row.rkind === 'add';
+        }).map(function (row) {
+            return row.rtext;
+        }).join('\n');
+    }
+
+    function copyHarvesterPane(fileIndex, side, btn) {
+        const st = harvesterState();
+        if (!st.ready || !(st.files || []).length) return;
+        cpWriteClipboard(harvesterPaneText(fileIndex, side), btn);
     }
 
     function copyHarvesterDiff(fileIndex, btn) {
@@ -8791,6 +8880,7 @@
             }
         });
         window.addEventListener('resize', function () {
+            syncCpModeThumb(true);
             if (!harvesterState().ready) return;
             applyHarvesterSplit(harvesterSplitPct(), false);
         });
@@ -8820,6 +8910,12 @@
             }
             if (event.target.closest('#harvesterCopyBtn')) {
                 copyHarvesterDiff(null, event.target.closest('#harvesterCopyBtn'));
+                return;
+            }
+            const paneCopy = event.target.closest('[data-cp-pane-copy]');
+            if (paneCopy) {
+                const i = parseInt(paneCopy.getAttribute('data-cp-file'), 10);
+                copyHarvesterPane(isNaN(i) ? 0 : i, paneCopy.getAttribute('data-cp-pane-copy'), paneCopy);
                 return;
             }
             const copyOne = event.target.closest('[data-cp-copy]');

@@ -2297,6 +2297,7 @@
             }
             el.hidden = item.id !== activeId;
         });
+        if (activeId === 'datasheet') sizeDatasheet();
     }
 
     function setPage(id) {

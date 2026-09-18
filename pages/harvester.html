@@ -2,15 +2,22 @@
         <div class="cp-view" id="harvesterView">
             <div class="cp-bar" role="toolbar" aria-label="Harvester">
                 <div class="cp-modes" id="harvesterCount" role="radiogroup" aria-label="Document view">
+                    <span class="cp-mode-thumb" aria-hidden="true"></span>
                     <button type="button" role="radio" aria-checked="true" data-cp-view="split" title="Split view">Split</button>
                     <button type="button" role="radio" aria-checked="false" data-cp-view="original" title="Original document">Original</button>
                     <button type="button" role="radio" aria-checked="false" data-cp-view="stripped" title="Stripped">Stripped</button>
                 </div>
                 <span class="cp-rule" aria-hidden="true"></span>
-                <button type="button" id="harvesterUploadBtn">Upload</button>
-                <button type="button" id="harvesterNewBtn">New</button>
+                <button type="button" class="cp-ico" id="harvesterUploadBtn" data-tip="Upload" aria-label="Upload">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M5 20h14"/></svg>
+                </button>
+                <button type="button" class="cp-ico" id="harvesterNewBtn" data-tip="New" aria-label="New">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M12 12v5M9.5 14.5h5"/></svg>
+                </button>
                 <div class="cp-dl">
-                    <button type="button" id="harvesterDownloadBtn" disabled>Download</button>
+                    <button type="button" class="cp-ico" id="harvesterDownloadBtn" disabled data-tip="Download" aria-label="Download">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
+                    </button>
                     <div class="export-menu" id="harvesterDownloadMenu" hidden>
                         <button type="button" data-cp-fmt="txt">Plain text</button>
                         <button type="button" data-cp-fmt="md">Markdown</button>
@@ -20,13 +27,17 @@
                         <button type="button" data-cp-fmt="xml">XML</button>
                     </div>
                 </div>
-                <button type="button" id="harvesterCopyBtn" disabled>Copy</button>
+                <button type="button" class="cp-ico" id="harvesterCopyBtn" disabled data-tip="Copy" aria-label="Copy">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="13" rx="1.6"/><path d="M5 15V5a1.6 1.6 0 0 1 1.6-1.6H15"/></svg>
+                </button>
                 <button type="button" id="harvesterInspectBtn" disabled title="Use these details in the case">Use details</button>
-                <button type="button" id="harvesterClearBtn" disabled>Clear</button>
+                <button type="button" class="cp-ico" id="harvesterClearBtn" disabled data-tip="Clear" aria-label="Clear">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>
+                </button>
             </div>
             <div class="cp-drop" id="harvesterDrop">
-                <strong>Drop or write a file. Keeps names, dates, accounts, passwords, times, age, and other key data.</strong>
-                <span class="cp-kinds">.txt · .md · .json · .html · .csv · .xml</span>
+                <strong>Drop or write a file.</strong>
+                <span class="cp-kinds">To extract all important data from a file</span>
                 <span class="cp-drop-acts">
                     <button type="button" class="work-ghost" id="harvesterDropBtn">Choose files</button>
                     <button type="button" class="work-ghost" id="harvesterDropNewBtn">Paste text</button>
