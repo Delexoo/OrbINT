@@ -1,71 +1,50 @@
 <div align="center">
 
-<img src="icons/app-512.png" width="96" height="96" alt="OrbINT">
+<a href="https://orbint.net/">
+  <img src="icons/app-512.png" width="96" height="96" alt="OrbINT">
+</a>
 
 # OrbINT
 
 **Open-source Reconnaissance Bureau of Intelligence**
 
-A local desk for collecting, organizing, and managing open-source reconnaissance.
+A local desk for collecting, organizing, analyzing, and managing publicly available information.
 
-[Open OrbINT](https://orbint.net/)
+<a href="https://orbint.net/"><img src="https://img.shields.io/badge/Website-orbint.net-09090b?style=flat-square&labelColor=18181b&color=67e8f9" alt="orbint.net"></a>
+<a href="https://github.com/Delexoo/OrbINT"><img src="https://img.shields.io/github/stars/Delexoo/OrbINT?style=flat-square&label=Stars&labelColor=18181b&color=09090b" alt="GitHub stars"></a>
 
-<img src="media/orbint.webp" alt="OrbINT in use" width="400" height="252">
+<br><br>
+
+[**Open the desk**](https://orbint.net/)
+
+<img src="media/orbint.webp" alt="The OrbINT desk" width="720">
 
 </div>
 
-## What it is
+---
 
-OrbINT is case and investigative management software for publicly available information. One subject sits at the center of a case: a dossier of facts, a chronology, a whiteboard, and a printable record.
+OrbINT is case and investigative management software for open-source reconnaissance. One subject sits at the center of a case: filed facts, a chronology, a diagram, notes, and a printable record.
 
-It runs entirely in the browser. There is no account, no remote database, and no upload. Cases stay on this device.
+The desk runs in the browser. There is no account and no remote database. A case stays on this device until you export it.
 
-## What it has
+## The desk
 
-- **Orbit** — the subject at the hub, with fields for identity, contact, place, vehicles, infrastructure, and media
-- **Timeline** — a pan-and-zoom chronology of dated events
-- **Whiteboard** — sketches, sticky notes, and diagrams for the same case
-- **Harvester** — drop a file or write one; keep names, dates, accounts, passwords, times, age, and other key data
-- **Case File** — a letter-style PDF of the particulars
-- **Toolkit** — searches that open from a filed value
+**Operations.** A world map of cameras, attack sources, internet outages, and security news.
 
-## How it works
+**Orbit.** The subject at the hub, with fields for identity, contact, place, vehicles, infrastructure, and media.
 
-1. Open the [live app](https://orbint.net/), or clone this repository and open `index.html`.
-2. Name the subject in the hub.
-3. Click a field, enter a value, and use the magnifying glass to search from it.
-4. Keep a timeline and a whiteboard as the case develops.
-5. Export JSON, or generate the case file, when you need a copy off the desk.
+**Timeline.** A chronology of dated events.
 
-Cases are stored in this browser. Clear site data and they are gone.
+**Whiteboard.** Sketches and diagrams kept with the same case.
 
-Export JSON downloads the case. Upload JSON on the profile rail restores that file. The browser does not keep an automatic backup.
+**Notepad.** Short notes beside the case.
 
-```bash
-git clone https://github.com/Delexoo/OrbINT.git
-```
+**Harvester.** Names, dates, accounts, and other key data pulled out of a messy file.
 
-## Project map
+**Case File.** A letter-style record of what has been filed.
 
-- `index.html` is the assembled desk. `python tools/bundle.py` rebuilds it from the pieces below.
-- `pages/` holds the desk markup.
-- `js/` holds the behavior. The bundler writes `investigation.js` and `app.js`.
-- `css/` holds the appearance.
-- `tools/` holds the bundler, the share relay (`tools/share-server.py`), and `node tools/test_harvester.js`.
+## About
 
-## DNS
+OrbINT is maintained by [Delexoo](https://github.com/Delexoo).
 
-There is no DNS zone in this repository. At the host that serves `orbint.net`, review the records that point the name at GitHub Pages and delete any record that still points at a host you removed.
-
-## Host headers
-
-GitHub Pages does not send these from a file in the repository. A proxy in front of Pages can:
-
-```
-Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; worker-src 'self' blob:; frame-ancestors 'none'
-X-Content-Type-Options: nosniff
-Referrer-Policy: strict-origin-when-cross-origin
-X-Frame-Options: DENY
-```
-
-`frame-ancestors` and `nosniff` cannot be set from HTML. The public pages send a referrer meta tag of `strict-origin-when-cross-origin`.
+The desk is at [https://orbint.net/](https://orbint.net/).
