@@ -1,0 +1,81 @@
+<section class="work-page page-operations" id="page-operations" hidden>
+        <div class="ops-scroll">
+            <div class="ops-stage">
+                <section class="ops-globe" data-ops-fixed="world" aria-label="World map">
+                    <div class="ops-globe-stage">
+                        <div id="opsMap" role="region" aria-label="Camera map"></div>
+                        <canvas id="opsMapDraw" aria-hidden="true"></canvas>
+                        <div class="ops-tip" id="opsMapTip" hidden></div>
+                        <div class="ops-report" id="opsReport" hidden></div>
+                        <header class="ops-globe-head">
+                            <div class="ops-mode" role="group" aria-label="Map view">
+                                <span class="ops-mode-thumb" aria-hidden="true"></span>
+                                <button type="button" id="opsMapCameras" data-map="cameras" class="is-on">Cameras</button>
+                                <button type="button" id="opsMapOutages" data-map="outages">Outages</button>
+                                <button type="button" id="opsMapAttacks" data-map="attacks">Attacks</button>
+                            </div>
+                            <div class="ops-range" id="opsRange" role="group" aria-label="Time window" hidden>
+                                <button type="button" data-range="live" class="is-on">Live</button>
+                                <button type="button" data-range="day">Day</button>
+                                <button type="button" data-range="week">Week</button>
+                                <button type="button" data-range="month">Month</button>
+                                <button type="button" data-range="year">Year</button>
+                                <button type="button" data-range="decade">Decade</button>
+                            </div>
+                            <p class="ops-map-status" id="opsMapStatus"></p>
+                        </header>
+                        <div class="ops-map-corner">
+                            <div class="ops-map-tools">
+                                <div class="ops-basemap-pop">
+                                    <button type="button" id="opsBasemapBtn" aria-label="Map style" aria-expanded="false" aria-controls="opsBasemap" title="Map style">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 4.5-9 4.5L3 7.5 12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5L12 21l9-4.5"/></svg>
+                                    </button>
+                                    <div class="ops-basemap" id="opsBasemap" role="menu" aria-label="Map style" hidden>
+                                        <button type="button" role="menuitemradio" data-basemap="dark" class="is-on" aria-checked="true">Dark</button>
+                                        <button type="button" role="menuitemradio" data-basemap="streets" aria-checked="false">Streets</button>
+                                        <button type="button" role="menuitemradio" data-basemap="satellite" aria-checked="false">Satellite</button>
+                                    </div>
+                                </div>
+                                <button type="button" id="opsMapRefresh" aria-label="Refresh" title="Refresh">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.2-5.8"/><path d="M21 3v6h-6"/></svg>
+                                </button>
+                                <button type="button" id="opsLocate" aria-label="My location" title="My location">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                                </button>
+                            </div>
+                            <div class="ops-globe-key" id="opsMapKey"></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="ops-panel ops-news-card" data-ops="news" data-ops-fixed="news" aria-labelledby="opsNewsTitle">
+                    <header class="ops-panel-head">
+                        <span class="ops-heading"><h2 id="opsNewsTitle">Security news</h2></span>
+                    </header>
+                    <div class="ops-body" id="opsNewsBody">
+                        <div class="ops-news" id="opsNews"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="ops-board">
+                <section class="ops-panel" data-ops="machine" aria-labelledby="opsMachineTitle">
+                    <header class="ops-panel-head">
+                        <span class="ops-heading"><h2 id="opsMachineTitle">This computer</h2><small id="opsMachineStatus">Not collected</small></span>
+                        <button type="button" id="opsAccessAsk">Allow access</button>
+                    </header>
+                    <div class="ops-body" id="opsMachineBody">
+                        <div class="ops-grid" id="opsMachine"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="ops-ask" id="opsAsk" hidden>
+                <div class="ops-ask-card" role="dialog" aria-modal="true" aria-labelledby="opsAskTitle">
+                    <h2 id="opsAskTitle">Allow this device to be read?</h2>
+                    <p>This fills This computer with what the browser can already see: system, screen, language, graphics, and storage. Nothing about this device is read until you allow it. Your files are not included.</p>
+                    <div class="ops-ask-actions">
+                        <button type="button" id="opsAskDeny">Don't allow</button>
+                        <button type="button" id="opsAskAllow">Allow</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>

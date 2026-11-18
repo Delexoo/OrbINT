@@ -1,0 +1,20 @@
+OrbINT uses the following third-party material.
+
+MapLibre GL JS
+Copyright MapLibre contributors
+BSD 3-Clause License
+https://github.com/maplibre/maplibre-gl-js
+Loaded from jsDelivr when the operations map opens.
+
+v86
+Copyright the v86 authors
+BSD 2-Clause License
+https://github.com/copy/v86
+The lab script, WebAssembly module, BIOS, and Buildroot Linux image are vendored in vendor/.
+
+Platform marks
+Files in icons/platforms/ identify outside services by their marks.
+Those marks are trademarks of their owners. They are not an endorsement.
+
+The OrbINT name, desk, and original interface are by Delexoo.
+https://github.com/Delexoo/OrbINT

@@ -1,0 +1,220 @@
+    <section class="work-page page-guide" id="page-guide" hidden>
+        <article class="guide">
+            <header class="guide-top">
+                <p class="help-kicker">Operator guide</p>
+                <h2>OrbINT</h2>
+                <p class="help-aka">Open-source Reconnaissance Bureau of Intelligence</p>
+                <p class="help-lead">OrbINT is for collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources. It also works as case and investigative management software. The workspace is local, not cloud-based: cases stay on this device, with no remote account and no cloud data-breach risk.</p>
+                <nav class="guide-nav" aria-label="On this page">
+                    <button type="button" data-guide-jump="guide-local">Local</button>
+                    <button type="button" data-guide-jump="guide-ops">Operations</button>
+                    <button type="button" data-guide-jump="guide-orbit">Orbit</button>
+                    <button type="button" data-guide-jump="guide-timeline">Timeline</button>
+                    <button type="button" data-guide-jump="guide-board">Whiteboard</button>
+                    <button type="button" data-guide-jump="guide-notes">Notepad</button>
+                    <button type="button" data-guide-jump="guide-harvest">Harvester</button>
+                    <button type="button" data-guide-jump="guide-file">Case file</button>
+                    <button type="button" data-guide-jump="guide-dock">Dock</button>
+                    <button type="button" data-guide-jump="guide-share">Share</button>
+                    <button type="button" data-guide-jump="guide-faq">Questions</button>
+                </nav>
+            </header>
+            <div class="guide-body">
+                <section class="help-section" id="guide-local">
+                    <h3>Local by design</h3>
+                    <p>There is no OrbINT cloud and no sign-in. Profiles, photos, the timeline, the whiteboard, notes, and harvested files live in this browser. A remote breach cannot take a copy that was never sent. Export a case file when you need a backup. Clear site data and the case leaves with it.</p>
+                    <p>The titles across the top switch the workspace. Operator guide in the dock opens this page. On a phone it is labeled Guide. Casebook is an extra title in that bar.</p>
+                </section>
+
+                <section class="help-section" id="guide-ops">
+                    <h3>Operations</h3>
+                    <p>The opening desk. A street map from OpenStreetMap, drawn by OpenFreeMap, plus security news and a few local tools. Scroll to zoom into a city. Attacks, outages, and cameras sit on top of the map.</p>
+                    <div class="help-dock">
+                        <div><b>Attacks</b>One dot per attacking address, on that address’s city coordinates. Live and Day each take the day’s top 1,000 from SANS plus the 30-day source list. Week merges the last seven daily lists. Month, Year, and Decade stay inside that 30-day public feed. Hover a dot for the matching story’s headline and image, or the country flag, plus the address. Click the dot to open that article. If no story matches, the click opens the SANS source for that address.</div>
+                        <div><b>Outages</b>The same map, drawn from IODA. The time buttons change the outage window. Alerts for countries, regions, and networks are placed on the country they name. Several alerts in one country spread apart so each stays visible. Click a dot to open that outage record.</div>
+                        <div><b>Land</b>Move across a land dot and it lightens. Double-click recenters. Scroll to zoom.</div>
+                        <div><b>Security news</b>Stories beside the map. The map hover uses these headlines and images.</div>
+                        <div><b>This computer</b>Stays empty until you allow access. Then it shows what the browser can see. It does not read the disk.</div>
+                    </div>
+                </section>
+
+                <section class="help-section" id="guide-orbit">
+                    <h3>Orbit</h3>
+                    <p>Work one person, company, or asset at a time. Begin with the strongest identifier you already have — usually a name, username, email, or phone — then let that fact open the next search.</p>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <span class="help-num">1</span>
+                            <div>
+                                <strong>Type into a pill</strong>
+                                <span>The value files as you type. You do not need to press Enter. Empty the box and the fact drops off.</span>
+                                <div class="help-ex"><code>Name → Jordan Hale</code><code>Email → jhale@pm.me</code></div>
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <span class="help-num">2</span>
+                            <div>
+                                <strong>Watch the hub</strong>
+                                <span>A filled pill turns green. Marking a field Missing turns it red. The ring around OrbINT fills green for values and red for missing.</span>
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <span class="help-num">3</span>
+                            <div>
+                                <strong>Read the casebook</strong>
+                                <span>On desktop the left sheet is the casebook. On a phone it is a page in the bar. It shows the subject, filed facts, and the case shelf. Click a row to focus that field.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <h3 class="guide-sub">Search from the pill</h3>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <span class="help-num">i</span>
+                            <div>
+                                <strong>Empty field</strong>
+                                <span>The information icon lists where that kind of fact usually turns up.</span>
+                                <div class="help-ex"><code>Phone empty → Whitepages, TruePeopleSearch</code></div>
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <span class="help-num">⌕</span>
+                            <div>
+                                <strong>Filled field</strong>
+                                <span>The magnifier opens lookups with the value already in the URL, and copies it for sites that need a paste. Image search uses the photo, not the file name.</span>
+                                <div class="help-ex"><code>domain.com → WHOIS, crt.sh, Wayback</code></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="help-grid">
+                        <div class="help-field">
+                            <b>Username</b>
+                            <span>Choose the platform first, then enter the handle. The icon stays on the pill.</span>
+                            <em>Instagram → @jordanh</em>
+                        </div>
+                        <div class="help-field">
+                            <b>Image / Audio</b>
+                            <span>Paste a URL, or use + to upload. Preview opens from the thumbnail.</span>
+                            <em>https://…/portrait.jpg</em>
+                        </div>
+                        <div class="help-field">
+                            <b>IP</b>
+                            <span>Geolocation, hosting, and indexed services. The pin opens a map when the address looks valid.</span>
+                            <em>8.8.8.8</em>
+                        </div>
+                        <div class="help-field">
+                            <b>Timezone</b>
+                            <span>Pick a zone. The pill shows the abbreviation and a live clock.</span>
+                            <em>EST · Eastern Time</em>
+                        </div>
+                        <div class="help-field">
+                            <b>Company</b>
+                            <span>Employer or legal name. Search opens filings, EDGAR, ownership, and sanctions lists.</span>
+                            <em>Northwind Analytics LLC</em>
+                        </div>
+                        <div class="help-field">
+                            <b>VIN / Plate</b>
+                            <span>Decode, history, and registration. MAC, Geo, and Barcode live under Add a field.</span>
+                            <em>1HGCM82633A004352</em>
+                        </div>
+                    </div>
+                    <h3 class="guide-sub">Move the map</h3>
+                    <div class="help-ex">
+                        <span class="help-kbd">Scroll</span><span class="help-kbd">Zoom</span>
+                        <span class="help-kbd">Pinch</span><span class="help-kbd">Zoom</span>
+                        <span class="help-kbd">Drag empty space</span><span class="help-kbd">Pan</span>
+                        <span class="help-kbd">Drag hub</span><span class="help-kbd">Move orbit</span>
+                    </div>
+                    <p>The + on the hub adds a field. Right-click a field, or long-press on a phone, to copy, cut, paste, rename, clear, search, or remove it. Right-click empty map space to drop a linked profile, or for this guide, Recenter, Undo, Redo, Export, Share, and Reset. Right-click the center circle to link this case to other profiles. Drag the right edge of the left sheet to resize the casebook.</p>
+                    <h3 class="guide-sub">Profiles</h3>
+                    <div class="help-dock">
+                        <div><b>Switch</b>Click a face on the case shelf. The orbit and facts follow it.</div>
+                        <div><b>New</b>The plus starts a blank case. Right-click empty map space to drop a linked circle where you clicked.</div>
+                        <div><b>Link</b>Right-click the hub to connect this case to another profile. A line stays between them on the map. Tap a linked circle to open that case.</div>
+                        <div><b>Upload</b>Import an OrbINT .json profile, including a file from Export.</div>
+                        <div><b>Rename</b>The pencil names the current profile. Right-click a face to rename, duplicate, download, or delete.</div>
+                    </div>
+                </section>
+
+                <section class="help-section" id="guide-timeline">
+                    <h3>Timeline</h3>
+                    <p>A pan-and-zoom chronology for the open case. Click the axis to add an event. Type on a card, attach an image, and drag the card to place it. Minimize tucks the extra fields. Connect cards draws an arrow between them. Recenter fits the axis.</p>
+                    <p>Events with a date, time, title, or note are written into the case file. An empty timeline adds no section.</p>
+                </section>
+
+                <section class="help-section" id="guide-board">
+                    <h3>Whiteboard</h3>
+                    <p>A canvas in the same dark desk. Use the Selection tool and drag to select several shapes. The toolbar has lock, shapes, draw, text, image, eraser, connect, and presets. Drag to size a shape. The image tool makes a frame you fill. Paste an image anytime. Connect shows every point. Ctrl+Z undoes.</p>
+                    <p>A card is filed when it has a title or text. Empty shapes, default labels, and bare drawings are left out. Links between filed cards are included. If the board has nothing to say, the case file skips it.</p>
+                </section>
+
+                <section class="help-section" id="guide-notes">
+                    <h3>Notepad</h3>
+                    <p>Short notes kept with this case. New note starts a blank page. The title and the body save as you type. Hold Shift and click notes to link them. The graph on the right shows those links. Drag the dividers to resize the list and the graph.</p>
+                    <p>A note is filed when it has a title or text. An untitled empty note is not. Links between filed notes are included. An empty notepad adds no section to the case file.</p>
+                </section>
+
+                <section class="help-section" id="guide-harvest">
+                    <h3>Harvester</h3>
+                    <p>Drop in a messy file. OrbINT keeps names, dates, accounts, phones, passwords, addresses, and other identifiers, and sets the rest aside. Split shows the original beside the stripped text. Original and Stripped are the other views. Upload, start a new file, copy, or download as text, Markdown, JSON, HTML, CSV, or XML.</p>
+                    <p>Only extracted values are written into the case file. A file that yields nothing does not add a section.</p>
+                </section>
+
+                <section class="help-section" id="guide-file">
+                    <h3>Case file</h3>
+                    <p>The printable record of the open case. The sheets on screen are the same pages as the PDF. Sensitive values stay covered until you reveal them. The downloaded file contains the full record.</p>
+                    <div class="help-dock">
+                        <div><b>Case caption</b>Case number, offense, status, investigator, subject, and the date of the record.</div>
+                        <div><b>Particulars</b>Filed facts from the orbit, in a stable order, with confidence, method, and source when you set them.</div>
+                        <div><b>Timeline</b>Added only when the chronology has an event.</div>
+                        <div><b>Whiteboard</b>Added only when a card has a title or text.</div>
+                        <div><b>Notepad</b>Added only when a note has a title or text.</div>
+                        <div><b>Harvester</b>Added only when a file produced a value.</div>
+                        <div><b>Photographs</b>Added only when the case has a picture beyond the portrait.</div>
+                        <div><b>Notes</b>Filed notes, analysis, and evidence notes. Empty notes are omitted.</div>
+                    </div>
+                    <p>Download PDF in the dock writes that record. Section numbers follow whatever is actually present, so a blank page never leaves a blank heading.</p>
+                </section>
+
+                <section class="help-section" id="guide-dock">
+                    <h3>Dock</h3>
+                    <p>The bar along the bottom follows the page. Buttons that belong to one page hide on the others.</p>
+                    <div class="help-dock">
+                        <div><b>Guide</b>This page. On a phone, open it from Help or More.</div>
+                        <div><b>Casebook</b>Show or hide the left sheet.</div>
+                        <div><b>Toolkit</b>The OSINT catalog, including Domain Intelligence, when a source is not on the pill.</div>
+                        <div><b>Add field</b>Same as the + on the hub. Pick a hidden field, or create your own.</div>
+                        <div><b>Recenter</b>Reset zoom and pan on the orbit, timeline, or whiteboard.</div>
+                        <div><b>Split screen</b>On OrbINT, pin the framework to one side and keep Operations, Timeline, and the other pages on the other. Drag the divider to resize. Click Split again, or the OrbINT title, to return to the full framework.</div>
+                        <div><b>Play</b>Replay the opening motion without reloading.</div>
+                        <div><b>Generate</b>Fill visible fields with a sample persona. Undo restores the case.</div>
+                        <div><b>Undo / Redo</b>Step through filed changes. Ctrl+Z and Ctrl+Y.</div>
+                        <div><b>Export</b>Download the current profile as .json.</div>
+                        <div><b>Import</b>Load an OrbINT .json profile.</div>
+                        <div><b>Report</b>Download the case file PDF.</div>
+                        <div><b>Install</b>Add OrbINT to the home screen, dock, or Start menu.</div>
+                        <div><b>Reset</b>Wipe every profile, the map, and saved layout, then reload the latest site.</div>
+                        <div><b>Settings</b>Privacy curtain, confirm before an outbound search, stealth tab title, clipboard clear, idle lock, reduce motion, larger type, remember the last page, and Logic bomb — delete saved information if you stay away.</div>
+                    </div>
+                </section>
+
+                <section class="help-section" id="guide-share">
+                    <h3>Share</h3>
+                    <p>Share sends one encrypted link for the open case. Turn Live session on and the link can be viewed, and only while you keep the session on. End it and the link shows nothing. The key stays after #. The server stores ciphertext, not the case.</p>
+                    <p>Copy link puts that session URL on the clipboard. The code underneath is for the public site, https://orbint.net/, and Share site hands the page to the system share sheet when the device has one.</p>
+                    <div class="help-callout">File the fact, then search from the pill. Use the pages to keep chronology, diagrams, notes, and extracted text with the same case. The case file prints only the pages that have something in them.</div>
+                    <p class="help-foot">Esc closes menus and sheets. It leaves this page open. Switch titles to go back to the case.</p>
+                </section>
+
+                <section class="help-section" id="guide-faq">
+                    <h3>Questions</h3>
+                    <h3>Where does a case live?</h3>
+                    <p>On this device, in this browser. There is no OrbINT account and no remote case database.</p>
+                    <h3>Who operates OrbINT?</h3>
+                    <p>Delexoo. Reach them at <a href="https://github.com/Delexoo">github.com/Delexoo</a>. Privacy, terms, and contact are in Settings.</p>
+                    <h3>Does a search leave the computer?</h3>
+                    <p>Only the value you send, and only to the public service you open. The rest of the case stays here.</p>
+                    <h3>How do I keep a copy?</h3>
+                    <p>Export JSON from the dock. Upload JSON on the profile rail puts that file back. The browser does not keep an automatic backup.</p>
+                </section>
+            </div>
+        </article>
+    </section>

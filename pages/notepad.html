@@ -1,0 +1,80 @@
+    <section class="work-page page-notepad" id="page-notepad" hidden>
+        <div class="note-view" id="noteView">
+            <aside class="note-list-wrap">
+                <div class="note-list-bar">
+                    <button type="button" id="noteNew">New note</button>
+                </div>
+                <div class="note-list" id="noteList" role="listbox" aria-label="Notes"></div>
+                <p class="note-empty" id="noteEmpty">No notes yet. Start typing, or use New note.</p>
+            </aside>
+            <div class="note-split" data-note-split="list" role="separator" aria-orientation="vertical" aria-label="Resize notes" title="Drag to resize" tabindex="0" aria-valuemin="160" aria-valuemax="560" aria-valuenow="220"></div>
+            <div class="note-editor">
+                <div class="note-editor-bar">
+                    <input id="noteTitle" type="text" maxlength="80" placeholder="Title" autocomplete="off" spellcheck="true">
+                </div>
+                <div class="note-sheet">
+                    <button type="button" class="note-line-plus" id="noteLinePlus" hidden aria-label="Format line">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                    </button>
+                    <div id="noteBody" class="note-body is-empty" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Write a note for this case." spellcheck="true"></div>
+                </div>
+            </div>
+            <div class="note-split" data-note-split="graph" role="separator" aria-orientation="vertical" aria-label="Resize links" title="Drag to resize" tabindex="0" aria-valuemin="180" aria-valuemax="720" aria-valuenow="280"></div>
+            <aside class="note-graph" aria-label="Note links">
+                <p class="note-link-tip" id="noteLinkHint">Hold <kbd>Shift</kbd> and click notes to link</p>
+                <div class="note-graph-stage" id="noteGraph"></div>
+            </aside>
+        </div>
+        <div class="app-menu note-menu" id="noteMenu" hidden role="menu"></div>
+        <div class="note-format" id="noteFormat" hidden role="dialog" aria-label="Format text">
+            <div class="note-format-styles" role="group" aria-label="Style">
+                <button type="button" data-fmt="bold" aria-label="Bold"><b>B</b></button>
+                <button type="button" data-fmt="italic" aria-label="Italic"><i>I</i></button>
+                <button type="button" data-fmt="underline" aria-label="Underline"><u>U</u></button>
+                <button type="button" data-fmt="strike" aria-label="Strikethrough"><s>S</s></button>
+                <button type="button" data-fmt="sup" aria-label="Superscript">x<sup>2</sup></button>
+                <button type="button" data-fmt="sub" aria-label="Subscript">x<sub>2</sub></button>
+                <button type="button" data-fmt="code" aria-label="Code">&lt;/&gt;</button>
+                <button type="button" data-fmt="clear" class="note-format-clear">Clear</button>
+            </div>
+            <p>Size</p>
+            <div class="note-format-sizes" role="group" aria-label="Font size">
+                <button type="button" data-fmt="size" data-value="">Aa</button>
+                <button type="button" data-fmt="size" data-value="12px">12</button>
+                <button type="button" data-fmt="size" data-value="14px">14</button>
+                <button type="button" data-fmt="size" data-value="18px">18</button>
+                <button type="button" data-fmt="size" data-value="22px">22</button>
+                <button type="button" data-fmt="size" data-value="28px">28</button>
+            </div>
+            <p>Color</p>
+            <div class="note-format-swatches" role="group" aria-label="Text color">
+                <button type="button" class="is-clear" data-fmt="color" data-value="" aria-label="Default color"></button>
+                <button type="button" data-fmt="color" data-value="#a1a1aa" style="background:#a1a1aa" aria-label="Gray"></button>
+                <button type="button" data-fmt="color" data-value="#f87171" style="background:#f87171" aria-label="Red"></button>
+                <button type="button" data-fmt="color" data-value="#fb923c" style="background:#fb923c" aria-label="Orange"></button>
+                <button type="button" data-fmt="color" data-value="#facc15" style="background:#facc15" aria-label="Yellow"></button>
+                <button type="button" data-fmt="color" data-value="#4ade80" style="background:#4ade80" aria-label="Green"></button>
+                <button type="button" data-fmt="color" data-value="#67e8f9" style="background:#67e8f9" aria-label="Cyan"></button>
+                <button type="button" data-fmt="color" data-value="#60a5fa" style="background:#60a5fa" aria-label="Blue"></button>
+                <button type="button" data-fmt="color" data-value="#c084fc" style="background:#c084fc" aria-label="Violet"></button>
+                <button type="button" data-fmt="color" data-value="#f472b6" style="background:#f472b6" aria-label="Pink"></button>
+            </div>
+            <p>Highlight</p>
+            <div class="note-format-swatches" role="group" aria-label="Highlight">
+                <button type="button" class="is-clear" data-fmt="highlight" data-value="" aria-label="No highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#fde047" style="background:#fde047" aria-label="Yellow highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#86efac" style="background:#86efac" aria-label="Green highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#67e8f9" style="background:#67e8f9" aria-label="Cyan highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#fdba74" style="background:#fdba74" aria-label="Orange highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#f9a8d4" style="background:#f9a8d4" aria-label="Pink highlight"></button>
+            </div>
+            <p>Font</p>
+            <div class="note-format-fonts" role="group" aria-label="Font">
+                <button type="button" data-fmt="font" data-value="">Default</button>
+                <button type="button" data-fmt="font" data-value="serif">Serif</button>
+                <button type="button" data-fmt="font" data-value="sans">Sans</button>
+                <button type="button" data-fmt="font" data-value="mono">Mono</button>
+                <button type="button" data-fmt="font" data-value="narrow">Narrow</button>
+            </div>
+        </div>
+    </section>

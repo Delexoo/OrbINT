@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy — OrbINT</title>
+  <meta name="description" content="What OrbINT keeps on this device, what a lookup sends out, and who receives it.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="theme-color" content="#09090b">
+  <link rel="canonical" href="https://orbint.net/privacy.html">
+  <link rel="icon" href="icons/app-192.png">
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #09090b; color: #fafafa; font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
+    main { width: min(40rem, calc(100% - 2rem)); margin: 2.5rem auto 4rem; }
+    h1 { font-size: 2rem; font-weight: 560; text-wrap: balance; }
+    h2 { font-size: 1.15rem; margin-top: 1.6rem; text-wrap: balance; }
+    p, li { color: #d4d4d8; }
+    a { color: #67e8f9; }
+    .kicker { letter-spacing: .12em; text-transform: uppercase; font-size: .72rem; color: #a1a1aa; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="kicker">OrbINT</p>
+    <h1>Privacy</h1>
+    <p>OrbINT is a local desk for open-source reconnaissance, operated by <a href="https://github.com/Delexoo">Delexoo</a>. There is no OrbINT account. This page says what stays on the device, what a lookup sends out, and who receives it.</p>
+
+    <h2>What stays on this device</h2>
+    <p>Cases, photos, notes, the timeline, the whiteboard, and harvested files stay in this browser. Facts and settings use localStorage. Profile images use the IndexedDB database named orbint-media-v1. OrbINT does not run a remote case database. Clear the site data and the case is gone. The browser does not keep an automatic backup.</p>
+
+    <h2>What a lookup sends out</h2>
+    <p>A search or a check sends only the value you submit, to the service you chose. That can include Have I Been Pwned, public DNS and RDAP, GitHub, GitLab, security-news feeds, map tiles from OpenFreeMap, and similar public lookup sites linked from a field. Those services receive the address of your browser and the value you asked them about. They are not OrbINT.</p>
+    <p>Optional share encrypts the case in the browser. If you set a share relay and turn a session on, that relay receives ciphertext, not the readable case. The key stays in the link fragment. You choose the relay address. Ending the session tells that relay to drop the blob.</p>
+
+    <h2>What OrbINT does not collect</h2>
+    <p>OrbINT sets no analytics cookies and does not record the session. A cookie is cleared only when you run a local wipe. There is no marketing list.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about this policy go to Delexoo at <a href="https://github.com/Delexoo">github.com/Delexoo</a>. See also the <a href="terms.html">terms</a> and the <a href="/">desk</a>.</p>
+  </main>
+</body>
+</html>

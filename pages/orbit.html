@@ -1,10 +1,10 @@
-    <main class="map" id="mapStage">
+    <main class="map" id="mapStage" tabindex="-1">
         <div class="map-grid" id="mapGrid" aria-hidden="true">
             <div class="map-grid-paper"></div>
             <div class="map-grid-spot"></div>
         </div>
-        <svg class="links" id="linkLayer"></svg>
-        <svg class="links peer-links" id="peerLinkLayer"></svg>
+        <svg class="links" id="linkLayer" preserveAspectRatio="none"></svg>
+        <svg class="links peer-links" id="peerLinkLayer" preserveAspectRatio="none"></svg>
         <div class="map-canvas" id="mapCanvas">
             <div class="peer-hubs" id="peerHubs"></div>
             <div class="hub" id="hub">
@@ -13,7 +13,7 @@
                     <circle class="hub-ring-fill" id="hubRingFill" cx="50" cy="50" r="46"></circle>
                     <circle class="hub-ring-null" id="hubRingNull" cx="50" cy="50" r="46"></circle>
                 </svg>
-                <img class="hub-face" id="hubFace" alt="" hidden>
+                <img class="hub-face" id="hubFace" alt="" width="120" height="120" hidden>
                 <div class="hub-title" id="hubTitle">OrbINT</div>
                 <button class="hub-add" id="hubAdd" type="button" aria-label="Add field">
                     <svg class="hub-add-ring" viewBox="0 0 40 40" aria-hidden="true">

@@ -1,0 +1,413 @@
+/* Whiteboard shapes */
+.wb-node {
+    position: absolute;
+    width: var(--wb-w, 200px);
+    height: var(--wb-h, 72px);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: grab;
+    user-select: none;
+    color: var(--text);
+    overflow: visible;
+    opacity: var(--wb-op, 1);
+    z-index: 2;
+    pointer-events: auto;
+}
+
+
+.wb-node.is-locked { cursor: default; }
+
+
+.wb-node.is-flip-x .wb-geo,
+.wb-node.is-flip-x .wb-face { transform: scaleX(-1); }
+
+
+.wb-node.is-flip-y .wb-geo,
+.wb-node.is-flip-y .wb-face { transform: scaleY(-1); }
+
+
+.wb-node.is-flip-x.is-flip-y .wb-geo,
+.wb-node.is-flip-x.is-flip-y .wb-face { transform: scale(-1, -1); }
+
+
+.wb-face {
+    box-sizing: border-box;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--wb-stroke, var(--line));
+    background: var(--wb-fill, #111113);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+
+.wb-copy { position: relative; z-index: 1; min-width: 0; pointer-events: auto; }
+
+
+.wb-text {
+    outline: none;
+    width: 100%;
+    min-height: 1.15em;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--text);
+}
+
+
+.wb-text h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0;
+}
+
+
+.wb-text p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--muted);
+}
+
+
+.wb-text.is-edit {
+    cursor: text;
+    color: var(--text);
+    caret-color: var(--accent);
+}
+
+
+.wb-node.is-editing,
+.wb-node.is-editing .wb-copy { cursor: text; }
+
+
+.wb-geo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: var(--wb-stroke, #e4e4e7);
+    overflow: visible;
+    pointer-events: auto;
+}
+
+
+.wb-node.is-geo {
+    pointer-events: none;
+}
+
+
+.wb-node.is-geo .wb-copy,
+.wb-node.is-geo .wb-handles,
+.wb-node.is-geo .wb-port,
+.wb-node.is-geo .wb-handle {
+    pointer-events: auto;
+}
+
+
+.wb-node.is-geo .wb-geo {
+    pointer-events: none;
+}
+
+
+.wb-node.is-geo .wb-face {
+    pointer-events: none;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+
+.wb-geo .wb-shape,
+.wb-geo .wb-fold {
+    pointer-events: visiblePainted;
+}
+
+
+.wb-node.is-text .wb-face {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 4px 6px;
+}
+
+
+.wb-node.is-sticky .wb-face {
+    justify-content: flex-start;
+    padding: 22px 14px 14px;
+    border: 0;
+    border-radius: 2px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 22%),
+        var(--wb-fill, #f3e08a);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.4) inset,
+        0 10px 22px rgba(0, 0, 0, 0.4),
+        0 1px 0 #c9a227;
+}
+
+
+.wb-node.is-sticky .wb-face::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 46px;
+    height: 11px;
+    margin-left: -23px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.42);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+    transform: rotate(-2deg);
+    pointer-events: none;
+}
+
+
+.wb-node.is-sticky .wb-copy {
+    height: 100%;
+}
+
+
+.wb-node.is-sticky .wb-text,
+.wb-node.is-sticky .wb-text h3,
+.wb-node.is-sticky .wb-text p,
+.wb-node.is-sticky .wb-text.is-edit {
+    color: #292524;
+    caret-color: #1c1917;
+}
+
+
+.wb-node.is-sticky .wb-text:empty::before {
+    content: "Note";
+    color: rgba(41, 37, 36, 0.38);
+}
+
+
+.wb-node.is-on.is-sticky .wb-face,
+.wb-node.is-from.is-sticky .wb-face {
+    border: 0;
+    box-shadow:
+        0 0 0 1.5px #e4e4e7,
+        0 1px 0 rgba(255, 255, 255, 0.4) inset,
+        0 12px 28px rgba(0, 0, 0, 0.48);
+}
+
+
+.wb-node.is-done.is-sticky .wb-face {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 22%),
+        #d4e8a8;
+    border: 0;
+}
+
+
+.wb-copy { pointer-events: auto; }
+
+
+.wb-geo .wb-shape,
+.wb-geo .wb-fold {
+    fill: none;
+    stroke: inherit;
+    stroke-linecap: var(--wb-lc, round);
+    stroke-linejoin: var(--wb-lj, round);
+    stroke-width: calc((var(--wb-sw, 1.75) * 1px) / var(--wb-z, 1));
+    stroke-dasharray: var(--wb-dash, none);
+}
+
+
+.wb-geo .wb-shape {
+    fill: var(--wb-fill, none);
+}
+
+
+.wb-geo .wb-arrowhead {
+    fill: var(--wb-stroke, #e4e4e7);
+    stroke: none;
+}
+
+
+.wb-geo * {
+    vector-effect: non-scaling-stroke;
+    pointer-events: visiblePainted;
+}
+
+
+.wb-node.is-ink {
+    pointer-events: none;
+    overflow: visible;
+}
+
+
+.wb-node.is-ink .wb-shape {
+    pointer-events: stroke;
+}
+
+
+.wb-node.is-stroke {
+    background: transparent;
+    pointer-events: none;
+    overflow: visible;
+}
+
+
+.wb-node.is-stroke .wb-face { display: none; }
+
+
+.wb-node.is-stroke .wb-geo,
+.wb-node.is-stroke .wb-geo * {
+    pointer-events: none;
+}
+
+
+.wb-node.is-stroke .wb-hit {
+    fill: none;
+    stroke: rgba(250, 250, 250, 0.01);
+    stroke-width: 16;
+    pointer-events: stroke !important;
+}
+
+
+.wb-node.is-stroke .wb-handles { pointer-events: none; inset: 0; }
+
+
+.wb-node.is-stroke .wb-handle { pointer-events: auto; }
+
+
+.wb-node.is-stroke .wb-handle:not([data-handle="start"]):not([data-handle="end"]) { display: none; }
+
+
+.wb-stroke {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+
+.wb-handle[data-handle="start"],
+.wb-handle[data-handle="end"] {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    cursor: grab;
+    transform: translate(-50%, -50%) scale(calc(1 / var(--wb-z, 1)));
+}
+
+
+.wb-node[data-shape="square"] .wb-copy,
+.wb-node[data-shape="circle"] .wb-copy,
+.wb-node[data-shape="ellipse"] .wb-copy,
+.wb-node[data-shape="diamond"] .wb-copy,
+.wb-node[data-shape="decision"] .wb-copy,
+.wb-node[data-shape="process"] .wb-copy,
+.wb-node[data-shape="terminator"] .wb-copy {
+    text-align: center;
+    padding: 8px;
+}
+
+
+.wb-node[data-shape="triangle"] .wb-copy {
+    text-align: center;
+    padding: 32% 14px 10px;
+}
+
+
+.wb-node[data-shape="line"] .wb-face,
+.wb-node[data-shape="arrow"] .wb-face {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+
+.wb-node[data-shape="line"] .wb-copy,
+.wb-node[data-shape="arrow"] .wb-copy {
+    display: none;
+}
+
+
+.wb-node[data-shape="draw"] .wb-face,
+.wb-node.is-ink .wb-face {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+
+.wb-node.is-ink .wb-copy { display: none; }
+
+
+.wb-ink,
+.wb-stroke { inset: 0; width: 100%; height: 100%; }
+
+
+.wb-node[data-shape="line"] .wb-face,
+.wb-node[data-shape="arrow"] .wb-face { pointer-events: none; }
+
+
+.wb-node[data-shape="line"] .wb-geo .wb-shape,
+.wb-node[data-shape="arrow"] .wb-geo .wb-shape,
+.wb-node.is-ink .wb-geo .wb-shape {
+    fill: none;
+}
+
+
+.wb-node.is-on .wb-face,
+.wb-node.is-from .wb-face {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+
+.wb-node.is-on.is-geo .wb-face,
+.wb-node.is-from.is-geo .wb-face,
+.wb-node.is-on.is-text .wb-face,
+.wb-node.is-from.is-text .wb-face { box-shadow: none; border: 0; }
+
+
+.wb-node.is-on.is-geo .wb-geo,
+.wb-node.is-from.is-geo .wb-geo,
+.wb-node.is-on.is-stroke .wb-geo,
+.wb-node.is-from.is-stroke .wb-geo { stroke: #fafafa; }
+
+
+.wb-node.is-on.is-image.is-empty .wb-geo,
+.wb-node.is-from.is-image.is-empty .wb-geo { stroke: #52525b; }
+
+
+.wb-handles {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+}
+
+
+.wb-handle {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 1px solid #09090b;
+    border-radius: 1px;
+    background: var(--accent);
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(calc(1 / var(--wb-z, 1)));
+}
+
+

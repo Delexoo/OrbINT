@@ -332,10 +332,17 @@
         }
 
         async function shareSetLive(on) {
+            if (shareState.opening) return;
             const svc = shareServices();
             if (!svc.api) throw new Error('Set a share API URL in Settings (or .env SHARE_API_URL).');
             shareEnsureIdentity();
             shareState.error = '';
+            shareState.opening = true;
+            const toggle = document.getElementById('shareSessionLive');
+            const status = document.getElementById('shareCollabStatus');
+            if (toggle) toggle.disabled = true;
+            if (status) status.textContent = on ? 'Turning the session on…' : 'Turning the session off…';
+            try {
             if (on) {
                 shareState.hosting = true;
                 shareSetReadonly(false);
@@ -350,6 +357,7 @@
                 shareStartLive();
                 sharePersistHost();
                 if (typeof appendCaseAudit === 'function') appendCaseAudit('share', '', 'Session on');
+                if (window.OrbINTDone) window.OrbINTDone('Share session is on', 'Anyone with the link can view this case until you turn the session off.');
             } else {
                 await sharePutSession(false);
                 shareState.live = false;
@@ -357,8 +365,12 @@
                 sharePersistHost();
                 if (typeof appendCaseAudit === 'function') appendCaseAudit('share', '', 'Session off');
             }
-            sharePaint();
             return shareState.lastViewUrl;
+            } finally {
+                shareState.opening = false;
+                if (toggle) toggle.disabled = false;
+                sharePaint();
+            }
         }
 
         async function shareJoinFromHash() {

@@ -1,0 +1,10 @@
+# OrbINT
+
+OrbINT is a local desk for open-source reconnaissance, operated by Delexoo. Cases stay in the browser. There is no account.
+
+## Pages
+
+- [Desk](https://orbint.net/): the app. The operator guide opens inside it.
+- [Privacy](https://orbint.net/privacy.html): what stays on the device and what a lookup sends out.
+- [Terms](https://orbint.net/terms.html): rules of use.
+- [Contact](https://orbint.net/contact.html): Delexoo, at https://github.com/Delexoo.

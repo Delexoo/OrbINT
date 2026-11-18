@@ -32,6 +32,7 @@
             reduceMotion: false,
             hideTips: false,
             startPage: 'orbit',
+            hibpApiKey: '',
             rememberPage: true,
             hideBackground: false,
             idleLock: 'off',
@@ -203,9 +204,11 @@
                 labelId: 'setStartPageLabel',
                 value: function () { return appSettings.startPage || 'orbit'; },
                 options: [
+                    { value: 'operations', label: 'Operations' },
                     { value: 'orbit', label: 'Orbit' },
                     { value: 'timeline', label: 'Timeline' },
                     { value: 'whiteboard', label: 'Whiteboard' },
+                    { value: 'notepad', label: 'Notepad' },
                     { value: 'harvester', label: 'Harvester' },
                     { value: 'datasheet', label: 'Case File' }
                 ]
@@ -429,6 +432,8 @@
             const watch = document.getElementById('setCollabWs');
             if (api && document.activeElement !== api) api.value = appSettings.shareApiUrl || '';
             if (watch && document.activeElement !== watch) watch.value = appSettings.collabWsUrl || '';
+            const hibp = document.getElementById('setHibpKey');
+            if (hibp && document.activeElement !== hibp) hibp.value = appSettings.hibpApiKey || '';
             updateBombCountdown();
             syncSetPickLabels();
         }

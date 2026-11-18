@@ -32,7 +32,7 @@ def slice_named(src: str, start: str, end: str | None) -> tuple[str, str, str]:
 
 
 def main() -> None:
-    if (ROOT / "js" / "intel.js").exists() and (ROOT / "js" / "orbit-fields.js").exists():
+    if (ROOT / "js" / "intel.js").exists():
         raise SystemExit("Already trimmed. Edit js/*.js and pages/*.html, then run: python tools/bundle.py")
     tl = read("js/timeline.js")
     before, dead, after = slice_named(tl, "    function collectedStats()", "    function syncBoardToolThumb(")

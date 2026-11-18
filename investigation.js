@@ -1,14 +1,17 @@
-/* Assembled from js/{core,datasheet,timeline,whiteboard,harvester,intel,report,boot}.js
+/* Assembled from the js/* files listed in CASE_ORDER.
    Edit those files, then run: python tools/bundle.py */
 (function () {
     'use strict';
 
     const PAGES = [
+        { id: 'operations', label: 'Operations', kicker: 'Dashboard', blurb: 'This browser, public security news, and breach checks.' },
         { id: 'orbit', label: 'OrbINT', kicker: 'Workspace', blurb: 'Orbit-style profile for names, usernames, emails, phones, domains, companies, and other identifiers.' },
         { id: 'timeline', label: 'Timeline', kicker: 'Chronology', blurb: 'Events and discoveries in order — who, when, evidence, and source.' },
         { id: 'whiteboard', label: 'Whiteboard', kicker: 'Diagram', blurb: 'Flowchart shapes and case cards on one board, including investigation playbooks.' },
+        { id: 'notepad', label: 'Notepad', kicker: 'Notes', blurb: 'Short notes kept with this case.' },
         { id: 'harvester', label: 'Harvester', kicker: 'Processor', blurb: 'Upload messy files. Keeps names, dates, accounts, passwords, times, age, and other key data — and cuts the rest.' },
-        { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' }
+        { id: 'datasheet', label: 'Case File', kicker: 'Record', blurb: 'On-screen preview is redacted. The downloaded PDF contains the full case file.' },
+        { id: 'guide', label: 'Guide', kicker: 'Operator', blurb: 'How every page works, including the map, the case file, and the dock.' }
     ];
 
     const FLOW_PRESETS = [
@@ -258,7 +261,7 @@
     let page = 'orbit';
     let pageAnimTimer = 0;
     let pageSwitchReady = false;
-    const PAGE_ANIM_MS = 420;
+    const PAGE_ANIM_MS = 180;
     let data = emptyInvestigation();
     let persistTimer = 0;
     let selectedEvent = '';
@@ -279,7 +282,6 @@
     let boardDrift = { x: 0, y: 0 };
     let boardClip = null;
     let boardStyleClip = null;
-    let boardToolLock = false;
     let boardPicked = [];
     let boardPickedLinks = [];
     let boardPaintFill = 'rgba(103,232,249,0.12)';
@@ -310,6 +312,7 @@
             timelineView: { x: 48, y: 40, z: 1 },
             evidence: [],
             whiteboard: { x: 0, y: 0, z: 1, nodes: [], links: [], grid: true },
+            notepad: { notes: [], active: '', links: [], layout: {}, pan: { x: 0, y: 0 } },
             harvester: { files: [], hits: [], ready: false, view: 'split', split: 50 },
             flowchart: { preset: 'username', checks: {}, notes: {} },
             intel: { host: '' }
@@ -536,9 +539,6 @@
     }
 
     function finishBoardTool() {
-        if (boardToolLock) return;
-        if (boardTool === 'select' || boardTool === 'pan' || boardTool === 'connect' || boardTool === 'eraser' || boardTool === 'laser' || boardTool === 'lasso' || boardTool === 'bucket') return;
-        boardTool = 'select';
         boardDrawToShape = false;
         syncBoardTools();
     }
@@ -1564,10 +1564,26 @@
         rec.type = 'image';
         rec.shape = rec.shape === 'image' ? rec.shape : (typeMeta('image').shape || 'image');
         rec.src = src;
+        rec.blur = '';
         if (title) rec.title = title;
         fitImageNode(rec, src);
         renderWhiteboard();
         schedulePersist();
+        const probe = new Image();
+        probe.onload = function () {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 16;
+                canvas.height = Math.max(1, Math.round(16 * probe.height / Math.max(1, probe.width)));
+                canvas.getContext('2d').drawImage(probe, 0, 0, canvas.width, canvas.height);
+                rec.blur = canvas.toDataURL('image/jpeg', 0.45);
+                rec.imgW = probe.naturalWidth || probe.width;
+                rec.imgH = probe.naturalHeight || probe.height;
+                renderWhiteboard();
+                schedulePersist();
+            } catch (error) {}
+        };
+        probe.src = src;
         return true;
     }
 
@@ -2227,6 +2243,21 @@
                 next.whiteboard.nodes = (Array.isArray(raw.whiteboard.nodes) ? raw.whiteboard.nodes : []).map(normalizeBoardNode);
                 next.whiteboard.links = (Array.isArray(raw.whiteboard.links) ? raw.whiteboard.links : []).map(normalizeLink);
             }
+            if (raw.notepad && typeof raw.notepad === 'object') {
+                next.notepad.notes = (Array.isArray(raw.notepad.notes) ? raw.notepad.notes : []).map(normalizeNote);
+                next.notepad.active = raw.notepad.active || (next.notepad.notes[0] && next.notepad.notes[0].id) || '';
+                const ids = {};
+                next.notepad.notes.forEach(function (note) { ids[note.id] = true; });
+                next.notepad.links = (Array.isArray(raw.notepad.links) ? raw.notepad.links : []).map(normalizeNoteLink).filter(function (link) {
+                    return ids[link.from] && ids[link.to];
+                });
+                next.notepad.layout = normalizeNoteLayout(raw.notepad.layout);
+                const pan = raw.notepad.pan;
+                next.notepad.pan = {
+                    x: Number(pan && pan.x) || 0,
+                    y: Number(pan && pan.y) || 0
+                };
+            }
             if (raw.flowchart && typeof raw.flowchart === 'object') {
                 next.flowchart.preset = raw.flowchart.preset || 'username';
                 next.flowchart.checks = raw.flowchart.checks && typeof raw.flowchart.checks === 'object' ? raw.flowchart.checks : {};
@@ -2289,13 +2320,171 @@
         el.classList.remove('is-page-enter', 'is-page-leave', 'from-left', 'from-right', 'to-left', 'to-right');
     }
 
+    let splitOn = false;
+    let splitRatio = 46;
+
+    function readSplitRatio() {
+        try {
+            const n = Number(localStorage.getItem('orbint-split-ratio'));
+            if (n >= 28 && n <= 72) return n;
+        } catch (error) {}
+        return 46;
+    }
+
+    function splitSidePage() {
+        let side = 'operations';
+        try {
+            const saved = localStorage.getItem('orbint-split-page');
+            if (saved && saved !== 'orbit' && PAGES.some(function (item) { return item.id === saved; })) side = saved;
+        } catch (error) {}
+        if (page && page !== 'orbit') side = page;
+        return side;
+    }
+
+    function paintSplitButton() {
+        const on = splitOn;
+        const tip = on ? 'Close split' : 'Split screen';
+        const btn = $('dockSplit');
+        if (btn) {
+            btn.classList.toggle('is-on', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.setAttribute('data-tip', tip);
+            btn.setAttribute('aria-label', tip);
+        }
+        const phone = $('phoneSplit');
+        if (phone) phone.textContent = tip;
+    }
+
+    function refreshSplitLayout() {
+        if (page === 'timeline') renderTimeline();
+        if (page === 'whiteboard') renderWhiteboard();
+        if (page === 'notepad') renderNotepad();
+        if (page === 'datasheet') sizeDatasheet();
+        if (typeof opsSyncMapSize === 'function') opsSyncMapSize();
+        window.dispatchEvent(new Event('resize'));
+    }
+
+    function ensureSplitBar() {
+        let bar = $('splitBar');
+        if (bar) return bar;
+        const stage = document.querySelector('.work-stage');
+        if (!stage) return null;
+        bar = document.createElement('div');
+        bar.id = 'splitBar';
+        bar.className = 'split-bar';
+        bar.hidden = true;
+        bar.tabIndex = 0;
+        bar.setAttribute('role', 'separator');
+        bar.setAttribute('aria-orientation', 'vertical');
+        bar.setAttribute('aria-label', 'Resize split');
+        bar.setAttribute('aria-valuemin', '28');
+        bar.setAttribute('aria-valuemax', '72');
+        stage.appendChild(bar);
+        function setRatio(next) {
+            splitRatio = Math.min(72, Math.max(28, next));
+            document.body.style.setProperty('--split-w', splitRatio + '%');
+            bar.setAttribute('aria-valuenow', String(Math.round(splitRatio)));
+        }
+        function narrow() {
+            try { return window.matchMedia('(max-width: 820px)').matches; } catch (error) { return false; }
+        }
+        bar.addEventListener('pointerdown', function (event) {
+            if (!splitOn || event.button) return;
+            event.preventDefault();
+            bar.setPointerCapture(event.pointerId);
+            const move = function (ev) {
+                const rect = stage.getBoundingClientRect();
+                const ratio = narrow()
+                    ? ((ev.clientY - rect.top) / rect.height) * 100
+                    : ((ev.clientX - rect.left) / rect.width) * 100;
+                setRatio(ratio);
+            };
+            const up = function (ev) {
+                if (bar.hasPointerCapture(ev.pointerId)) bar.releasePointerCapture(ev.pointerId);
+                bar.removeEventListener('pointermove', move);
+                bar.removeEventListener('pointerup', up);
+                bar.removeEventListener('pointercancel', up);
+                try { localStorage.setItem('orbint-split-ratio', String(Math.round(splitRatio))); } catch (error) {}
+                refreshSplitLayout();
+            };
+            bar.addEventListener('pointermove', move);
+            bar.addEventListener('pointerup', up);
+            bar.addEventListener('pointercancel', up);
+        });
+        bar.addEventListener('dblclick', function () {
+            setRatio(46);
+            try { localStorage.setItem('orbint-split-ratio', '46'); } catch (error) {}
+            refreshSplitLayout();
+        });
+        bar.addEventListener('keydown', function (event) {
+            if (!splitOn) return;
+            const step = event.shiftKey ? 8 : 3;
+            const key = event.key;
+            if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Home' && key !== 'End') return;
+            event.preventDefault();
+            if (key === 'Home') setRatio(28);
+            else if (key === 'End') setRatio(72);
+            else if (key === 'ArrowLeft' || key === 'ArrowUp') setRatio(splitRatio - step);
+            else setRatio(splitRatio + step);
+            try { localStorage.setItem('orbint-split-ratio', String(Math.round(splitRatio))); } catch (error) {}
+            refreshSplitLayout();
+        });
+        return bar;
+    }
+
+    function applySplit() {
+        document.body.classList.toggle('split-orbit', splitOn);
+        document.body.style.setProperty('--split-w', splitRatio + '%');
+        const bar = ensureSplitBar();
+        if (bar) {
+            bar.hidden = !splitOn;
+            bar.setAttribute('aria-valuenow', String(Math.round(splitRatio)));
+            bar.setAttribute('aria-orientation', (function () {
+                try { return window.matchMedia('(max-width: 820px)').matches ? 'horizontal' : 'vertical'; } catch (error) { return 'vertical'; }
+            })());
+        }
+        paintSplitButton();
+        try { localStorage.setItem('orbint-split', splitOn ? '1' : '0'); } catch (error) {}
+    }
+
+    function restoreSplit(savedPage) {
+        splitRatio = readSplitRatio();
+        splitOn = false;
+        try {
+            splitOn = localStorage.getItem('orbint-split') === '1' && !!savedPage && savedPage !== 'orbit' && savedPage !== 'guide';
+        } catch (error) {}
+        applySplit();
+    }
+
+    function toggleSplit() {
+        if (splitOn) {
+            splitOn = false;
+            applySplit();
+            setPage('orbit');
+            return;
+        }
+        splitRatio = readSplitRatio();
+        const side = splitSidePage();
+        splitOn = true;
+        applySplit();
+        if (page === side) {
+            const map = $('mapStage');
+            if (map) map.setAttribute('aria-hidden', 'false');
+            settlePages(page);
+            refreshSplitLayout();
+            return;
+        }
+        setPage(side);
+        refreshSplitLayout();
+    }
+
     function settlePages(activeId) {
         PAGES.forEach(function (item) {
             const el = pagePane(item.id);
             if (!el) return;
             clearPageAnim(el);
             if (item.id === 'orbit') {
-                el.setAttribute('aria-hidden', activeId === 'orbit' ? 'false' : 'true');
+                el.setAttribute('aria-hidden', (activeId === 'orbit' || splitOn) ? 'false' : 'true');
                 return;
             }
             el.hidden = item.id !== activeId;
@@ -2308,6 +2497,10 @@
         if (id === 'analytics' || id === 'evidence') id = 'orbit';
         if (id === 'compiler') id = 'harvester';
         const next = PAGES.some(function (item) { return item.id === id; }) ? id : 'orbit';
+        if (next === 'orbit' && splitOn) {
+            splitOn = false;
+            applySplit();
+        }
         const prev = page;
         if (page === 'whiteboard' && next !== 'whiteboard') {
             hideBoardAddMenu();
@@ -2323,7 +2516,7 @@
         document.body.setAttribute('data-page', page);
         document.body.classList.toggle('page-orbit', page === 'orbit');
 
-        const skipAnim = !pageSwitchReady || prev === next || reduceMotion();
+        const skipAnim = !pageSwitchReady || prev === next || reduceMotion() || splitOn;
         const slideTab = pageSwitchReady && prev !== next;
         pageSwitchReady = true;
         if (pageAnimTimer) {
@@ -2336,7 +2529,6 @@
         } else {
             const fromEl = pagePane(prev);
             const toEl = pagePane(next);
-            const goingRight = pageIndex(next) > pageIndex(prev);
         PAGES.forEach(function (item) {
                 if (item.id === prev || item.id === next) return;
                 const el = pagePane(item.id);
@@ -2352,21 +2544,25 @@
                 clearPageAnim(toEl);
                 if (toEl.id !== 'mapStage') toEl.hidden = false;
             }
-            if (fromEl && toEl) {
-                void toEl.offsetWidth;
-                fromEl.classList.add('is-page-leave', goingRight ? 'to-left' : 'to-right');
-                toEl.classList.add('is-page-enter', goingRight ? 'from-right' : 'from-left');
-                pageAnimTimer = setTimeout(function () {
-                    pageAnimTimer = 0;
+            const paint = function () {
+                if (fromEl && toEl) {
+                    void toEl.offsetWidth;
+                    fromEl.classList.add('is-page-leave');
+                    toEl.classList.add('is-page-enter');
+                    pageAnimTimer = setTimeout(function () {
+                        pageAnimTimer = 0;
+                        settlePages(page);
+                    }, PAGE_ANIM_MS);
+                } else {
                     settlePages(page);
-                }, PAGE_ANIM_MS);
-            } else {
-                settlePages(page);
-            }
+                }
+            };
+            if (document.startViewTransition) document.startViewTransition(paint);
+            else paint();
         }
 
         const map = $('mapStage');
-        if (map) map.setAttribute('aria-hidden', page === 'orbit' ? 'false' : 'true');
+        if (map) map.setAttribute('aria-hidden', (page === 'orbit' || splitOn) ? 'false' : 'true');
         renderPageSwitch({ instant: !slideTab });
         syncDock();
         if (page === 'timeline') {
@@ -2374,15 +2570,19 @@
             syncTimelineIsland();
         }
         if (page === 'whiteboard') renderWhiteboard();
+        if (page === 'notepad') renderNotepad();
         if (page === 'harvester') renderHarvester();
         if (page === 'datasheet') renderDatasheet();
+        if (page === 'operations') renderOperations();
         try {
             if (window.OrbINTSettings && OrbINTSettings.get('rememberPage') === false) {
                 /* keep the in-memory page without writing it */
             } else {
                 localStorage.setItem('orbint-page', page);
             }
+            if (splitOn && page !== 'orbit') localStorage.setItem('orbint-split-page', page);
         } catch (error) {}
+        paintSplitButton();
     }
 
     function currentPage() {
@@ -2397,7 +2597,9 @@
             orbit: 'Add field',
             timeline: 'Add event',
             whiteboard: 'Add shape',
-            harvester: 'Upload file'
+            notepad: 'New note',
+            harvester: 'Upload file',
+            operations: 'Operations'
         };
         const label = labels[page] || labels.orbit;
         if (add) {
@@ -2435,10 +2637,15 @@
             });
             return true;
         }
+        if (page === 'notepad') {
+            addNotepadNote();
+            return true;
+        }
         if (page === 'harvester') {
             openHarvesterPicker();
             return true;
         }
+        if (page === 'operations') return true;
         return false;
     }
 
@@ -2465,8 +2672,9 @@
     }
 
     function pageSwitchItems() {
-        if (!isCompactNav()) return PAGES;
-        return [{ id: 'casebook', label: 'Casebook' }].concat(PAGES);
+        const items = PAGES.filter(function (item) { return item.id !== 'guide'; });
+        if (!isCompactNav()) return items;
+        return [{ id: 'casebook', label: 'Casebook' }].concat(items);
     }
 
     function pageSwitchActive() {
@@ -2571,8 +2779,10 @@
         renderPageSwitch();
         renderTimeline();
         renderWhiteboard();
+        renderNotepad();
         renderHarvester();
         renderDatasheet();
+        renderOperations();
     }
 
 
@@ -2623,22 +2833,338 @@
         renderDatasheet();
     }
 
+    let dsOpening = null;
+    let dsSuppressClick = false;
+
+    function dsLocked() {
+        return !!(host && host.readonly && host.readonly());
+    }
+
+    function dsSpec(row) {
+        if (!row) return null;
+        return {
+            kind: row.getAttribute('data-ds-edit') || '',
+            id: row.getAttribute('data-ds-id') || '',
+            key: row.getAttribute('data-ds-key') || '',
+            raw: row.getAttribute('data-ds-raw') || '',
+            match: row.getAttribute('data-ds-match') || ''
+        };
+    }
+
+    function dsPageIndex(page) {
+        const view = $('datasheetView');
+        if (!view || !page) return -1;
+        return Array.prototype.indexOf.call(view.querySelectorAll('.ds-page'), page);
+    }
+
+    function dsFindRow(spec) {
+        const view = $('datasheetView');
+        if (!view || !spec) return null;
+        const rows = view.querySelectorAll('[data-ds-edit]');
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if ((row.getAttribute('data-ds-edit') || '') !== spec.kind) continue;
+            if ((row.getAttribute('data-ds-id') || '') !== spec.id) continue;
+            if ((row.getAttribute('data-ds-key') || '') !== spec.key) continue;
+            if ((row.getAttribute('data-ds-match') || '') !== (spec.match || '')) continue;
+            if (spec.raw && (row.getAttribute('data-ds-raw') || '') !== spec.raw) continue;
+            return row;
+        }
+        return null;
+    }
+
+    function dsToggleRedact(btn) {
+        const key = btn.getAttribute('data-redact') || '';
+        const on = !btn.classList.contains('is-open');
+        btn.classList.toggle('is-open', on);
+        if (dsRevealAll) {
+            if (on) dsHidden.delete(key);
+            else dsHidden.add(key);
+        } else if (on) dsRevealed.add(key);
+        else dsRevealed.delete(key);
+    }
+
+    function dsChanged(next, show, raw) {
+        if (next === show || next === raw) return false;
+        if (!next && !show && !raw) return false;
+        return true;
+    }
+
+    function dsApplyEdit(kind, id, key, raw, show, next, inputMatch) {
+        if (!dsChanged(next, show, raw)) return;
+        if (kind === 'case') {
+            if (host && host.writeCaseField) host.writeCaseField(key, next);
+            return;
+        }
+        if (kind === 'fact') {
+            const match = inputMatch || raw;
+            if (host && host.patchProfileFact) host.patchProfileFact(id, match, key === 'source' ? 'source' : 'value', next);
+            return;
+        }
+        if (kind === 'note') {
+            if (key === 'analysis') {
+                if (host && host.writeAnalysis) host.writeAnalysis(next);
+                return;
+            }
+            if (key === 'evidence') {
+                const item = (data.evidence || [])[Number(id)];
+                if (item) item.note = next;
+                schedulePersist();
+                return;
+            }
+            if (host && host.patchProfileFact) host.patchProfileFact(id || 'notes', raw, 'value', next);
+            return;
+        }
+        if (kind === 'note-new') {
+            if (next && host && host.addFact) host.addFact('notes', next);
+            return;
+        }
+        if (kind === 'event') {
+            const ev = (data.timeline || []).find(function (item) { return item && item.id === id; });
+            if (!ev) return;
+            if (key === 'body' && show !== raw) ev.moreNotes = [];
+            ev[key] = next;
+            schedulePersist();
+            renderTimeline();
+            return;
+        }
+        if (kind === 'board') {
+            const node = ((data.whiteboard && data.whiteboard.nodes) || []).find(function (item) { return item && item.id === id; });
+            if (!node) return;
+            node[key] = next;
+            schedulePersist();
+            renderWhiteboard();
+            return;
+        }
+        if (kind === 'pad') {
+            const note = ((data.notepad && data.notepad.notes) || []).find(function (item) { return item && item.id === id; });
+            if (!note) return;
+            note[key] = next;
+            if (key === 'body') note.html = '';
+            schedulePersist();
+            renderNotepad();
+            return;
+        }
+        if (kind === 'harvest') {
+            const hit = ((data.harvester && data.harvester.hits) || [])[Number(id)];
+            if (!hit) return;
+            hit[key] = next;
+            schedulePersist();
+            renderHarvester();
+        }
+    }
+
+    function dsFinishEdit(nextOpen) {
+        dsOpening = null;
+        dsClearEditors();
+        dsMarkup = '';
+        renderDatasheet();
+        if (!nextOpen) return;
+        if (nextOpen.kind === 'note-new') {
+            const pages = ($('datasheetView') || {}).querySelectorAll ? $('datasheetView').querySelectorAll('.ds-page') : [];
+            dsOpenNote(pages[nextOpen.page], nextOpen.x, nextOpen.y);
+            return;
+        }
+        const row = dsFindRow(nextOpen);
+        if (row) dsOpenEditor(row);
+    }
+
+    function dsCommitEditor(input, cancel) {
+        if (!input || input.dataset.dsDone) return;
+        input.dataset.dsDone = '1';
+        const kind = input.getAttribute('data-ds-kind') || '';
+        const id = input.getAttribute('data-ds-id') || '';
+        const key = input.getAttribute('data-ds-key') || '';
+        const raw = input.getAttribute('data-ds-raw') || '';
+        const show = input.getAttribute('data-ds-show') || '';
+        const multiline = input.tagName === 'TEXTAREA';
+        const next = multiline
+            ? String(input.value || '').replace(/\s+$/g, '').replace(/^\s+/g, '')
+            : String(input.value || '').replace(/\s+/g, ' ').trim();
+        const match = input.getAttribute('data-ds-match') || '';
+        const hold = cancel ? null : dsOpening;
+        dsOpening = null;
+        if (input.parentNode) input.remove();
+        if (!cancel) dsApplyEdit(kind, id, key, raw, show, next, match);
+        dsFinishEdit(hold);
+    }
+
+    function dsClearEditors() {
+        const view = $('datasheetView');
+        if (!view) return;
+        view.querySelectorAll('.ds-inline, .ds-status-edit').forEach(function (el) { el.remove(); });
+    }
+
+    function dsPlaceCaret(input) {
+        input.focus();
+        const n = input.value.length;
+        if (input.setSelectionRange) input.setSelectionRange(n, n);
+    }
+
+    function dsBindEditor(input) {
+        input.addEventListener('mousedown', function (event) { event.stopPropagation(); });
+        input.addEventListener('click', function (event) { event.stopPropagation(); });
+        input.addEventListener('blur', function () { dsCommitEditor(input, false); });
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                dsOpening = null;
+                dsCommitEditor(input, true);
+                return;
+            }
+            if (event.key === 'Enter' && (input.tagName !== 'TEXTAREA' || !event.shiftKey)) {
+                event.preventDefault();
+                input.blur();
+            }
+        });
+    }
+
+    function dsOpenEditor(row) {
+        if (!row || dsLocked() || row.querySelector('.ds-inline, .ds-status-edit')) return;
+        const kind = row.getAttribute('data-ds-edit') || '';
+        const key = row.getAttribute('data-ds-key') || '';
+        if (kind === 'case' && key === 'status') {
+            dsOpenStatus(row);
+            return;
+        }
+        const show = row.getAttribute('data-ds-show') || '';
+        const raw = row.getAttribute('data-ds-raw') || '';
+        const multiline = kind === 'note' || show.indexOf('\n') >= 0 || raw.indexOf('\n') >= 0;
+        const input = document.createElement(multiline ? 'textarea' : 'input');
+        input.className = 'ds-inline';
+        if (!multiline) {
+            input.type = 'text';
+            if (kind === 'case' && key === 'number') input.maxLength = 48;
+            if (kind === 'case' && key === 'offense') input.maxLength = 80;
+            if (kind === 'case' && key === 'investigator') input.maxLength = 48;
+            if (kind !== 'case') input.maxLength = 4000;
+        } else input.maxLength = 4000;
+        input.spellcheck = false;
+        input.autocomplete = 'off';
+        input.placeholder = show || raw ? '' : '--';
+        input.value = show || raw;
+        input.setAttribute('data-ds-kind', kind);
+        input.setAttribute('data-ds-id', row.getAttribute('data-ds-id') || '');
+        input.setAttribute('data-ds-key', key);
+        input.setAttribute('data-ds-raw', raw);
+        input.setAttribute('data-ds-show', show);
+        input.setAttribute('data-ds-match', row.getAttribute('data-ds-match') || '');
+        const label = row.querySelector('.ds-fill-k');
+        if (label) input.setAttribute('aria-label', label.textContent || 'Edit');
+        row.classList.add('is-editing');
+        if (row.classList.contains('ds-note')) {
+            row.textContent = '';
+            row.appendChild(input);
+        } else {
+            const slot = row.querySelector('.ds-fill-v');
+            if (!slot) return;
+            slot.textContent = '';
+            slot.appendChild(input);
+        }
+        dsBindEditor(input);
+        dsPlaceCaret(input);
+    }
+
+    function dsOpenStatus(row) {
+        const slot = row.querySelector('.ds-fill-v');
+        if (!slot) return;
+        const current = row.getAttribute('data-ds-raw') || 'open';
+        const choices = [['open', 'Open'], ['inactive', 'Inactive'], ['closed', 'Closed']];
+        const bar = document.createElement('span');
+        bar.className = 'ds-status-edit';
+        bar.addEventListener('mousedown', function (event) { event.stopPropagation(); });
+        choices.forEach(function (pair) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = pair[1];
+            if (pair[0] === current) btn.className = 'is-on';
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                dsOpening = null;
+                if (host && host.writeCaseField) host.writeCaseField('status', pair[0]);
+                dsFinishEdit(null);
+            });
+            bar.appendChild(btn);
+        });
+        row.classList.add('is-editing');
+        slot.textContent = '';
+        slot.appendChild(bar);
+    }
+
+    function dsOpenNote(page, clientX, clientY) {
+        if (!page || dsLocked() || page.querySelector('.ds-inline')) return;
+        const input = document.createElement('textarea');
+        input.className = 'ds-inline ds-inline-note';
+        input.maxLength = 4000;
+        input.rows = 2;
+        input.spellcheck = false;
+        input.placeholder = 'Add to the record';
+        input.setAttribute('aria-label', 'Add to the record');
+        input.setAttribute('data-ds-kind', 'note-new');
+        const rect = page.getBoundingClientRect();
+        const scale = rect.width / (page.offsetWidth || 612) || 1;
+        const localX = Number.isFinite(clientX) ? (clientX - rect.left) / scale : 72;
+        const localY = Number.isFinite(clientY) ? (clientY - rect.top) / scale : 120;
+        const left = Math.max(72, Math.min(localX, 430));
+        const top = Math.max(86, Math.min(localY, 700));
+        input.style.left = left + 'px';
+        input.style.top = top + 'px';
+        input.style.width = Math.max(140, 540 - left) + 'px';
+        page.appendChild(input);
+        dsBindEditor(input);
+        input.focus();
+    }
+
+    function dsPaperTarget(event) {
+        const page = event.target.closest('.ds-page');
+        if (!page) return null;
+        if (event.target.closest('.ds-headband, .ds-footband, .ds-cover, .ds-close, .ds-h, .ds-redact-photo, .ds-fill, .ds-item, .ds-meta, .ds-pair, .ds-case, .ds-p, .ds-cap')) return null;
+        if (page.classList.contains('is-first') || page.classList.contains('is-close-page')) return null;
+        return page;
+    }
+
     function bindDatasheet() {
         const view = $('datasheetView');
         if (view && !view.dataset.redactBound) {
             view.dataset.redactBound = '1';
+            view.addEventListener('mousedown', function (event) {
+                if (event.button !== 0) return;
+                const inline = view.querySelector('.ds-inline');
+                const status = view.querySelector('.ds-status-edit');
+                if (!inline && !status) return;
+                if (event.target.closest('.ds-inline, .ds-status-edit')) return;
+                const row = event.target.closest('[data-ds-edit]');
+                const page = dsPaperTarget(event);
+                dsSuppressClick = true;
+                if (row) dsOpening = dsSpec(row);
+                else if (page) dsOpening = { kind: 'note-new', page: dsPageIndex(page), x: event.clientX, y: event.clientY };
+                else dsOpening = null;
+                if (inline) return;
+                dsFinishEdit(dsOpening);
+            });
             view.addEventListener('click', function (event) {
-                const btn = event.target.closest('.ds-redact');
-                if (!btn) return;
+                if (dsSuppressClick) {
+                    dsSuppressClick = false;
+                    return;
+                }
+                if (event.target.closest('.ds-inline, .ds-status-edit')) return;
+                const photo = event.target.closest('.ds-redact-photo');
+                if (photo) {
+                    event.preventDefault();
+                    dsToggleRedact(photo);
+                    return;
+                }
+                const row = event.target.closest('[data-ds-edit]');
+                if (row) {
+                    event.preventDefault();
+                    dsOpenEditor(row);
+                    return;
+                }
+                const page = dsPaperTarget(event);
+                if (!page) return;
                 event.preventDefault();
-                const key = btn.getAttribute('data-redact') || '';
-                const on = !btn.classList.contains('is-open');
-                btn.classList.toggle('is-open', on);
-                if (dsRevealAll) {
-                    if (on) dsHidden.delete(key);
-                    else dsHidden.add(key);
-                } else if (on) dsRevealed.add(key);
-                else dsRevealed.delete(key);
+                dsOpenNote(page, event.clientX, event.clientY);
             });
         }
         const dockBtn = $('dockSpoilers');
@@ -2664,6 +3190,11 @@
         const view = $('datasheetView');
         if (!view) return;
         bindDatasheet();
+        view.classList.toggle('is-locked', dsLocked());
+        if (view.querySelector('.ds-inline, .ds-status-edit')) {
+            dsMarkup = '';
+            return;
+        }
         const html = reportPreviewMarkup();
         if (html === dsMarkup && view.firstChild) {
             sizeDatasheet();
@@ -2871,6 +3402,64 @@
         if (!data.timelineView || typeof data.timelineView !== 'object') data.timelineView = { x: 48, y: 40, z: 1 };
         if (!(data.timelineView.z > 0)) data.timelineView.z = 1;
         return data.timelineView;
+    }
+
+    let tlCamAnim = 0;
+    let tlCamAim = null;
+
+    function timelineCamClose(a, b) {
+        return !!a && !!b && Math.abs(a.x - b.x) < 0.6 && Math.abs(a.y - b.y) < 0.6 && Math.abs((a.z || 1) - (b.z || 1)) < 0.004;
+    }
+
+    function stopTimelineCamAnim() {
+        if (tlCamAnim) cancelAnimationFrame(tlCamAnim);
+        tlCamAnim = 0;
+        tlCamAim = null;
+    }
+
+    function easeTimelineCam(target) {
+        const cam = timelineCam();
+        const to = {
+            x: Number(target.x) || 0,
+            y: Number(target.y) || 0,
+            z: target.z > 0 ? target.z : 1
+        };
+        if (tlCamAnim && timelineCamClose(tlCamAim, to)) return;
+        const from = { x: cam.x, y: cam.y, z: cam.z || 1 };
+        if (timelineCamClose(from, to) || reduceMotion()) {
+            stopTimelineCamAnim();
+            cam.x = to.x;
+            cam.y = to.y;
+            cam.z = to.z;
+            applyTimelineCam();
+            drawTimelineAxis();
+            return;
+        }
+        stopTimelineCamAnim();
+        tlCamAim = to;
+        const t0 = performance.now();
+        const ms = 500;
+        function frame(now) {
+            const t = Math.min(1, (now - t0) / ms);
+            const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            cam.x = from.x + (to.x - from.x) * e;
+            cam.y = from.y + (to.y - from.y) * e;
+            cam.z = from.z + (to.z - from.z) * e;
+            applyTimelineCam();
+            if (t < 1) {
+                tlCamAnim = requestAnimationFrame(frame);
+                return;
+            }
+            cam.x = to.x;
+            cam.y = to.y;
+            cam.z = to.z;
+            tlCamAnim = 0;
+            tlCamAim = null;
+            applyTimelineCam();
+            drawTimelineAxis();
+            schedulePersist();
+        }
+        tlCamAnim = requestAnimationFrame(frame);
     }
 
     function applyTimelineCam() {
@@ -4110,12 +4699,12 @@
         applyTimelineCam();
         const empty = $('timelineEmpty');
         if (empty) empty.hidden = true;
-        if (!events.length) {
+        if (!events.length && !tlCamAnim) {
             const view = $('timelineView');
             const cam = timelineCam();
             if (view && view.clientHeight > 80) {
-                cam.y = Math.round(view.clientHeight / 2 - TL_AXIS_Y * cam.z);
-                applyTimelineCam();
+                const y = Math.round(view.clientHeight / 2 - TL_AXIS_Y * (cam.z || 1));
+                if (Math.abs((cam.y || 0) - y) > 1) easeTimelineCam({ x: cam.x, y: y, z: cam.z || 1 });
             }
         }
         if (!list) {
@@ -4589,14 +5178,8 @@
 
     function recenterTimeline() {
         const view = $('timelineView');
-        const cam = timelineCam();
-        const z = 1;
         const y = view ? Math.round(view.clientHeight / 2 - TL_AXIS_Y) : 40;
-        cam.x = 48;
-        cam.y = y;
-        cam.z = z;
-        applyTimelineCam();
-        drawTimelineAxis();
+        easeTimelineCam({ x: 48, y: y, z: 1 });
     }
 
     function openEventEditor(id) {
@@ -4996,6 +5579,24 @@
         if (act === 'delete' && id) deleteEvent(id);
     }
 
+    function boardImageTag(node) {
+        const w = Math.max(1, Math.round(node.imgW || node.w || 240));
+        const h = Math.max(1, Math.round(node.imgH || node.h || 168));
+        if (node.blur) {
+            return '<img src="' + esc(node.blur) + '" data-full="' + esc(node.src) + '" width="' + w + '" height="' + h + '" alt="" style="filter:blur(12px)">';
+        }
+        return '<img src="' + esc(node.src) + '" width="' + w + '" height="' + h + '" alt="">';
+    }
+
+    document.addEventListener('load', function (event) {
+        const img = event.target;
+        if (!img || !img.getAttribute || !img.getAttribute('data-full')) return;
+        const full = img.getAttribute('data-full');
+        img.removeAttribute('data-full');
+        img.style.filter = '';
+        if (full) img.src = full;
+    }, true);
+
     function syncBoardToolThumb(instant) {
         const bar = document.querySelector('.board-toolbar');
         if (!bar) return;
@@ -5036,8 +5637,6 @@
         document.querySelectorAll('[data-board-tool]').forEach(function (btn) {
             btn.classList.toggle('is-on', btn.getAttribute('data-board-tool') === boardTool);
         });
-        const lockBtn = document.querySelector('[data-board-lock]');
-        if (lockBtn) lockBtn.classList.toggle('is-on', boardToolLock);
         const presetBtn = document.querySelector('[data-board-presets]');
         const presetSheet = $('boardPresetSheet');
         if (presetBtn) presetBtn.classList.toggle('is-on', !!(presetSheet && !presetSheet.hidden));
@@ -5118,17 +5717,19 @@
                 copy = '<iframe src="' + esc(node.src) + '" sandbox="allow-scripts allow-popups allow-forms" referrerpolicy="no-referrer" title=""></iframe>';
             } else if (node.type === 'embed') {
                 copy = '<div class="wb-image-slot">' +
-                    '<input type="url" data-wb-embed-url placeholder="Paste page URL">' +
+                    '<label for="wb-embed-' + esc(node.id) + '">Page URL</label>' +
+                    '<input id="wb-embed-' + esc(node.id) + '" type="url" data-wb-embed-url placeholder="Paste page URL">' +
                     '</div>';
             } else if (node.type === 'image' && node.src) {
-                copy = '<img src="' + esc(node.src) + '" alt="">';
+                copy = boardImageTag(node);
             } else if (node.type === 'image') {
                 copy = '<div class="wb-image-slot">' +
                     '<button type="button" data-wb-upload>Upload</button>' +
-                    '<input type="url" data-wb-image-url placeholder="Paste image URL">' +
+                    '<label for="wb-image-' + esc(node.id) + '">Image URL</label>' +
+                    '<input id="wb-image-' + esc(node.id) + '" type="url" data-wb-image-url placeholder="Paste image URL">' +
                     '</div>';
             } else {
-                const img = node.shape === 'document' && node.src ? '<img src="' + esc(node.src) + '" alt="">' : '';
+                const img = node.shape === 'document' && node.src ? boardImageTag(node) : '';
                 const href = node.href ? '<p class="wb-href">' + esc(node.href) + '</p>' : '';
                 copy = img +
                     '<div class="wb-text" data-wb-text>' +
@@ -6042,7 +6643,8 @@
             html += menuItem('data-board-ctx="flip-h"', 'flip-h', 'Flip horizontal', '<span class="board-kbd">Shift+H</span>');
             html += menuItem('data-board-ctx="flip-v"', 'flip-v', 'Flip vertical', '<span class="board-kbd">Shift+V</span>');
             html += '<hr>';
-            html += menuItem('data-board-ctx="link"', 'link', rec.href ? 'Edit link' : 'Add link', '<span class="board-kbd">Ctrl+K</span>');
+            const boardChord = (/Mac|iPhone|iPad/.test(navigator.platform || '') || /Mac/.test(navigator.userAgent || '')) ? '⌘⇧K' : 'Ctrl+Shift+K';
+            html += menuItem('data-board-ctx="link"', 'link', rec.href ? 'Edit link' : 'Add link', '<span class="board-kbd">' + boardChord + '</span>');
             html += menuItem('data-board-ctx="lock"', rec.locked ? 'unlock' : 'lock', rec.locked ? 'Unlock' : 'Lock');
             html += '<hr>' + menuItem('data-board-ctx="delete" class="danger"', 'delete', 'Delete', '<span class="board-kbd">Del</span>');
         } else if (boardMenuMode === 'link') {
@@ -6765,7 +7367,6 @@
                 clearStrokeSnap();
                 if (kind === 'text' || kind === 'finding' || kind === 'question' || kind === 'note') beginBoardTextEdit(rec.id);
                 if (kind === 'image' || kind === 'embed') {
-                    boardTool = 'select';
                     renderWhiteboard();
                     focusImageSlot(rec.id);
                     return;
@@ -6837,6 +7438,1730 @@
             beginBoardTextEdit(rec.id);
         });
     }
+
+    let noteLinkFrom = '';
+    let noteShiftIds = [];
+    let noteDrag = null;
+    let notePan = null;
+    let noteBodies = {};
+    let noteDotEls = {};
+    let noteLineEls = {};
+    let noteSimOn = false;
+    let noteSimCalm = 0;
+    let noteSimSize = null;
+    let noteGraphSig = '';
+
+    function setNoteTip(picking) {
+        const tip = $('noteLinkHint');
+        if (!tip) return;
+        tip.classList.toggle('is-armed', !!picking);
+        if (picking) {
+            tip.textContent = 'Click another note to link';
+            return;
+        }
+        tip.innerHTML = 'Hold <kbd>Shift</kbd> and click notes to link. Middle-click to pan.';
+    }
+
+    function linkNoteIntoShift(id) {
+        if (!id || !noteById(id)) return;
+        if (noteLinkFrom) {
+            noteLinkFrom = '';
+            setNoteTip(false);
+        }
+        if (noteShiftIds.indexOf(id) === -1) {
+            noteShiftIds.forEach(function (other) { addNoteLink(other, id); });
+            noteShiftIds.push(id);
+        }
+        notepadState().active = id;
+        renderNotepad();
+        const tip = $('noteLinkHint');
+        if (tip) tip.classList.add('is-armed');
+    }
+
+    function normalizeNote(note) {
+        const rec = note && typeof note === 'object' ? note : {};
+        const created = rec.created || rec.updated || '';
+        return {
+            id: rec.id || uid('note'),
+            title: String(rec.title || '').slice(0, 80),
+            body: String(rec.body || ''),
+            html: String(rec.html || '').slice(0, 200000),
+            created: created,
+            updated: rec.updated || created
+        };
+    }
+
+    function normalizeNoteLink(link) {
+        const rec = link && typeof link === 'object' ? link : {};
+        const from = String(rec.from || '');
+        const to = String(rec.to || '');
+        if (!from || !to || from === to) return { id: '', from: '', to: '' };
+        return { id: rec.id || uid('nlink'), from: from, to: to };
+    }
+
+    function normalizeNoteLayout(layout) {
+        const next = {};
+        if (!layout || typeof layout !== 'object') return next;
+        Object.keys(layout).forEach(function (id) {
+            const spot = layout[id];
+            const x = Number(spot && spot.x);
+            const y = Number(spot && spot.y);
+            if (!isFinite(x) || !isFinite(y)) return;
+            next[id] = { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+        });
+        return next;
+    }
+
+    function noteNow() {
+        return new Date().toISOString();
+    }
+
+    function noteWhen(note) {
+        const raw = (note && (note.updated || note.created)) || '';
+        const date = new Date(raw);
+        if (!raw || isNaN(date.getTime())) return '';
+        return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function blankNote() {
+        const now = noteNow();
+        return { id: uid('note'), title: '', body: '', created: now, updated: now };
+    }
+
+    function notepadState() {
+        if (!data.notepad || typeof data.notepad !== 'object') data.notepad = { notes: [], active: '', links: [], layout: {}, pan: { x: 0, y: 0 } };
+        if (!Array.isArray(data.notepad.notes)) data.notepad.notes = [];
+        if (!Array.isArray(data.notepad.links)) data.notepad.links = [];
+        if (!data.notepad.layout || typeof data.notepad.layout !== 'object') data.notepad.layout = {};
+        if (!data.notepad.pan || typeof data.notepad.pan !== 'object') data.notepad.pan = { x: 0, y: 0 };
+        data.notepad.pan.x = Number(data.notepad.pan.x) || 0;
+        data.notepad.pan.y = Number(data.notepad.pan.y) || 0;
+        return data.notepad;
+    }
+
+    function noteById(id) {
+        return notepadState().notes.filter(function (note) { return note.id === id; })[0] || null;
+    }
+
+    function noteTitleText(note) {
+        return (note && note.title && note.title.trim()) || 'Untitled';
+    }
+
+    function notePreview(note) {
+        const text = String(note.body || '').replace(/\s+/g, ' ').trim();
+        const when = noteWhen(note);
+        const bit = text ? text.slice(0, 42) : 'Empty note';
+        return when ? when + ' · ' + bit : bit;
+    }
+
+    function noteHasLink(from, to) {
+        return notepadState().links.some(function (link) {
+            return (link.from === from && link.to === to) || (link.from === to && link.to === from);
+        });
+    }
+
+    function closeNoteMenu() {
+        const menu = $('noteMenu');
+        if (!menu) return;
+        menu.hidden = true;
+        menu.innerHTML = '';
+    }
+
+    function cancelNoteLink() {
+        noteLinkFrom = '';
+        const cancel = $('noteLinkCancel');
+        const go = $('noteLinkGo');
+        if (cancel) cancel.hidden = true;
+        if (go) go.classList.remove('is-on');
+        setNoteTip(false);
+        paintNoteGraph();
+    }
+
+    function startNoteLink(id) {
+        const note = noteById(id);
+        if (!note) return;
+        noteLinkFrom = id;
+        noteShiftIds = [];
+        notepadState().active = id;
+        const cancel = $('noteLinkCancel');
+        const go = $('noteLinkGo');
+        if (cancel) cancel.hidden = false;
+        if (go) go.classList.add('is-on');
+        setNoteTip(true);
+        renderNotepad();
+    }
+
+    function addNoteLink(from, to) {
+        if (!from || !to || from === to || noteHasLink(from, to)) return;
+        if (!noteById(from) || !noteById(to)) return;
+        notepadState().links.push({ id: uid('nlink'), from: from, to: to });
+        schedulePersist();
+    }
+
+    function deleteNote(id) {
+        const state = notepadState();
+        state.notes = state.notes.filter(function (note) { return note.id !== id; });
+        state.links = state.links.filter(function (link) { return link.from !== id && link.to !== id; });
+        if (state.layout) delete state.layout[id];
+        if (state.active === id) state.active = state.notes.length ? state.notes[0].id : '';
+        if (noteLinkFrom === id) noteLinkFrom = '';
+        noteShiftIds = noteShiftIds.filter(function (item) { return item !== id; });
+        closeNoteMenu();
+        renderNotepad();
+        schedulePersist();
+    }
+
+    function noteActRow(act, label, attrs, danger) {
+        return '<button type="button" role="menuitem" data-note-act="' + act + '"' + (attrs || '') + (danger ? ' class="is-danger"' : '') + '><span>' + esc(label) + '</span></button>';
+    }
+
+    function noteMenuHtml(noteId) {
+        const links = notepadState().links.filter(function (link) { return link.from === noteId || link.to === noteId; });
+        let html = '<p>Note</p>' +
+            noteActRow('rename', 'Rename') +
+            noteActRow('edit', 'Edit') +
+            noteActRow('link', 'Link');
+        links.forEach(function (link) {
+            const otherId = link.from === noteId ? link.to : link.from;
+            html += noteActRow('unlink', 'Unlink ' + noteTitleText(noteById(otherId)), ' data-link="' + esc(link.id) + '"');
+        });
+        html += '<hr>' + noteActRow('delete', 'Delete', '', true);
+        return html;
+    }
+
+    function fillNoteMenu(html, noteId, fieldId) {
+        const menu = $('noteMenu');
+        if (!menu) return null;
+        hideFieldMenu();
+        menu.innerHTML = html;
+        menu.dataset.note = noteId || '';
+        menu.dataset.field = fieldId || '';
+        return menu;
+    }
+
+    function openNoteMenu(noteId, anchor) {
+        const note = noteById(noteId);
+        const menu = note && anchor ? fillNoteMenu(noteMenuHtml(noteId), noteId, '') : null;
+        if (!menu) return;
+        menu.hidden = false;
+        const rect = anchor.getBoundingClientRect();
+        const width = menu.offsetWidth || 196;
+        placeAppMenu(menu, rect.right - width, rect.bottom + 4);
+    }
+
+    function openNoteMenuAt(noteId, x, y) {
+        if (!noteById(noteId)) return;
+        const menu = fillNoteMenu(noteMenuHtml(noteId), noteId, '');
+        if (menu) placeAppMenu(menu, x, y);
+    }
+
+    function openNoteEditMenu(field, x, y) {
+        if (!field) return;
+        armFieldEdit(field);
+        const note = noteById(notepadState().active);
+        let html = fieldEditRows(field);
+        if (note) html += '<hr>' + noteActRow('delete', 'Delete note', '', true);
+        const menu = fillNoteMenu(html, note ? note.id : '', field.id || '');
+        if (menu) placeAppMenu(menu, x, y);
+    }
+
+    function openNoteCreateMenu(x, y) {
+        const menu = fillNoteMenu('<p>Notepad</p>' + noteActRow('new', 'New note'), '', '');
+        if (menu) placeAppMenu(menu, x, y);
+    }
+
+    function renderNotepad() {
+        const list = $('noteList');
+        const title = $('noteTitle');
+        const body = $('noteBody');
+        const empty = $('noteEmpty');
+        if (!list || !title || !body) return;
+        const state = notepadState();
+        if (!state.active || !state.notes.some(function (note) { return note.id === state.active; })) {
+            state.active = state.notes.length ? state.notes[0].id : '';
+        }
+        list.innerHTML = state.notes.map(function (note) {
+            const on = note.id === state.active;
+            const shift = noteShiftIds.indexOf(note.id) >= 0;
+            return '<div class="note-item' + (on ? ' is-on' : '') + (shift ? ' is-shift' : '') + '" role="option" tabindex="0" data-note="' + esc(note.id) + '"' +
+                (on ? ' aria-selected="true"' : ' aria-selected="false"') + '>' +
+                '<strong>' + esc(noteTitleText(note)) + '</strong>' +
+                '<button type="button" class="note-more" data-note-more aria-label="Options for ' + esc(noteTitleText(note)) + '">⋯</button>' +
+                '<small>' + esc(notePreview(note)) + '</small></div>';
+        }).join('');
+        const current = noteById(state.active);
+        const has = !!current;
+        if (empty) empty.hidden = state.notes.length > 0;
+        if (document.activeElement !== title) title.value = has ? current.title : '';
+        if (document.activeElement !== body) noteFillBody(body, has ? current : null);
+        paintNoteGraph();
+    }
+
+    function noteSpots(notes, w, h) {
+        const state = notepadState();
+        const spots = {};
+        notes.forEach(function (note, index) {
+            const saved = state.layout[note.id];
+            let x;
+            let y;
+            if (saved && isFinite(saved.x) && isFinite(saved.y)) {
+                x = 28 + saved.x * Math.max(1, w - 56);
+                y = 24 + saved.y * Math.max(1, h - 56);
+            } else {
+                const angle = (-Math.PI / 2) + (index / Math.max(1, notes.length)) * Math.PI * 2;
+                const rx = Math.max(28, (w - 80) / 2);
+                const ry = Math.max(24, (h - 72) / 2);
+                x = w / 2 + Math.cos(angle) * rx * 0.78;
+                y = h / 2 + Math.sin(angle) * ry * 0.72;
+            }
+            spots[note.id] = { x: x, y: y };
+        });
+        return spots;
+    }
+
+    function noteReduceMotion() {
+        return document.documentElement.classList.contains('reduce-motion') ||
+            (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function noteGraphSignature(state) {
+        return state.notes.map(function (note) { return note.id; }).join('\n') + '\n' +
+            state.links.map(function (link) { return link.id + ':' + link.from + ':' + link.to; }).join('\n');
+    }
+
+    function noteSyncBodies(notes, w, h) {
+        const spots = noteSpots(notes, w, h);
+        const next = {};
+        notes.forEach(function (note) {
+            const prev = noteBodies[note.id];
+            if (prev) {
+                next[note.id] = prev;
+                return;
+            }
+            const spot = spots[note.id];
+            let x = spot.x;
+            let y = spot.y;
+            const placed = Object.keys(next);
+            let guard = 0;
+            for (let i = 0; i < placed.length; i++) {
+                const other = next[placed[i]];
+                if (Math.hypot(other.x - x, other.y - y) < 48) {
+                    guard += 1;
+                    const angle = guard * 2.4;
+                    x = w / 2 + Math.cos(angle) * Math.min(120, w * 0.34);
+                    y = h / 2 + Math.sin(angle) * Math.min(120, h * 0.28);
+                    i = -1;
+                    if (guard > placed.length + 2) break;
+                }
+            }
+            next[note.id] = { x: x, y: y, vx: 0, vy: 0 };
+        });
+        noteBodies = next;
+    }
+
+    function noteResizeBodies(w, h) {
+        if (w < 20 || h < 20) return false;
+        if (!noteSimSize) {
+            noteSimSize = { w: w, h: h };
+            return false;
+        }
+        if (Math.abs(noteSimSize.w - w) < 2 && Math.abs(noteSimSize.h - h) < 2) return false;
+        if (noteSimSize.w < 20 || noteSimSize.h < 20) {
+            noteBodies = {};
+            noteSimSize = { w: w, h: h };
+            return true;
+        }
+        const sx = w / noteSimSize.w;
+        const sy = h / noteSimSize.h;
+        Object.keys(noteBodies).forEach(function (id) {
+            noteBodies[id].x *= sx;
+            noteBodies[id].y *= sy;
+        });
+        noteSimSize = { w: w, h: h };
+        return true;
+    }
+
+    function noteStoreLayout() {
+        const stage = $('noteGraph');
+        if (!stage) return;
+        const w = Math.max(1, stage.clientWidth);
+        const h = Math.max(1, stage.clientHeight);
+        const state = notepadState();
+        Object.keys(noteBodies).forEach(function (id) {
+            const body = noteBodies[id];
+            state.layout[id] = {
+                x: Math.min(1, Math.max(0, (body.x - 28) / Math.max(1, w - 56))),
+                y: Math.min(1, Math.max(0, (body.y - 24) / Math.max(1, h - 56)))
+            };
+        });
+    }
+
+    function noteIndexGraph(svg) {
+        noteDotEls = {};
+        noteLineEls = {};
+        const dots = svg.querySelectorAll('[data-graph-note]');
+        for (let i = 0; i < dots.length; i++) noteDotEls[dots[i].getAttribute('data-graph-note')] = dots[i];
+        const lines = svg.querySelectorAll('[data-note-edge]');
+        for (let i = 0; i < lines.length; i++) {
+            const id = lines[i].getAttribute('data-note-edge');
+            if (!noteLineEls[id]) noteLineEls[id] = [];
+            noteLineEls[id].push(lines[i]);
+        }
+    }
+
+    function noteRefreshMarks(notes, state) {
+        notes.forEach(function (note) {
+            const dot = noteDotEls[note.id];
+            if (!dot) return;
+            dot.classList.toggle('is-on', note.id === state.active);
+            dot.classList.toggle('is-from', note.id === noteLinkFrom);
+            dot.classList.toggle('is-shift', noteShiftIds.indexOf(note.id) >= 0);
+            const text = dot.querySelector('text');
+            const label = noteTitleText(note).slice(0, 18);
+            if (text && text.textContent !== label) text.textContent = label;
+        });
+    }
+
+    function notePaintBodies() {
+        Object.keys(noteBodies).forEach(function (id) {
+            const dot = noteDotEls[id];
+            const body = noteBodies[id];
+            if (dot) dot.setAttribute('transform', 'translate(' + body.x.toFixed(1) + ' ' + body.y.toFixed(1) + ')');
+        });
+        const links = notepadState().links;
+        links.forEach(function (link) {
+            const lines = noteLineEls[link.id];
+            const a = noteBodies[link.from];
+            const b = noteBodies[link.to];
+            if (!lines || !a || !b) return;
+            for (let i = 0; i < lines.length; i++) {
+                lines[i].setAttribute('x1', a.x.toFixed(1));
+                lines[i].setAttribute('y1', a.y.toFixed(1));
+                lines[i].setAttribute('x2', b.x.toFixed(1));
+                lines[i].setAttribute('y2', b.y.toFixed(1));
+            }
+        });
+    }
+
+    function noteSimStep(w, h) {
+        const state = notepadState();
+        const ids = Object.keys(noteBodies);
+        const cx = w / 2;
+        const cy = h / 2;
+        const rest = Math.min(150, Math.max(78, Math.min(w, h) * 0.28));
+        for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+                const a = noteBodies[ids[i]];
+                const b = noteBodies[ids[j]];
+                let dx = b.x - a.x;
+                let dy = b.y - a.y;
+                let dist = Math.hypot(dx, dy);
+                if (dist < 1) {
+                    dx = (i % 2 ? 1 : -1);
+                    dy = 0.35;
+                    dist = 1;
+                }
+                const push = Math.min(11, 1600 / (dist * dist));
+                const fx = (dx / dist) * push;
+                const fy = (dy / dist) * push;
+                a.vx -= fx;
+                a.vy -= fy;
+                b.vx += fx;
+                b.vy += fy;
+            }
+        }
+        state.links.forEach(function (link) {
+            const a = noteBodies[link.from];
+            const b = noteBodies[link.to];
+            if (!a || !b) return;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const pull = (dist - rest) * 0.02;
+            const fx = (dx / dist) * pull;
+            const fy = (dy / dist) * pull;
+            a.vx += fx;
+            a.vy += fy;
+            b.vx -= fx;
+            b.vy -= fy;
+        });
+        let energy = 0;
+        ids.forEach(function (id) {
+            const body = noteBodies[id];
+            if (noteDrag && noteDrag.id === id) {
+                body.vx = noteDrag.vx || 0;
+                body.vy = noteDrag.vy || 0;
+                energy += 1;
+                return;
+            }
+            body.vx += (cx - body.x) * 0.012;
+            body.vy += (cy - body.y) * 0.012;
+            body.vx *= 0.8;
+            body.vy *= 0.8;
+            const speed = Math.hypot(body.vx, body.vy);
+            if (speed > 12) {
+                body.vx = body.vx / speed * 12;
+                body.vy = body.vy / speed * 12;
+            } else if (speed < 0.05) {
+                body.vx = 0;
+                body.vy = 0;
+            }
+            body.x += body.vx;
+            body.y += body.vy;
+            if (body.x < 36) { body.x = 36; body.vx *= -0.35; }
+            if (body.x > w - 36) { body.x = w - 36; body.vx *= -0.35; }
+            if (body.y < 28) { body.y = 28; body.vy *= -0.35; }
+            if (body.y > h - 40) { body.y = h - 40; body.vy *= -0.35; }
+            energy += body.vx * body.vx + body.vy * body.vy;
+        });
+        return energy;
+    }
+
+    function noteSimStop(save) {
+        noteSimOn = false;
+        noteSimCalm = 0;
+        if (!save) return;
+        noteStoreLayout();
+        schedulePersist();
+    }
+
+    function noteSimTick() {
+        if (!noteSimOn) return;
+        const stage = $('noteGraph');
+        const page = document.body && document.body.getAttribute('data-page');
+        if (page !== 'notepad' || !stage || !stage.querySelector('svg')) {
+            noteSimOn = false;
+            return;
+        }
+        const w = stage.clientWidth;
+        const h = stage.clientHeight;
+        if (w < 20 || h < 20) {
+            requestAnimationFrame(noteSimTick);
+            return;
+        }
+        const energy = noteSimStep(w, h);
+        notePaintBodies();
+        if (!noteDrag && energy < 0.08) noteSimCalm += 1;
+        else noteSimCalm = 0;
+        if (!noteDrag && noteSimCalm > 24) {
+            noteSimStop(true);
+            return;
+        }
+        requestAnimationFrame(noteSimTick);
+    }
+
+    function noteSimStart() {
+        const stage = $('noteGraph');
+        if (!stage || !Object.keys(noteBodies).length) return;
+        const w = Math.max(1, stage.clientWidth);
+        const h = Math.max(1, stage.clientHeight);
+        if (noteReduceMotion()) {
+            for (let step = 0; step < 140; step++) noteSimStep(w, h);
+            Object.keys(noteBodies).forEach(function (id) {
+                noteBodies[id].vx = 0;
+                noteBodies[id].vy = 0;
+            });
+            notePaintBodies();
+            noteStoreLayout();
+            return;
+        }
+        if (noteSimOn) return;
+        noteSimCalm = 0;
+        noteSimOn = true;
+        requestAnimationFrame(noteSimTick);
+    }
+
+    function paintNoteGraph() {
+        const stage = $('noteGraph');
+        if (!stage) return;
+        const state = notepadState();
+        const notes = state.notes;
+        if (!notes.length) {
+            noteBodies = {};
+            noteDotEls = {};
+            noteLineEls = {};
+            noteGraphSig = '';
+            noteSimSize = null;
+            noteSimOn = false;
+            stage.innerHTML = '';
+            return;
+        }
+        const w = Math.max(1, stage.clientWidth);
+        const h = Math.max(1, stage.clientHeight);
+        if (w < 20 || h < 20) return;
+        const resized = noteResizeBodies(w, h);
+        noteSyncBodies(notes, w, h);
+        const sig = noteGraphSignature(state);
+        const svg = stage.querySelector('svg');
+        if (svg && sig === noteGraphSig) {
+            svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+            svg.setAttribute('width', w);
+            svg.setAttribute('height', h);
+            noteRefreshMarks(notes, state);
+            notePaintBodies();
+            if (resized) noteSimStart();
+            return;
+        }
+        noteGraphSig = sig;
+        const lines = state.links.filter(function (link) {
+            return noteBodies[link.from] && noteBodies[link.to];
+        }).map(function (link) {
+            const a = noteBodies[link.from];
+            const b = noteBodies[link.to];
+            const id = esc(link.id);
+            return '<line class="note-edge-hit" data-note-edge="' + id + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" />' +
+                '<line class="note-edge" data-note-edge="' + id + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" />';
+        }).join('');
+        const dots = notes.map(function (note) {
+            const spot = noteBodies[note.id];
+            const on = note.id === state.active ? ' is-on' : '';
+            const from = note.id === noteLinkFrom ? ' is-from' : '';
+            const shift = noteShiftIds.indexOf(note.id) >= 0 ? ' is-shift' : '';
+            const label = noteTitleText(note).slice(0, 18);
+            return '<g class="note-dot' + on + from + shift + '" data-graph-note="' + esc(note.id) + '" transform="translate(' + spot.x + ' ' + spot.y + ')">' +
+                '<circle r="7" />' +
+                '<text y="18">' + esc(label) + '</text></g>';
+        }).join('');
+        stage.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '"><g data-note-cam transform="translate(' +
+            notepadState().pan.x + ' ' + notepadState().pan.y + ')">' + lines + dots + '</g></svg>';
+        noteIndexGraph(stage.querySelector('svg'));
+        noteSimStart();
+    }
+
+    function addNotepadNote() {
+        const state = notepadState();
+        const note = blankNote();
+        state.notes.unshift(note);
+        state.active = note.id;
+        renderNotepad();
+        schedulePersist();
+        const title = $('noteTitle');
+        if (title) title.focus();
+    }
+
+    function writeActiveNote() {
+        const state = notepadState();
+        const title = $('noteTitle');
+        const body = $('noteBody');
+        if (!title || !body) return;
+        noteMarkEmpty(body);
+        let note = noteById(state.active);
+        const fresh = !note;
+        const plain = notePlainFrom(body);
+        const html = noteSanitize(body.innerHTML);
+        if (!note) {
+            if (!title.value && !plain && !noteHasFormat(html)) return;
+            note = blankNote();
+            state.notes.unshift(note);
+            state.active = note.id;
+        }
+        note.title = title.value.slice(0, 80);
+        note.body = plain;
+        note.html = (plain || noteHasFormat(html)) ? html : '';
+        if (!note.created) note.created = note.updated || noteNow();
+        note.updated = noteNow();
+        if (fresh) {
+            renderNotepad();
+            schedulePersist();
+            return;
+        }
+        const rows = document.querySelectorAll('#noteList [data-note]');
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute('data-note') !== note.id) continue;
+            const strong = rows[i].querySelector('strong');
+            const small = rows[i].querySelector('small');
+            const more = rows[i].querySelector('[data-note-more]');
+            if (strong) strong.textContent = noteTitleText(note);
+            if (small) small.textContent = notePreview(note);
+            if (more) more.setAttribute('aria-label', 'Options for ' + noteTitleText(note));
+        }
+        paintNoteGraph();
+        schedulePersist();
+    }
+
+    function runNoteAction(action, noteId, linkId) {
+        closeNoteMenu();
+        if (action === 'new') {
+            addNotepadNote();
+            return;
+        }
+        const state = notepadState();
+        if (noteId) state.active = noteId;
+        if (action === 'rename') {
+            renderNotepad();
+            const title = $('noteTitle');
+            if (title) {
+                title.focus();
+                title.select();
+            }
+            return;
+        }
+        if (action === 'edit') {
+            renderNotepad();
+            const body = $('noteBody');
+            if (body) body.focus();
+            return;
+        }
+        if (action === 'link') {
+            startNoteLink(noteId);
+            return;
+        }
+        if (action === 'unlink') {
+            state.links = state.links.filter(function (link) { return link.id !== linkId; });
+            renderNotepad();
+            schedulePersist();
+            return;
+        }
+        if (action === 'delete') deleteNote(noteId);
+    }
+
+
+    const NOTE_TAGS = { b: 1, strong: 1, i: 1, em: 1, u: 1, s: 1, strike: 1, del: 1, sup: 1, sub: 1, mark: 1, code: 1, span: 1, br: 1, div: 1, p: 1 };
+    const NOTE_FONTS = {
+        serif: 'Georgia, "Times New Roman", serif',
+        sans: '"Segoe UI", sans-serif',
+        mono: 'ui-monospace, Consolas, monospace',
+        narrow: '"Arial Narrow", sans-serif'
+    };
+    const NOTE_COLORS = { '#fafafa': 1, '#a1a1aa': 1, '#f87171': 1, '#fb923c': 1, '#facc15': 1, '#4ade80': 1, '#67e8f9': 1, '#60a5fa': 1, '#c084fc': 1, '#f472b6': 1 };
+    const NOTE_MARKS = { '#fde047': 1, '#86efac': 1, '#67e8f9': 1, '#fdba74': 1, '#f9a8d4': 1 };
+    const NOTE_SIZES = { '12px': 1, '14px': 1, '15px': 1, '18px': 1, '22px': 1, '28px': 1 };
+    let noteFormatRange = null;
+    let noteFormatBlock = null;
+    let noteFormatNote = '';
+    let notePlusBlock = null;
+
+    function noteColorHex(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        if (/^#[0-9a-f]{3}$/.test(raw)) return '#' + raw[1] + raw[1] + raw[2] + raw[2] + raw[3] + raw[3];
+        if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
+        const rgb = raw.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/);
+        if (!rgb) return '';
+        return '#' + [rgb[1], rgb[2], rgb[3]].map(function (part) {
+            const hex = Number(part).toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+        }).join('');
+    }
+
+    function noteKnownColor(value) {
+        const hex = noteColorHex(value);
+        return NOTE_COLORS[hex] || NOTE_MARKS[hex] ? hex : '';
+    }
+
+    function noteFontKey(value) {
+        const text = String(value || '').toLowerCase().replace(/["']/g, '');
+        if (!text || text === 'inherit') return '';
+        if (text.indexOf('narrow') >= 0) return 'narrow';
+        if (text.indexOf('mono') >= 0 || text.indexOf('consolas') >= 0 || text.indexOf('courier') >= 0) return 'mono';
+        if (text.indexOf('georgia') >= 0 || text.indexOf('times') >= 0) return 'serif';
+        if (text.indexOf('segoe') >= 0) return 'sans';
+        return '';
+    }
+
+    function noteSafeStyle(style) {
+        const out = [];
+        String(style || '').split(';').forEach(function (part) {
+            const idx = part.indexOf(':');
+            if (idx < 0) return;
+            const key = part.slice(0, idx).trim().toLowerCase();
+            const raw = part.slice(idx + 1).trim();
+            let value = '';
+            if (key === 'color' || key === 'background-color') value = noteKnownColor(raw);
+            else if (key === 'font-size') value = NOTE_SIZES[raw.toLowerCase()] ? raw.toLowerCase() : '';
+            else if (key === 'font-family') value = NOTE_FONTS[noteFontKey(raw)] || '';
+            else if (key === 'font-weight' && /^(700|bold)$/i.test(raw)) value = '700';
+            else if (key === 'font-style' && /^italic$/i.test(raw)) value = 'italic';
+            else if (key === 'text-decoration') {
+                const text = raw.toLowerCase();
+                const bits = [];
+                if (text.indexOf('underline') >= 0) bits.push('underline');
+                if (text.indexOf('line-through') >= 0) bits.push('line-through');
+                value = bits.join(' ');
+            }
+            if (value) out.push(key + ': ' + value);
+        });
+        return out.join('; ');
+    }
+
+    function noteCleanNode(node) {
+        Array.from(node.childNodes).forEach(function (child) {
+            if (child.nodeType !== 1) {
+                if (child.nodeType !== 3) node.removeChild(child);
+                return;
+            }
+            const tag = child.tagName.toLowerCase();
+            if (!NOTE_TAGS[tag]) {
+                noteCleanNode(child);
+                while (child.firstChild) node.insertBefore(child.firstChild, child);
+                node.removeChild(child);
+                return;
+            }
+            const style = noteSafeStyle(child.getAttribute('style') || '');
+            const code = (tag === 'div' || tag === 'p') && child.classList.contains('is-code');
+            while (child.attributes.length) child.removeAttribute(child.attributes[0].name);
+            if (style) child.setAttribute('style', style);
+            if (code) child.className = 'is-code';
+            noteCleanNode(child);
+            if (tag === 'span' && !child.getAttribute('style') && child.parentNode) {
+                while (child.firstChild) child.parentNode.insertBefore(child.firstChild, child);
+                child.parentNode.removeChild(child);
+            }
+        });
+    }
+
+    function noteSanitize(html) {
+        const root = document.createElement('div');
+        root.innerHTML = String(html || '');
+        noteCleanNode(root);
+        return root.innerHTML;
+    }
+
+    function noteHasFormat(html) {
+        return /style=|class="is-code"|<(b|strong|i|em|u|s|strike|del|sup|sub|code|mark)\b/i.test(String(html || ''));
+    }
+
+    function noteInlineText(node) {
+        let text = '';
+        const kids = Array.from(node.childNodes || []);
+        kids.forEach(function (child) {
+            if (child.nodeType === 3) text += child.nodeValue || '';
+            else if (child.nodeName === 'BR') {
+                if (child !== kids[kids.length - 1]) text += '\n';
+            } else text += noteInlineText(child);
+        });
+        return text.replace(/\u00a0/g, ' ');
+    }
+
+    function notePlainFrom(root) {
+        if (!root) return '';
+        const blocks = [];
+        Array.from(root.childNodes).forEach(function (node) {
+            if (node.nodeType === 3) blocks.push(node.nodeValue || '');
+            else if (node.nodeType === 1) blocks.push(noteInlineText(node));
+        });
+        return blocks.join('\n').replace(/\u00a0/g, ' ');
+    }
+
+    function notePlainFromHtml(html) {
+        const holder = document.createElement('div');
+        holder.innerHTML = html;
+        return notePlainFrom(holder);
+    }
+
+    function noteSameText(a, b) {
+        return String(a || '').replace(/\u00a0/g, ' ').replace(/\s+$/g, '') === String(b || '').replace(/\u00a0/g, ' ').replace(/\s+$/g, '');
+    }
+
+    function noteTextToHtml(text) {
+        const value = String(text || '');
+        if (!value) return '';
+        return value.split('\n').map(function (line) {
+            return '<div>' + (esc(line) || '<br>') + '</div>';
+        }).join('');
+    }
+
+    function noteMarkEmpty(el) {
+        if (el) el.classList.toggle('is-empty', !notePlainFrom(el));
+    }
+
+    function noteFillBody(el, note) {
+        if (!el) return;
+        if (!note) {
+            el.innerHTML = '';
+            noteMarkEmpty(el);
+            return;
+        }
+        const plain = String(note.body || '');
+        let html = note.html ? noteSanitize(note.html) : '';
+        if (html && !noteSameText(notePlainFromHtml(html), plain)) html = '';
+        el.innerHTML = html || noteTextToHtml(plain);
+        noteMarkEmpty(el);
+    }
+
+    function noteBodySelection() {
+        const body = $('noteBody');
+        const sel = window.getSelection();
+        if (!body || !sel || sel.isCollapsed || !sel.rangeCount) return false;
+        return body.contains(sel.getRangeAt(0).commonAncestorContainer);
+    }
+
+    function noteCaptureRange() {
+        const body = $('noteBody');
+        const sel = window.getSelection();
+        if (!body || !sel || !sel.rangeCount) return null;
+        const range = sel.getRangeAt(0);
+        if (!body.contains(range.commonAncestorContainer)) return null;
+        return range.cloneRange();
+    }
+
+    function noteRestoreRange() {
+        const body = $('noteBody');
+        if (!body) return;
+        body.focus();
+        if (!noteFormatRange) return;
+        const sel = window.getSelection();
+        if (!sel) return;
+        sel.removeAllRanges();
+        try { sel.addRange(noteFormatRange); } catch (error) {}
+    }
+
+    function noteRememberRange() {
+        noteFormatRange = noteCaptureRange();
+    }
+
+    function noteOwningBlock(node) {
+        const body = $('noteBody');
+        let el = node && node.nodeType === 1 ? node : node && node.parentElement;
+        if (!el || !body || !body.contains(el)) return null;
+        if (el === body) return body.firstElementChild || null;
+        while (el.parentElement && el.parentElement !== body) el = el.parentElement;
+        return el === body ? null : el;
+    }
+
+    function noteBlockIsEmpty(block) {
+        return !String(block && block.textContent || '').replace(/\u00a0/g, '').trim();
+    }
+
+    function noteCoversBlock(range, block) {
+        if (!range || !block) return false;
+        if (noteBlockIsEmpty(block)) return block.contains(range.startContainer);
+        const full = document.createRange();
+        full.selectNodeContents(block);
+        try {
+            return range.compareBoundaryPoints(Range.START_TO_START, full) <= 0 && range.compareBoundaryPoints(Range.END_TO_END, full) >= 0;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function noteLiveBlock() {
+        const body = $('noteBody');
+        if (noteFormatBlock && body && body.contains(noteFormatBlock)) return noteFormatBlock;
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return null;
+        return noteOwningBlock(sel.getRangeAt(0).startContainer);
+    }
+
+    function noteClosest(node, selector) {
+        const body = $('noteBody');
+        const el = node && node.nodeType === 1 ? node : node && node.parentElement;
+        if (!el || !el.closest || !body) return null;
+        const host = el.closest(selector);
+        return host && body.contains(host) ? host : null;
+    }
+
+    function noteInlineValue(node, prop) {
+        const body = $('noteBody');
+        let el = node && node.nodeType === 1 ? node : node && node.parentElement;
+        while (el && body && el !== body) {
+            if (el.style && el.style[prop]) return el.style[prop];
+            el = el.parentElement;
+        }
+        return '';
+    }
+
+    function noteUnwrapElement(node) {
+        const parent = node && node.parentNode;
+        if (!parent) return;
+        while (node.firstChild) parent.insertBefore(node.firstChild, node);
+        parent.removeChild(node);
+    }
+
+    function noteStripProp(node, prop) {
+        if (!node || !node.childNodes) return;
+        if (node.nodeType === 1 && node.style) {
+            node.style[prop] = '';
+            if (node.getAttribute('style') === '') node.removeAttribute('style');
+        }
+        Array.from(node.childNodes).forEach(function (child) { noteStripProp(child, prop); });
+    }
+
+    function notePruneSpans(node) {
+        if (!node || !node.childNodes) return;
+        Array.from(node.childNodes).forEach(notePruneSpans);
+        if (node.nodeType === 1 && node.tagName === 'SPAN' && !node.getAttribute('style')) noteUnwrapElement(node);
+    }
+
+    function noteStripTag(node, tag) {
+        if (!node || !node.childNodes) return;
+        Array.from(node.childNodes).forEach(function (child) { noteStripTag(child, tag); });
+        if (node.nodeType === 1 && node.tagName === tag) noteUnwrapElement(node);
+    }
+
+    function noteReselect(node) {
+        if (!node) return;
+        const sel = window.getSelection();
+        if (!sel) return;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    function noteCommandOn(command) {
+        try { return !!document.queryCommandState(command); } catch (error) { return false; }
+    }
+
+    function noteFinishFormat() {
+        noteRememberRange();
+        noteSyncFormat();
+        const body = $('noteBody');
+        if (body) noteMarkEmpty(body);
+        writeActiveNote();
+    }
+
+    function noteRun(command) {
+        try { document.execCommand(command, false, null); } catch (error) {}
+    }
+
+    function noteToggleCommand(command, prop, onValue) {
+        noteRestoreRange();
+        const block = noteLiveBlock();
+        if (block && noteBlockIsEmpty(block)) {
+            block.style[prop] = block.style[prop] === onValue ? '' : onValue;
+            if (!block.getAttribute('style')) block.removeAttribute('style');
+        } else noteRun(command);
+        noteFinishFormat();
+    }
+
+    function noteToggleDecor(word, command) {
+        noteRestoreRange();
+        const block = noteLiveBlock();
+        if (block && noteBlockIsEmpty(block)) {
+            const parts = String(block.style.textDecoration || '').toLowerCase().split(/\s+/).filter(Boolean);
+            const has = parts.indexOf(word) >= 0;
+            block.style.textDecoration = (has ? parts.filter(function (part) { return part !== word; }) : parts.concat([word])).join(' ');
+            if (!block.getAttribute('style')) block.removeAttribute('style');
+        } else noteRun(command);
+        noteFinishFormat();
+    }
+
+    function noteApplyProp(prop, value) {
+        noteRestoreRange();
+        const body = $('noteBody');
+        const sel = window.getSelection();
+        if (!body || !sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const block = noteLiveBlock();
+        if (block && (range.collapsed || noteCoversBlock(range, block))) {
+            block.style[prop] = value || '';
+            if (!block.getAttribute('style')) block.removeAttribute('style');
+            Array.from(block.childNodes).forEach(function (child) { noteStripProp(child, prop); });
+            notePruneSpans(block);
+            noteReselect(block);
+            noteFinishFormat();
+            return;
+        }
+        if (range.collapsed) {
+            noteFinishFormat();
+            return;
+        }
+        const frag = range.extractContents();
+        noteStripProp(frag, prop);
+        notePruneSpans(frag);
+        if (value) {
+            const span = document.createElement('span');
+            span.style[prop] = value;
+            span.appendChild(frag);
+            range.insertNode(span);
+            noteReselect(span);
+        } else range.insertNode(frag);
+        noteFinishFormat();
+    }
+
+    function noteToggleCode() {
+        noteRestoreRange();
+        const body = $('noteBody');
+        const sel = window.getSelection();
+        if (!body || !sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const host = noteClosest(range.startContainer, 'code');
+        const block = noteLiveBlock();
+        if (host) {
+            noteUnwrapElement(host);
+            if (block) noteReselect(block);
+        } else if (range.collapsed && block) {
+            block.classList.toggle('is-code');
+        } else if (!range.collapsed) {
+            const code = document.createElement('code');
+            code.appendChild(range.extractContents());
+            range.insertNode(code);
+            noteReselect(code);
+        }
+        noteFinishFormat();
+    }
+
+    function noteApplyHighlight(color) {
+        noteRestoreRange();
+        const hex = noteKnownColor(color);
+        const body = $('noteBody');
+        const sel = window.getSelection();
+        if (!body || !sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const block = noteLiveBlock();
+        if (!hex) {
+            if (block) {
+                block.style.backgroundColor = '';
+                if (!block.getAttribute('style')) block.removeAttribute('style');
+            }
+            if (!range.collapsed) {
+                const frag = range.extractContents();
+                noteStripTag(frag, 'MARK');
+                noteStripProp(frag, 'backgroundColor');
+                range.insertNode(frag);
+            }
+            noteFinishFormat();
+            return;
+        }
+        if (range.collapsed && block) {
+            block.style.backgroundColor = noteColorHex(block.style.backgroundColor) === hex ? '' : hex;
+            if (!block.getAttribute('style')) block.removeAttribute('style');
+            noteFinishFormat();
+            return;
+        }
+        if (range.collapsed) {
+            noteFinishFormat();
+            return;
+        }
+        const mark = document.createElement('mark');
+        mark.style.backgroundColor = hex;
+        const frag = range.extractContents();
+        noteStripTag(frag, 'MARK');
+        mark.appendChild(frag);
+        range.insertNode(mark);
+        noteReselect(mark);
+        noteFinishFormat();
+    }
+
+    function noteFlattenFormat(node) {
+        if (!node || !node.childNodes) return;
+        Array.from(node.childNodes).forEach(noteFlattenFormat);
+        if (node.nodeType !== 1) return;
+        const tag = node.tagName;
+        if (tag === 'DIV' || tag === 'P') {
+            node.removeAttribute('style');
+            node.classList.remove('is-code');
+            return;
+        }
+        if (/^(CODE|MARK|SPAN|FONT|B|STRONG|I|EM|U|S|STRIKE|DEL|SUP|SUB)$/.test(tag)) noteUnwrapElement(node);
+    }
+
+    function noteClearFormat() {
+        noteRestoreRange();
+        const body = $('noteBody');
+        const sel = window.getSelection();
+        if (!body || !sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const block = noteLiveBlock();
+        if (block && (range.collapsed || noteCoversBlock(range, block))) {
+            block.removeAttribute('style');
+            block.classList.remove('is-code');
+        }
+        if (!range.collapsed) {
+            noteRun('removeFormat');
+            const live = window.getSelection();
+            if (live && live.rangeCount) {
+                const again = live.getRangeAt(0);
+                if (!again.collapsed && body.contains(again.commonAncestorContainer)) {
+                    const frag = again.extractContents();
+                    noteFlattenFormat(frag);
+                    again.insertNode(frag);
+                }
+            }
+        }
+        if (block) noteReselect(block);
+        noteFinishFormat();
+    }
+
+    function noteApplyFormat(kind, value) {
+        if (kind === 'bold') noteToggleCommand('bold', 'fontWeight', '700');
+        else if (kind === 'italic') noteToggleCommand('italic', 'fontStyle', 'italic');
+        else if (kind === 'underline') noteToggleDecor('underline', 'underline');
+        else if (kind === 'strike') noteToggleDecor('line-through', 'strikeThrough');
+        else if (kind === 'sup') noteToggleCommand('superscript', 'verticalAlign', 'super');
+        else if (kind === 'sub') noteToggleCommand('subscript', 'verticalAlign', 'sub');
+        else if (kind === 'code') noteToggleCode();
+        else if (kind === 'clear') noteClearFormat();
+        else if (kind === 'size') noteApplyProp('fontSize', value || '');
+        else if (kind === 'color') noteApplyProp('color', value || '');
+        else if (kind === 'font') noteApplyProp('fontFamily', value ? (NOTE_FONTS[value] || '') : '');
+        else if (kind === 'highlight') noteApplyHighlight(value || '');
+    }
+
+    function noteSyncFormat() {
+        const menu = $('noteFormat');
+        if (!menu) return;
+        const sel = window.getSelection();
+        const node = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+        const size = noteInlineValue(node, 'fontSize');
+        const color = noteColorHex(noteInlineValue(node, 'color'));
+        const font = noteFontKey(noteInlineValue(node, 'fontFamily'));
+        const decor = noteInlineValue(node, 'textDecoration').toLowerCase();
+        const mark = noteClosest(node, 'mark');
+        const block = noteLiveBlock();
+        const markColor = noteColorHex((mark && mark.style.backgroundColor) || noteInlineValue(node, 'backgroundColor'));
+        const code = !!(noteClosest(node, 'code') || (block && block.classList.contains('is-code')));
+        menu.querySelectorAll('[data-fmt]').forEach(function (button) {
+            const kind = button.getAttribute('data-fmt');
+            const value = button.getAttribute('data-value') || '';
+            let on = false;
+            if (kind === 'bold') on = noteCommandOn('bold') || noteInlineValue(node, 'fontWeight') === '700';
+            else if (kind === 'italic') on = noteCommandOn('italic') || noteInlineValue(node, 'fontStyle') === 'italic';
+            else if (kind === 'underline') on = noteCommandOn('underline') || decor.indexOf('underline') >= 0;
+            else if (kind === 'strike') on = noteCommandOn('strikeThrough') || decor.indexOf('line-through') >= 0;
+            else if (kind === 'sup') on = noteCommandOn('superscript');
+            else if (kind === 'sub') on = noteCommandOn('subscript');
+            else if (kind === 'code') on = code;
+            else if (kind === 'size') on = value ? size === value : !size;
+            else if (kind === 'color') on = value ? color === value : !color;
+            else if (kind === 'font') on = value ? font === value : !font;
+            else if (kind === 'highlight') on = value ? markColor === noteColorHex(value) : !markColor;
+            button.classList.toggle('is-on', on);
+            if (button.hasAttribute('aria-label') && kind !== 'color' && kind !== 'highlight') button.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    }
+
+    function closeNoteFormat() {
+        const menu = $('noteFormat');
+        if (menu) menu.hidden = true;
+        const plus = $('noteLinePlus');
+        if (plus) plus.classList.remove('is-on');
+        noteFormatRange = null;
+        noteFormatBlock = null;
+    }
+
+    function openNoteFormat(x, y) {
+        const menu = $('noteFormat');
+        if (!menu) return;
+        hideFieldMenu();
+        closeNoteMenu();
+        noteFormatRange = noteCaptureRange();
+        noteFormatNote = notepadState().active || '';
+        if (menu.parentElement !== document.body) document.body.appendChild(menu);
+        placeAppMenu(menu, x, y);
+        noteSyncFormat();
+    }
+
+    function openNoteSelectionFormat(x, y) {
+        noteFormatBlock = null;
+        const plus = $('noteLinePlus');
+        if (plus) plus.classList.remove('is-on');
+        openNoteFormat(x, y);
+    }
+
+    function noteSelectBlock(block) {
+        const body = $('noteBody');
+        if (!body || !block) return null;
+        let target = block;
+        if (target === body) {
+            if (!body.firstElementChild) body.innerHTML = '<div><br></div>';
+            target = body.firstElementChild;
+        }
+        body.focus();
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const sel = window.getSelection();
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+        return target;
+    }
+
+    function openNoteLineFormat(block) {
+        const target = noteSelectBlock(block);
+        if (!target) return;
+        noteFormatBlock = target;
+        notePlusBlock = target;
+        const plus = $('noteLinePlus');
+        if (plus) plus.classList.add('is-on');
+        showNotePlus(target);
+        const rect = plus ? plus.getBoundingClientRect() : target.getBoundingClientRect();
+        openNoteFormat(rect.left, rect.bottom + 6);
+    }
+
+    function noteBlockAt(clientY) {
+        const body = $('noteBody');
+        if (!body) return null;
+        const rect = body.getBoundingClientRect();
+        if (clientY < rect.top || clientY > rect.bottom) return null;
+        const kids = body.children;
+        for (let i = 0; i < kids.length; i++) {
+            const box = kids[i].getBoundingClientRect();
+            if (clientY >= box.top - 3 && clientY <= box.bottom + 3) return kids[i];
+        }
+        if (!kids.length || body.classList.contains('is-empty')) return body;
+        return kids[kids.length - 1] || null;
+    }
+
+    function showNotePlus(block) {
+        const plus = $('noteLinePlus');
+        const sheet = plus && plus.parentElement;
+        const body = $('noteBody');
+        if (!plus || !sheet || !block || !body) return;
+        const sheetRect = sheet.getBoundingClientRect();
+        const rect = block === body ? body.getBoundingClientRect() : block.getBoundingClientRect();
+        const height = block === body ? 24 : rect.height;
+        const top = block === body ? rect.top + 2 : rect.top;
+        if (top + height < sheetRect.top + 2 || top > sheetRect.bottom - 2) {
+            if (!plus.classList.contains('is-on')) plus.hidden = true;
+            return;
+        }
+        notePlusBlock = block === body ? (body.firstElementChild || body) : block;
+        plus.hidden = false;
+        plus.style.top = Math.max(0, top - sheetRect.top + Math.min(height, 28) / 2 - 11) + 'px';
+    }
+
+    function hideNotePlus() {
+        const plus = $('noteLinePlus');
+        if (!plus || plus.classList.contains('is-on')) return;
+        plus.hidden = true;
+        notePlusBlock = null;
+    }
+
+    function bindNoteFormat() {
+        const body = $('noteBody');
+        const plus = $('noteLinePlus');
+        const menu = $('noteFormat');
+        const sheet = body && body.parentElement;
+        if (!body || !plus || !menu || !sheet) return;
+        try { document.execCommand('defaultParagraphSeparator', false, 'div'); } catch (error) {}
+        plus.addEventListener('mousedown', function (event) { event.preventDefault(); });
+        plus.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            openNoteLineFormat(notePlusBlock || noteBlockAt(plus.getBoundingClientRect().top + 11));
+        });
+        menu.addEventListener('mousedown', function (event) { event.preventDefault(); });
+        menu.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-fmt]');
+            if (!button) return;
+            event.preventDefault();
+            event.stopPropagation();
+            noteApplyFormat(button.getAttribute('data-fmt') || '', button.getAttribute('data-value') || '');
+        });
+        sheet.addEventListener('pointermove', function (event) {
+            if (!menu.hidden && plus.classList.contains('is-on')) return;
+            if (event.buttons) {
+                hideNotePlus();
+                return;
+            }
+            if (event.target.closest && event.target.closest('#noteLinePlus')) return;
+            const block = noteBlockAt(event.clientY);
+            if (!block) hideNotePlus();
+            else showNotePlus(block);
+        });
+        sheet.addEventListener('pointerleave', hideNotePlus);
+        body.addEventListener('scroll', function () {
+            if (notePlusBlock && (notePlusBlock === body || body.contains(notePlusBlock))) showNotePlus(notePlusBlock);
+            else hideNotePlus();
+        });
+        body.addEventListener('paste', function (event) {
+            const clip = event.clipboardData;
+            if (!clip) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const text = clip.getData('text/plain') || '';
+            const html = clip.getData('text/html') || '';
+            let clean = html ? noteSanitize(html) : '';
+            if (!clean || !notePlainFromHtml(clean)) clean = noteTextToHtml(text);
+            if (!clean) return;
+            document.execCommand('insertHTML', false, clean);
+            writeActiveNote();
+        });
+        body.addEventListener('dragover', function (event) { event.preventDefault(); });
+        body.addEventListener('drop', function (event) {
+            event.preventDefault();
+            const text = event.dataTransfer ? event.dataTransfer.getData('text/plain') : '';
+            if (!text) return;
+            let range = null;
+            if (document.caretRangeFromPoint) range = document.caretRangeFromPoint(event.clientX, event.clientY);
+            else if (document.caretPositionFromPoint) {
+                const spot = document.caretPositionFromPoint(event.clientX, event.clientY);
+                if (spot) {
+                    range = document.createRange();
+                    range.setStart(spot.offsetNode, spot.offset);
+                    range.collapse(true);
+                }
+            }
+            if (range) {
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+            document.execCommand('insertText', false, text);
+            writeActiveNote();
+        });
+    }
+
+    bindNoteFormat();
+    function bindNotepad() {
+        const list = $('noteList');
+        const title = $('noteTitle');
+        const body = $('noteBody');
+        const add = $('noteNew');
+        const menu = $('noteMenu');
+        const stage = $('noteGraph');
+        const view = $('noteView');
+        const linkGo = $('noteLinkGo');
+        const linkCancel = $('noteLinkCancel');
+        if (add) add.addEventListener('click', addNotepadNote);
+        if (list) {
+            list.addEventListener('click', function (event) {
+                const more = event.target.closest('[data-note-more]');
+                const row = event.target.closest('[data-note]');
+                if (!row) return;
+                const id = row.getAttribute('data-note') || '';
+                if (event.shiftKey && !more) {
+                    event.preventDefault();
+                    linkNoteIntoShift(id);
+                    return;
+                }
+                notepadState().active = id;
+                if (more) {
+                    event.stopPropagation();
+                    renderNotepad();
+                    const anchor = document.querySelector('#noteList [data-note="' + id + '"] [data-note-more]');
+                    openNoteMenu(id, anchor);
+                    return;
+                }
+                closeNoteMenu();
+                renderNotepad();
+            });
+            list.addEventListener('keydown', function (event) {
+                const row = event.target.closest('[data-note]');
+                if (!row || (event.key !== 'Enter' && event.key !== ' ')) return;
+                if (event.target.closest('[data-note-more]')) return;
+                event.preventDefault();
+                notepadState().active = row.getAttribute('data-note') || '';
+                closeNoteMenu();
+                renderNotepad();
+            });
+        }
+        if (menu) {
+            menu.addEventListener('mousedown', function (event) { event.preventDefault(); });
+            menu.addEventListener('click', function (event) {
+                const fieldBtn = event.target.closest('[data-field-act]');
+                if (fieldBtn) {
+                    if (fieldBtn.disabled) return;
+                    const field = document.getElementById(menu.dataset.field || '');
+                    const act = fieldBtn.getAttribute('data-field-act');
+                    closeNoteMenu();
+                    if (field) runFieldEdit(field, act);
+                    return;
+                }
+                const button = event.target.closest('[data-note-act]');
+                if (!button) return;
+                runNoteAction(button.getAttribute('data-note-act'), menu.dataset.note || '', button.getAttribute('data-link') || '');
+            });
+        }
+        if (view) {
+            view.addEventListener('contextmenu', function (event) {
+                const field = event.target.closest('#noteTitle, #noteBody');
+                if (field && field.id === 'noteBody' && noteBodySelection()) {
+                    openNoteFormat(event.clientX, event.clientY);
+                    return;
+                }
+                if (field) {
+                    openNoteEditMenu(field, event.clientX, event.clientY);
+                    return;
+                }
+                const row = event.target.closest('#noteList [data-note]');
+                if (row) {
+                    const id = row.getAttribute('data-note') || '';
+                    notepadState().active = id;
+                    renderNotepad();
+                    openNoteMenuAt(id, event.clientX, event.clientY);
+                    return;
+                }
+                const dot = event.target.closest('[data-graph-note]');
+                if (dot) {
+                    const id = dot.getAttribute('data-graph-note') || '';
+                    notepadState().active = id;
+                    renderNotepad();
+                    openNoteMenuAt(id, event.clientX, event.clientY);
+                    return;
+                }
+                openNoteCreateMenu(event.clientX, event.clientY);
+            });
+        }
+        document.addEventListener('click', function (event) {
+            if (event.target.closest('#noteMenu') || event.target.closest('#noteFormat') || event.target.closest('#noteLinePlus') || event.target.closest('[data-note-more]')) return;
+            closeNoteMenu();
+            closeNoteFormat();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Shift') {
+                const tip = $('noteLinkHint');
+                if (tip && !noteLinkFrom) tip.classList.add('is-armed');
+            }
+            if (event.key !== 'Escape') return;
+            closeNoteMenu();
+            closeNoteFormat();
+            if (noteLinkFrom) cancelNoteLink();
+        });
+        document.addEventListener('keyup', function (event) {
+            if (event.key !== 'Shift') return;
+            const tip = $('noteLinkHint');
+            if (tip && !noteLinkFrom) tip.classList.remove('is-armed');
+            if (!noteShiftIds.length) return;
+            noteShiftIds = [];
+            renderNotepad();
+        });
+        if (title) title.addEventListener('input', writeActiveNote);
+        if (body) body.addEventListener('input', writeActiveNote);
+        if (linkGo) {
+            linkGo.addEventListener('click', function () {
+                if (noteLinkFrom) {
+                    cancelNoteLink();
+                    return;
+                }
+                const state = notepadState();
+                const id = state.active || (state.notes[0] && state.notes[0].id) || '';
+                if (id) startNoteLink(id);
+            });
+        }
+        if (linkCancel) linkCancel.addEventListener('click', cancelNoteLink);
+        if (stage) {
+            function stopNoteAutoscroll(event) {
+                if (event.button === 1) event.preventDefault();
+            }
+            stage.addEventListener('mousedown', stopNoteAutoscroll, true);
+            stage.addEventListener('auxclick', stopNoteAutoscroll);
+            stage.addEventListener('pointerdown', function (event) {
+                if (event.button === 1) {
+                    event.preventDefault();
+                    notePan = { x: event.clientX, y: event.clientY, pointer: event.pointerId, moved: false };
+                    stage.classList.add('is-panning');
+                    try { stage.setPointerCapture(event.pointerId); } catch (error) {}
+                    return;
+                }
+                if (event.button !== 0) return;
+                if (event.target.closest('[data-note-edge]')) return;
+                const dot = event.target.closest('[data-graph-note]');
+                if (!dot) {
+                    if (noteLinkFrom) cancelNoteLink();
+                    return;
+                }
+                const id = dot.getAttribute('data-graph-note') || '';
+                if (event.shiftKey) {
+                    linkNoteIntoShift(id);
+                    return;
+                }
+                if (noteLinkFrom) {
+                    if (noteLinkFrom !== id) addNoteLink(noteLinkFrom, id);
+                    cancelNoteLink();
+                    notepadState().active = id;
+                    renderNotepad();
+                    return;
+                }
+                noteDrag = { id: id, x: event.clientX, y: event.clientY, vx: 0, vy: 0, moved: false, pointer: event.pointerId };
+                stage.classList.add('is-dragging');
+                try { stage.setPointerCapture(event.pointerId); } catch (error) {}
+            });
+            stage.addEventListener('pointermove', function (event) {
+                if (notePan && notePan.pointer === event.pointerId) {
+                    const dx = event.clientX - notePan.x;
+                    const dy = event.clientY - notePan.y;
+                    if (!notePan.moved && Math.hypot(dx, dy) < 3) return;
+                    notePan.moved = true;
+                    notePan.x = event.clientX;
+                    notePan.y = event.clientY;
+                    const pan = notepadState().pan;
+                    pan.x += dx;
+                    pan.y += dy;
+                    const cam = stage.querySelector('[data-note-cam]');
+                    if (cam) cam.setAttribute('transform', 'translate(' + pan.x + ' ' + pan.y + ')');
+                    return;
+                }
+                if (!noteDrag || noteDrag.pointer !== event.pointerId) return;
+                const dx = event.clientX - noteDrag.x;
+                const dy = event.clientY - noteDrag.y;
+                if (!noteDrag.moved && Math.hypot(dx, dy) < 4) return;
+                noteDrag.moved = true;
+                noteDrag.x = event.clientX;
+                noteDrag.y = event.clientY;
+                const body = noteBodies[noteDrag.id];
+                const rect = stage.getBoundingClientRect();
+                const pan = notepadState().pan;
+                if (!body) return;
+                const x = event.clientX - rect.left - pan.x;
+                const y = event.clientY - rect.top - pan.y;
+                noteDrag.vx = x - body.x;
+                noteDrag.vy = y - body.y;
+                body.x = x;
+                body.y = y;
+                noteSimStart();
+            });
+            stage.addEventListener('pointerup', function (event) {
+                if (notePan && notePan.pointer === event.pointerId) {
+                    const moved = notePan.moved;
+                    notePan = null;
+                    stage.classList.remove('is-panning');
+                    if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+                    if (moved) schedulePersist();
+                    return;
+                }
+                if (!noteDrag || noteDrag.pointer !== event.pointerId) return;
+                const drag = noteDrag;
+                const body = noteBodies[drag.id];
+                noteDrag = null;
+                stage.classList.remove('is-dragging');
+                if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+                if (!drag.moved) {
+                    notepadState().active = drag.id;
+                    renderNotepad();
+                    return;
+                }
+                if (body) {
+                    body.vx = drag.vx || 0;
+                    body.vy = drag.vy || 0;
+                }
+                noteStoreLayout();
+                schedulePersist();
+                noteSimStart();
+            });
+            stage.addEventListener('pointercancel', function () {
+                noteDrag = null;
+                notePan = null;
+                stage.classList.remove('is-dragging');
+                stage.classList.remove('is-panning');
+            });
+            stage.addEventListener('click', function (event) {
+                const edge = event.target.closest('[data-note-edge]');
+                if (!edge) return;
+                const id = edge.getAttribute('data-note-edge') || '';
+                const state = notepadState();
+                state.links = state.links.filter(function (link) { return link.id !== id; });
+                paintNoteGraph();
+                schedulePersist();
+            });
+            if (window.ResizeObserver) {
+                const watcher = new ResizeObserver(function () {
+                    if (!noteDrag) paintNoteGraph();
+                });
+                watcher.observe(stage);
+            }
+        }
+        bindNoteSplit();
+    }
+
+    function notePaneNumber(view, name, fallback) {
+        const n = parseFloat(view.style.getPropertyValue(name));
+        return isFinite(n) ? n : fallback;
+    }
+
+    function notePaneSaved() {
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem('orbint-note-panes') || '') || {}; } catch (error) {}
+        const list = Number(saved.list);
+        const graph = Number(saved.graph);
+        return {
+            list: isFinite(list) ? list : 220,
+            graph: isFinite(graph) ? graph : 280
+        };
+    }
+
+    function notePaneStore(list, graph) {
+        try { localStorage.setItem('orbint-note-panes', JSON.stringify({ list: list, graph: graph })); } catch (error) {}
+    }
+
+    function applyNotePane(view, which, next) {
+        const width = view.getBoundingClientRect().width;
+        const narrow = window.innerWidth <= 1100;
+        const listNow = notePaneNumber(view, '--note-list-w', 220);
+        const graphNow = notePaneNumber(view, '--note-graph-w', 280);
+        if (which === 'list') {
+            const reserved = (narrow ? 12 : 24) + 220 + (narrow ? 0 : graphNow);
+            const max = width > 40 ? Math.max(160, width - reserved) : 560;
+            const list = Math.round(Math.min(max, Math.max(160, next)));
+            view.style.setProperty('--note-list-w', list + 'px');
+            const handle = view.querySelector('[data-note-split="list"]');
+            if (handle) handle.setAttribute('aria-valuenow', String(list));
+            return list;
+        }
+        const max = width > 40 ? Math.max(180, width - 24 - 220 - listNow) : 720;
+        const graph = Math.round(Math.min(max, Math.max(180, next)));
+        view.style.setProperty('--note-graph-w', graph + 'px');
+        const handle = view.querySelector('[data-note-split="graph"]');
+        if (handle) handle.setAttribute('aria-valuenow', String(graph));
+        return graph;
+    }
+
+    function bindNoteSplit() {
+        const view = $('noteView');
+        if (!view) return;
+        const saved = notePaneSaved();
+        applyNotePane(view, 'list', saved.list);
+        applyNotePane(view, 'graph', saved.graph);
+        let drag = null;
+        function finishNoteSplit() {
+            if (!drag) return;
+            drag.handle.classList.remove('is-on');
+            document.body.classList.remove('note-splitting');
+            notePaneStore(notePaneNumber(view, '--note-list-w', 220), notePaneNumber(view, '--note-graph-w', 280));
+            drag = null;
+        }
+        view.addEventListener('pointerdown', function (event) {
+            const handle = event.target.closest('.note-split');
+            if (!handle || event.button || window.innerWidth <= 820) return;
+            const which = handle.getAttribute('data-note-split');
+            if (which === 'graph' && window.innerWidth <= 1100) return;
+            event.preventDefault();
+            drag = {
+                which: which,
+                handle: handle,
+                x: event.clientX,
+                size: notePaneNumber(view, which === 'list' ? '--note-list-w' : '--note-graph-w', which === 'list' ? 220 : 280)
+            };
+            handle.classList.add('is-on');
+            document.body.classList.add('note-splitting');
+            handle.setPointerCapture(event.pointerId);
+        });
+        view.addEventListener('pointermove', function (event) {
+            if (!drag) return;
+            const delta = event.clientX - drag.x;
+            applyNotePane(view, drag.which, drag.which === 'list' ? drag.size + delta : drag.size - delta);
+        });
+        view.addEventListener('pointerup', finishNoteSplit);
+        view.addEventListener('pointercancel', finishNoteSplit);
+        view.addEventListener('dblclick', function (event) {
+            const handle = event.target.closest('.note-split');
+            if (!handle) return;
+            const which = handle.getAttribute('data-note-split');
+            applyNotePane(view, which, which === 'list' ? 220 : 280);
+            notePaneStore(notePaneNumber(view, '--note-list-w', 220), notePaneNumber(view, '--note-graph-w', 280));
+        });
+        view.addEventListener('keydown', function (event) {
+            const handle = event.target.closest('.note-split');
+            if (!handle) return;
+            const which = handle.getAttribute('data-note-split');
+            const step = event.shiftKey ? 32 : 16;
+            let delta = 0;
+            if (event.key === 'ArrowLeft') delta = which === 'list' ? -step : step;
+            else if (event.key === 'ArrowRight') delta = which === 'list' ? step : -step;
+            else if (event.key === 'Home') {
+                applyNotePane(view, which, which === 'list' ? 160 : 180);
+                notePaneStore(notePaneNumber(view, '--note-list-w', 220), notePaneNumber(view, '--note-graph-w', 280));
+                event.preventDefault();
+                return;
+            } else return;
+            event.preventDefault();
+            const current = notePaneNumber(view, which === 'list' ? '--note-list-w' : '--note-graph-w', which === 'list' ? 220 : 280);
+            applyNotePane(view, which, current + delta);
+            notePaneStore(notePaneNumber(view, '--note-list-w', 220), notePaneNumber(view, '--note-graph-w', 280));
+        });
+        if (window.ResizeObserver) {
+            const panes = new ResizeObserver(function () {
+                if (drag || view.hidden || !view.getBoundingClientRect().width) return;
+                applyNotePane(view, 'list', notePaneNumber(view, '--note-list-w', 220));
+                if (window.innerWidth > 1100) applyNotePane(view, 'graph', notePaneNumber(view, '--note-graph-w', 280));
+            });
+            panes.observe(view);
+        }
+    }
+
+    bindNotepad();
 
     const CP_MAX = 2 * 1024 * 1024;
     const CP_KINDS = {
@@ -8472,6 +10797,7 @@
                 cpReveal = true;
                 renderHarvester();
                 schedulePersist();
+                if (window.OrbINTDone) window.OrbINTDone('File harvested', 'Names, dates, and accounts from that file are on the desk. The rest of the file stays in the harvest view.');
             }, wait);
         }).catch(function (error) {
             setHarvesterBusy(false);
@@ -8951,6 +11277,2764 @@
             if (focus) focus.focus();
         });
     }
+const OPS_LAND = { cols: 180, rows: 90, bits: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAfAP8DAAAAAAAAAAAAAAAAAAAAAADo//z//wcAAAAAAAACAAAAAAAAAAAAhvvw//8PAPABAAAAwAMAAAAAAAAAwADkw////wEABAAAAABgAAAAAAAAAADAUT8A/v8PAAAAAAwA/j8AuAEAAAAAcBHtDcD/fwAAAAAwAPz/fwMAABCAAQD5w/wD8P8FAAAMAIL7//9//xOAAP/ff0668QD/HwAA+A8At///////v48PAAAAAODBB+D//x8AKAAEAAAAAAAAcwAAAABAB/7Af/j/YCgAAAAAAAAAAADw/////wEs4AEAAHz+////////////gL////8HeAAcAADg5///////////9ADgAf7/f4AnAAAAAH78////////H0QAAAiA//8f8AcAAIBB4////////38ADwAQAOD//5//AQAAHAT/////////A3AAAAAA/v//+T8AAGDz//////////8DAQAAAMD/////AwAAsP//////////LwAAAAAA6P///2IAAAD+//////////8CAAAAAAD///8/CAAA4P//////////JwAAAAAA8P///wYAAAD+/unz/////z8AAAAAAAD///8HAAAA/pgPPP//////MQAAAAAA8P//PwAAAMBD9v7n/////wcBAAAAAAD///8AAAAAPkD7f/7///8hEAAAAAAA4P//DwAAAIDhAv/n////f8YAAAAAAAD8//8AAAAA+AdE//////8jDwAAAAAAgP//AwAAAMD/APD/////PxgAAAAAAADw/x8AAAAA/n/v//////8HAAAAAAAAAPwDAgAAAOD////7////fwAAAAAAAACgHyAAAACA//9/f/7///8DAAAAAAAAAPQBAAAAAPj//+cv+P//PwAAAAAAAAAAHjAAAADA/////g/+//8EAAAAAAAAAOBhCAAAAP7//99/4D//AAAAAAAAAAAAPAMEAADA////+Qf84BcAAAAAAAAAAAA/AAAAAPz//58fgAf+QAAAAAAAAAAAAA8AAADg////ewA4gA8EAAAAAAAAAADAAAAAAPz//38BgAP4QQAAAAAAAAAAAAgPAADA////zwAwgAwQAAAAAAAAAAAA9Q8AAPj///8HAAVIAAAAAAAAAAAAAID/AQAA////fwBAAAAQAAAAAAAAAAAA+P8AAGDh//8DAAA0GAAAAAAAAAAAAID/HwAAAPj/HwAAgMIBAAAAAAAAAAAA/P8BAACA//8AAAAYXgAAAAAAAAAAAMD/fwAAAPz/BwAAAOOBAQAAAAAAAAAA/P8/AACA/z8AAABgbtQBAAAAAAAAAOD//w8AAPD/AwAAAAQIeAAAAAAAAAAA/P//AQAA/z8AAACAA4APAQAAAAAAAID//w8AAPD/AwAAAAARsEAAAAAAAAAA+P9/AAAA/j8AAAAAAAAAAAAAAAAAAAD//wcAAPD/QwAAAACAIwAAAAAAAAAA8P9/AAAA/z8EAAAAAD8GIAAAAAAAAAD8/wMAAPD/cQAAAAD4ZwAAAAAAAAAAgP8/AAAA/w8HAAAAgP8HAAAAAAAAAAD4/wMAAOD/MAAAAAD//wEBAAAAAAAAgP8PAAAA/g8DAAAA+P8fAAAAAAAAAAD4PwAAAOB/EAAAAID//wMAAAAAAAAAgP8DAAAA/AMAAAAA+P9/AAAAAAAAAAD8HwAAAMA/AAAAAID//wcAAAAAAAAAwP8BAAAA+AEAAAAA8P9/AAAAAAAAAAD8DwAAAIAPAAAAAAAP/gMAAAAAAAAAwB8AAAAAAAAAAAAAEIAfAAEAAAAAAAD+AwAAAAAAAAAAAAAA8AEgAAAAAAAA4AcAAAAAAAAAAAAAAAAAAAYAAAAAAABeAAAAAAAAAAAAAAAAwAAwAAAAAAAAwAMAAAAAAAAAAAAAAAAIgAEAAAAAAAAeAAAAAAAAAAAAAAAAAAAMAAAAAAAA4AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAAAAAAAAABAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAAAAB4AEDwn/8HAAAAAAAAAAAwAAAAAACA/P/h/////w8AAAAAAAAAwAcAAAD4////z///////PwAAAAAAHALwAACA//////////////8HAADw/y///wMAAP7/////////////HwAA+P///38AAID///////////////8AAPL/////BwAO////////////////DwAA8P////8HEPD//////////////z8AAOD/////////////////////////HwDgPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' };
+const OPS_PLACES = {"FJ":[179.59,-16.41],"TZ":[34.34,-6.52],"EH":[-12.03,24.78],"CA":[-90.74,56.4],"US":[-90.36,38.27],"KZ":[65.25,47.26],"UZ":[65.29,41.15],"PG":[146.21,-7.77],"ID":[121.59,-2.04],"AR":[-65.09,-37.02],"CL":[-71.42,-37.96],"CD":[23.0,-3.84],"SO":[46.84,6.42],"KE":[37.82,1.11],"SD":[29.34,12.81],"TD":[18.0,13.0],"HT":[-72.7,18.84],"DO":[-70.49,18.73],"RU":[95.53,59.56],"BS":[-77.95,24.53],"FK":[-59.58,-51.73],"NO":[18.09,66.23],"GL":[-41.03,74.15],"TF":[69.46,-49.12],"TL":[125.91,-8.75],"ZA":[24.72,-28.6],"LS":[28.37,-29.58],"MX":[-103.13,23.87],"UY":[-56.14,-32.7],"BR":[-56.93,-9.66],"BO":[-64.13,-16.34],"PE":[-74.08,-7.75],"CO":[-72.65,4.49],"PA":[-80.32,8.5],"CR":[-84.16,9.82],"NI":[-84.98,13.08],"HN":[-86.31,14.75],"SV":[-88.92,13.85],"GT":[-90.27,15.53],"BZ":[-88.63,17.42],"VE":[-66.85,7.21],"GY":[-58.9,4.48],"SR":[-55.87,3.7],"FR":[3.3,47.0],"EC":[-78.7,-1.64],"PR":[-66.43,18.28],"JM":[-77.35,18.19],"CU":[-79.73,21.72],"ZW":[29.66,-18.87],"BW":[24.47,-22.48],"NA":[17.93,-21.56],"SN":[-14.59,13.88],"ML":[-5.8,14.08],"MR":[-12.43,18.83],"BJ":[2.33,9.81],"NE":[8.74,15.48],"NG":[8.35,9.73],"CM":[13.17,6.91],"TG":[0.87,8.88],"GH":[-0.97,8.29],"CI":[-6.35,7.94],"GN":[-10.98,10.42],"GW":[-15.21,11.98],"LR":[-9.14,6.75],"SL":[-11.7,8.6],"BF":[-1.92,12.11],"CF":[20.7,6.29],"CG":[14.93,-0.92],"GA":[11.89,-0.34],"GQ":[10.07,1.59],"ZM":[27.98,-12.83],"MW":[34.06,-12.91],"MZ":[34.87,-17.91],"SZ":[31.44,-26.42],"AO":[17.38,-10.94],"BI":[30.04,-3.23],"IL":[35.19,32.06],"LB":[35.85,33.8],"MG":[46.99,-17.97],"PS":[35.24,31.81],"GM":[-15.29,13.5],"TN":[9.84,34.02],"DZ":[3.02,29.67],"JO":[36.65,31.13],"AE":[54.24,24.2],"QA":[51.15,25.26],"KW":[47.74,29.34],"IQ":[44.4,33.44],"OM":[56.57,20.86],"VU":[166.89,-15.38],"KH":[104.9,12.64],"TH":[100.66,13.18],"LA":[103.69,18.28],"MM":[97.15,20.0],"VN":[105.94,16.71],"KP":[127.33,39.89],"KR":[127.47,36.72],"MN":[104.59,47.2],"IN":[83.59,23.97],"BD":[90.61,23.4],"BT":[90.62,27.47],"NP":[84.56,28.21],"PK":[69.44,30.79],"AF":[67.77,34.83],"TJ":[70.79,38.51],"KG":[73.98,41.36],"TM":[58.46,39.33],"IR":[53.34,33.3],"SY":[37.95,35.15],"AM":[45.31,39.95],"SE":[16.56,62.74],"BY":[28.22,53.38],"UA":[30.45,48.69],"PL":[19.48,51.74],"AT":[13.48,47.64],"HU":[19.25,47.46],"MD":[28.47,47.05],"RO":[25.19,45.86],"LT":[24.02,55.2],"LV":[24.94,56.86],"EE":[25.93,58.61],"DE":[10.69,51.04],"BG":[24.69,42.89],"GR":[23.14,39.8],"TR":[36.75,38.4],"AL":[20.13,41.23],"HR":[16.38,44.9],"CH":[8.31,46.8],"LU":[5.98,49.81],"BE":[4.58,50.63],"NL":[5.65,52.16],"PT":[-8.04,39.76],"ES":[-4.45,40.18],"IE":[-7.72,53.53],"NC":[165.51,-21.18],"SB":[159.13,-7.9],"NZ":[175.48,-38.2],"AU":[133.25,-23.8],"LK":[80.86,7.63],"CN":[105.67,37.31],"TW":[121.11,23.86],"IT":[12.63,43.09],"DK":[9.62,56.28],"GB":[-3.08,53.9],"IS":[-19.27,65.28],"AZ":[47.41,40.37],"GE":[43.36,42.26],"PH":[121.82,15.37],"MY":[114.77,3.68],"BN":[115.0,4.74],"SI":[15.0,46.11],"FI":[25.77,65.48],"SK":[19.35,48.76],"CZ":[15.85,49.78],"ER":[39.59,14.71],"JP":[136.0,35.72],"PY":[-57.57,-23.3],"YE":[46.47,15.51],"SA":[43.59,24.04],"AQ":[-166.46,-72.96],"CY":[33.24,35.02],"MA":[-9.43,28.77],"EG":[31.64,28.1],"LY":[16.64,28.48],"ET":[39.21,8.98],"DJ":[42.52,11.8],"UG":[31.99,1.26],"RW":[29.89,-1.98],"BA":[17.87,44.15],"MK":[21.69,41.67],"RS":[20.94,43.83],"ME":[19.45,42.74],"TT":[-61.46,10.48],"SS":[30.09,8.01]};
+const OPS_COUNTRY = { cols: 180, rows: 90, codes: ["","FJ","TZ","EH","CA","US","KZ","UZ","PG","ID","AR","CL","CD","SO","KE","SD","TD","HT","DO","RU","BS","FK","NO","GL","TF","TL","ZA","LS","MX","UY","BR","BO","PE","CO","PA","CR","NI","HN","SV","GT","BZ","VE","GY","SR","FR","EC","PR","JM","CU","ZW","BW","NA","SN","ML","MR","BJ","NE","NG","CM","TG","GH","CI","GN","GW","LR","SL","BF","CF","CG","GA","GQ","ZM","MW","MZ","SZ","AO","BI","IL","LB","MG","PS","GM","TN","DZ","JO","AE","QA","KW","IQ","OM","VU","KH","TH","LA","MM","VN","KP","KR","MN","IN","BD","BT","NP","PK","AF","TJ","KG","TM","IR","SY","AM","SE","BY","UA","PL","AT","HU","MD","RO","LT","LV","EE","DE","BG","GR","TR","AL","HR","CH","LU","BE","NL","PT","ES","IE","NC","SB","NZ","AU","LK","CN","TW","IT","DK","GB","IS","AZ","GE","PH","MY","BN","SI","FI","SK","CZ","ER","JP","PY","YE","SA","AQ","CY","MA","EG","LY","ET","DJ","UG","RW","BA","MK","RS","ME","TT","SS"], bits: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEBAQEBAQEAAAAAAAAAAAAAAAXFxcXFxcXFxcXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAQEBAQEBAQEBAQAABcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEAAAAAAQEBAAEBAQEBAAAAAAXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcAAAAAAAAAAAAAAAAAAAAAFhYWFhYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExMTEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAQAAAAAAAAAAAAABAAABAQEBAQAAAAAFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXAAAAAAAAAAAAAAAAAAAAAAAWAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEBAAAAAQABAAEBAQEBAQAAAAAAAAAAAAAABcXFxcXFxcXFxcXFxcXFxcXFxcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMTAAAAAAAAAAAAAAAAABMTExMTExMTExMTExMAAAAAAAAAAAAAAAAAExMTABMTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEBAAEAAAABAAAAAQABAQABAQEBAAEBAAAAAAAAAAAAAAXFxcXFxcXFxcXFxcXFxcXFwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATEwAAAAAAAAAAAAAAABMTExMTExMTExMTExMTExMTExMTEwATEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExcXFxcXFxcXFxcXFxcTFxMTExMTExMTExMTExMTExMTExMTExMTFhYTExMTExMTExMTExMTABMTExMTAAAAEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATAAAAAAAAAAAAABMTABMTExMTExMTExMAAAAAAAAAAAAFBQUFBQUFBQUFBQUEAAQEBAQEBAQEBAAABAQEAAAEAAAEAAQEBAAEBAAAAAQEBAQAAAAAAAAAABcXFxcXFxcXFxcXFxcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFpgWFpgTExMTAAAAAAAAAAAAAAAAExMTABMTABMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTABMTExMTAAAAExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTFxcXFxcXFxcXFxMTExMTExMTExMTExMTExMTExMTExMTExZvb29vmJiYAAAAAAAAEwATAAAAAAAAAAAAAAAAEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExMAABMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExcXFxcXFxMTExMTExMTE5GRkZETExMTExMTExMTExMTFm9vb28TE5iYAAATABMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFBQUFBQUFBQUFBQUEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAAAAAAAAAAAABAQABAAAAAAAAAAXFxcXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYWb29vAACYmJiYmBMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTAAAAAAAAAAUFBQUFBQUABQUFBQUEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAAAAAABAQEBAAAAAAAAAAAAAAAFxcXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFhYWb29vAACYmJgTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTAAATABMTExMAAAAAAAAAAAAAAAAABQUFBQAAAAAAAAAABQUEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAAAAAABAQEBAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFhYWb29vAAAAeXkTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMAAAAAABMAAAATAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAFBAQEBAQEBAQEBAQEBAQEBAQEBAQEAAAAAAAAAAQEBAQEBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkJAAAAAAAI8Ab28AAAB4eHgTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTAAAAAAAAAAAAExMTEwAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAABAQEBAQEBAQEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQkJAAAAAAAI8AAAAAABN3d3BwExMTExMTExMTExMTExMTExMTEwYTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMAAAAAAAAAAAAAExMTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAABAQEBAQEBAQEBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIaGAJCQAACDg3p6enJycnJycHBwcBMTExMTExMTExMTExMTEwYGBgYGBgYGExMTExMTExMTExMTExMTExMTExMTjIyMExMTExMTExMTAAAAAAAAEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJCQAIKCenp6eppycnJycXFxcXFxExMTExMTEwYGEwYTEwYGBgYGBgYGBgYGExMTExMTE2JiExMTExMTExMTjIyMjBMTExMTEwATAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAFBQUFBQUFBQUFBQUFBQQEBAQEBAQEBAQEBAQABAAAAAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLCwsLHp6epqamZlxcXFxcXFxcXETExMGBgYGBgYGBgYGBgYGBgYGBgYGBgZiYmJiYmJiYmJiYmJiYoyMjIyMjIwTExMTEwATAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUFBQUFBQUFBQUFBQUFBQUFBQUEBAQEBAQEBAUEBAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLCwsgIBzc3N0dHR2dnZ1cXFxcRMTExMTBgYGBgYGBgYGBgYGBgYGBgYGjIyMYmJiYmJiYmJiYmJiYmJijIyMjIyMjBMTAAATAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUFBQUFBQUFBQUFBQUFBQUFBQUFBQQEBAQFBQUABAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLCwsjo6OAH+pf6t2dnZ2AAATABMTExMTAAAGBgcHBgYGBgYGBgYGBoyMjIyMjIxiYmJiYmJiYmJijIyMjIyMjIyMExMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUFBQUFBQUFBQUFBQUFBQUFBQUFBQQEBQUFBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIWFhYUsLCwAAACOjgAArAB7e3sAAAAAAACTkxMTAAAGBgcHBwcHBgYGBmoGBoyMjIyMjIyMYmJiYmJiYoyMjIyMjIyMjIyMEwAAAJycAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACEhYWFAAAAAI4AAI6OAKp8fH0AfX19fX19fW6SkgAAa2trawcHBwcHamqMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMYGAAAAAAAJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISFhYWFAAAAAAAAAACOAHx8AH19fX19fX19fWxskgAAa2tra2sHB2lpaYyMjIyMjIyMjIyMjIyMjIyMjIyMjIwAAAAAYAAAAAAAAJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhYUAAAAAU1JSAI4AAAAAAAB9fX19fX1tWGxsbAAAbGxsa2toaGhoaGeMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjAAAYWEAAACcnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQUFBQUFBQUFBQUFBQUFBQUFBQUFBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoqJTU1NTU1IAAAAAAAAAfAAAAKEAbW1tWFhsbGxsbGxsaGhoaGhoZ2dnjIyMjIyMjIyMjIyMjIyMjIyMjIyMAAAAYQAAnJycnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUFBQUFBQUFBQUFBQUFBQUFBQUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACioqJTU1NTU1JSAAAAAAAAAAAAAAAAbVhYWFhsbGxsbGxsaGhoaGhnZ2NjY4yMjIyMjIyMjIyMjIyMjIyMjIyMAAAAAACcnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcHBwcHAUFBQUFBQUFBQUFBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKKiolNTU1NTU1OkpKSkAKSko6MAo6NNVJ+fWFhYbGxsbGxsbGhoZ2dnZ2NjY4yMjIyMjIyMjIyMjIyMjIyMjIyMjAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwcHBwcHAUFAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKJTU1NTU1NTU1OkpKSkpKSkpKOjo6Ofn5+fn5+fAGxsbGxsbGdnZ2dnY2NjY2ZmjIyMjIxjjIyMjIyMjIyMjIyMjAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcHBwcHAUAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACiogNTU1NTU1NTU1OkpKSkpKSkpKOjo6MAn5+fn5+fnwAAbGxsbGxnZ2djY2NjY2NjZmZjZWNjXoyMjIyMjIyMjIyMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHBwcHBwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACiNjY2NlNTU1NTU1OkpKSkpKSkpKOjo6MAAJ+fn5+fn1YAVQAAAAAAZ2djY2NjY2NjY2NkZGNeXoyMjIyMjIyMjIyMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwcHBwAAAAAAAAAMDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKI2NjY2NTVTU1NTU1NTOKSkpKSkpKOjo6OjAJ+fn5+fn59VVVlZAAAAAABjY2NjY2NjY2NkZGNeXl6MjF+MjIyMjAAAjQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwcHBwAAAAAHBwAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANjY2NjY2NTU1NVNTUzg4ODgQEKSkpA8PDw8PDwCfn5+fn5+fn1kAAAAAAABjY2NjY2NjY2MAAF5eXl5dXV9fAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcHBwcAAAcHAAAAAAAAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADY2NjY2NTU1NTU4ODg4ODgQEBAQDw8PDw8PDwAAn5+fn59ZWVkAAAAAAAAAY2NjY2NjAAAAAABeXlxcXV8AjAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwcHBwnKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADY2NjY2NTU1NTU4ODg4ODgQEBAQDw8PDw8PmwAAn56fnp5ZAAAAAAAAAAAAAGNjY2MAAAAAAABeXlxcXF1fAAAAAAAAlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAnJSUlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANDQ0NTU1NTU1NTg4ODg4OBAQEBAPDw8PDw8Pm5sAnp6engAAAAAAAAAAAAAAAGNjYwAAAAAAAAAAAFxcXFxdAAAAAAAAlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQ0NTU1NUJCQjg5OTg5ORAQEBAPDw8PDw8PpaWlAJ4AAAAAAAAAAAAAAAAAAGNjYwAAAAAAAAAAAF5cW1tbXwAAAAAAlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkAAAAACEhKSkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4+Pj41QkJCNzc5OTk5ORAQEBAPDw8PD66lpaWlAAAADQ0AAAAAAAAAAAAAAABjYwAAAAAAAAAAAF4AAFtfAAAAAAAAAACUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIwAiACEhKSkpKSkpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBQT49PT08Ozk5OTk5OhAQQ0NDrq6urq6lpaWlpQAADQAAAAAAAAAAAAAAAABjAIsAAAAAAAAAAFwAAF8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISEhISkpKSkpKgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEA9PTw8Ozk5OTk5OjpDQ0NDQ66urq6lpaWlpaUNDQAAAAAAAAAAAAAAAAAAAIsAAAAAAAAAAAAAAAAAAAAAAAAAAACUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISEhISEpKSkpKisrLAAAAAAAAAAAAAAAAAAAAAAAAAAAAEA9AD0AAAAAOTo6OkNDQ0NDQwyurq4OpaWlpQ0NAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQCVlQAAAAAAlpUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISEhISEpKR4eKisrLB4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6OjpEDAwMDAwMp6cODg4ODQ0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkAlQAAAACVlQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtISEhIR4eHh4eHh4eHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFRUREDAwMDAwMp6cODg4NDQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkJAAAAAJUJCQkACQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtLSAhIR4eHh4eHh4eHh4eHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEVFRUREDAwMDAwMpwIODg4OAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJCQAAAAkJCQkAAAAAAAAJCQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtICAgIB4eHh4eHh4eHh4eHh4eHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFREQMDAwMDAwMAgICAg4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQkAAAkJCQAJCQAAAAkACQAJCQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgICAgHh4eHh4eHh4eHh4eHh4eHh4eAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAwMDAwMDAwMAgICAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkAAAAAAAAAAAkAAAAAAAAACQkICAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgICAeHh4eHh4eHh4eHh4eHh4eHh4eHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS0sMDAwMDAwMAgICAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJCQkAAAAAAAAAAAAAAAAACQkICAgAAAAAiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICAeHh4eHh4eHh4eHh4eHh4eHh4eAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS0tLS0sMDAxHRwICAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkAAAAJAAAAAAAAAAkIAAgAAAAAAACIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICAgIB4fHh4eHh4eHh4eHh4eHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEtLS0tLDAxHR0cCAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgICAfHx8eHh4eHh4eHh4eHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS0tLS0tHR0cMR0hJSUkAAAAATwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKiooAAACKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgIB8fHx8fHh4eHh4eHh4eHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS0tLS0tHR0dHSUlISUkAAAAATwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKioqKiooAAACKigAAAAAAAAAAAABaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIB8fHx8fHx4eHh4eHh4eHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM0tLS0tHR0cxMUlJSQAAAE9PTwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIqKioqKioqKAACKigAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsfHx8fHx4eHh4eHh4eHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMzMzMzIyMjExMUlJAAAAAE9PTwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIqKioqKioqKioqKigAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsfHx+dnR4eHh4eHh4eHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMzMzIyMjIxMUlJAAAAAE9PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIqKioqKioqKioqKioqKioqKAAAAAAAAAIcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLCgqdnZ0eHh4eHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMzMzIyMjIaGklJAAAAAE9PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAioqKioqKioqKioqKioqKioqKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsKCgoKCp2dHh4eAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMzMzIyMhoaGkkAAAAAAE8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAioqKioqKioqKioqKioqKioqKigAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsKCgoKCp0KHh4eAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzMxoaGhoaSgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAioqKioqKioqKioqKioqKioqKiooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwoKCgoKCgoeHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaGhoaGhobGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAioqKioqKioqKioqKioqKioqKiooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwoKCgoKCh0eHh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhoaGhoaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIqKioqKioqKioqKioqKioqKiooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwoKCgoKCh0dHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhoaGhoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIqKiooAAAAAAIqKioqKioqKigAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwoKCgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIoAAAAAAAAAAAAAioqKioqKAAAAAAAAAAAAAACJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALCgoKCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIqKioqKAAAAAAAAAAAAAAAAiQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiYkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALCgoKAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiooAAAAAAAAAAAAAAACJiQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIoAAAAAAAAAAAAAAImJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALCgoKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiYkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALCgoKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALCwsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKCgoKAAAAAAAAAAAAAAAAAAAACgAAAAAACgoKCgoKCgoKAAAKCgoKCgoKCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgAACgoKCgoKCgoKCgoKCgoKAAAAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoKCgoKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoKAAAAAAoAAAAAAAAAAAAACgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACgoKCgoKCgoKCgoKCgoKCgAKAAAKCgoKCgoKCgoKCgoKCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAoAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgAAAAAAAAAAAAAAAAAACgoKAAAAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoAAAAAAAAAAAAKAAAAAAAAAAoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKAAAAAAAAAAAAAAAAAAAAAAoKCgoKCgoKCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' };
+const OPS_FLOCK = {
+    file: 'data/cameras.bin',
+    flock: 335701,
+    service: 214073,
+    osm: 146322
+};
+
+    const OPS_NEWS_KEY = 'orbint-ops-news';
+    const OPS_LAYOUT_KEY = 'orbint-ops-layout';
+    const OPS_SPANS = [3, 4, 6, 8, 12];
+    const OPS_LAYOUT_DEFAULT = {
+        machine: { span: 12, open: true, height: 0 },
+        news: { span: 4, open: true, height: 0 }
+    };
+    const OPS_OUTAGE_META = {
+        bgp: { label: 'Network', color: '#fb7185' },
+        'ping-slash24': { label: 'Reachability', color: '#c084fc' },
+        'merit-nt': { label: 'Telescope', color: '#fbbf24' }
+    };
+    const OPS_FEEDS = [
+        { name: 'The Hacker News', url: 'https://feeds.feedburner.com/TheHackersNews', home: 'https://thehackernews.com/' },
+        { name: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml', home: 'https://www.darkreading.com/' },
+        { name: 'Krebs on Security', url: 'https://krebsonsecurity.com/feed/', home: 'https://krebsonsecurity.com/' },
+        { name: 'SecurityWeek', url: 'https://www.securityweek.com/feed/', home: 'https://www.securityweek.com/' },
+        { name: 'BleepingComputer', url: 'https://www.bleepingcomputer.com/feed/', home: 'https://www.bleepingcomputer.com/' },
+        { name: 'The Record', url: 'https://therecord.media/feed', home: 'https://therecord.media/' },
+        { name: 'SANS Internet Storm Center', url: 'https://isc.sans.edu/rssfeed.xml', home: 'https://isc.sans.edu/' },
+        { name: 'CISA', url: 'https://www.cisa.gov/cybersecurity-advisories/all.xml', home: 'https://www.cisa.gov/news-events/cybersecurity-advisories' }
+    ];
+    const OPS_NEWS_MS = 7000;
+    const OPS_TOPICS = [
+        { id: 'all', label: 'All' },
+        { id: 'ai', label: 'AI', test: /\b(ai|llm|chatgpt|openai|anthropic|claude|machine learning)\b/i },
+        { id: 'malware', label: 'Malware', test: /\b(malware|trojan|botnet|stealer|backdoor|spyware|rootkit)\b/i },
+        { id: 'virus', label: 'Viruses', test: /\b(virus|worm|ransomware|wiper)\b/i },
+        { id: 'outage', label: 'Outages', test: /\b(outage|outages|offline|disruption|downtime)\b/i },
+        { id: 'breach', label: 'Breaches', test: /\b(breach|breaches|leak|leaked|stolen|exposed)\b/i },
+        { id: 'vuln', label: 'Vulnerabilities', test: /\b(vulnerability|vulnerabilities|cve-\d|zero-day|0-day|exploit|rce|patch)\b/i }
+    ];
+    const OPS_PORTS = {
+        21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP', 43: 'WHOIS', 53: 'DNS',
+        80: 'HTTP', 110: 'POP3', 143: 'IMAP', 443: 'HTTPS', 445: 'SMB',
+        1433: 'MSSQL', 3306: 'MySQL', 3389: 'RDP', 5900: 'VNC', 8080: 'HTTP', 8443: 'HTTPS'
+    };
+    let opsNewsBusy = false;
+    let opsNewsAll = [];
+    let opsNewsItems = [];
+    let opsNewsIndex = 0;
+    let opsNewsAt = 0;
+    let opsNewsNote = '';
+    let opsNewsPaused = false;
+    let opsNewsTopic = 'all';
+    let opsNewsDir = 1;
+    let opsNewsStamp = 0;
+    let opsNewsHold = 0;
+    let opsNewsPaintKey = '';
+    let opsNewsClosed = false;
+    let opsChapterMove = 0;
+    let opsImageQueue = [];
+    let opsImageBusy = false;
+    let opsFinger = '';
+    const OPS_DEVICE_KEY = 'orbint-ops-device';
+
+    function opsDeviceChoice() {
+        try { return localStorage.getItem(OPS_DEVICE_KEY) || ''; } catch (error) { return ''; }
+    }
+
+    function opsDeviceAllowed() {
+        return opsDeviceChoice() === 'allow';
+    }
+
+    function setOpsDeviceChoice(value) {
+        try {
+            if (value) localStorage.setItem(OPS_DEVICE_KEY, value);
+            else localStorage.removeItem(OPS_DEVICE_KEY);
+        } catch (error) {}
+    }
+    let opsMapMode = 'cameras';
+    let opsAttackRange = 'live';
+    let opsPointer = null;
+    let opsTipPoint = null;
+    let opsAttacks = [];
+    let opsOutages = [];
+    let opsAttackNote = 'Loading attack sources';
+    let opsOutageNote = 'Loading internet outages';
+    let opsAttackAt = 0;
+    let opsOutageAt = 0;
+    let opsMapHits = [];
+    let opsFlockCells = null;
+    let opsView = { z: 1, x: 0, y: 0 };
+    let opsViewPlaced = false;
+    let opsWorldW = 1;
+    let opsMapBox = { w: 0, h: 0 };
+    let opsMapDrag = null;
+    let opsHover = null;
+    let opsTipKey = '';
+    let opsReportKey = '';
+    let opsPortCache = null;
+    let opsPortStop = false;
+    let opsPortMiss = {};
+    let opsMapRunning = false;
+    let opsLandDots = null;
+    let opsLandRaw = '';
+    let opsCountryRaw = '';
+    let opsLandCanvas = null;
+    let opsLandSize = '';
+
+    function opsText(id, text) {
+        const node = $(id);
+        if (node) node.textContent = text;
+    }
+
+    function opsHash(text) {
+        let hash = 2166136261;
+        const value = String(text || '');
+        for (let i = 0; i < value.length; i++) {
+            hash ^= value.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return ('00000000' + (hash >>> 0).toString(16)).slice(-8);
+    }
+
+    function opsGpu() {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) return '';
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+            const lose = gl.getExtension('WEBGL_lose_context');
+            if (lose) lose.loseContext();
+            return name || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function opsBytes(size) {
+        const n = Number(size);
+        if (!isFinite(n) || n < 0) return '';
+        if (n < 1024) return n + ' B';
+        if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+        if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+        return (n / 1073741824).toFixed(1) + ' GB';
+    }
+
+    function opsClock() {
+        return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function opsAgo(date) {
+        let raw = date;
+        if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(raw.trim())) raw = raw.trim().replace(' ', 'T') + 'Z';
+        const time = new Date(raw).getTime();
+        if (!time || isNaN(time)) return '';
+        const min = Math.round((Date.now() - time) / 60000);
+        if (min < 0) return new Date(time).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        if (min < 1) return 'Just now';
+        if (min < 60) return min + 'm ago';
+        const hr = Math.round(min / 60);
+        if (hr < 36) return hr + 'h ago';
+        return new Date(time).toLocaleDateString();
+    }
+
+    function opsNetLabel() {
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (!conn) return 'Network unavailable';
+        const label = [conn.effectiveType, conn.downlink ? conn.downlink + ' Mb/s' : ''].filter(Boolean).join(' · ');
+        return label || 'Network unavailable';
+    }
+
+    function paintOpsRail() {}
+
+    function opsLayout(next) {
+        if (next) {
+            try { localStorage.setItem(OPS_LAYOUT_KEY, JSON.stringify(next)); } catch (error) {}
+            return next;
+        }
+        try {
+            const saved = JSON.parse(localStorage.getItem(OPS_LAYOUT_KEY) || '');
+            if (saved && typeof saved === 'object') {
+                if (saved._v !== 2) {
+                    ['machine'].forEach(function (id) {
+                        if (saved[id]) saved[id].open = false;
+                    });
+                    saved._v = 2;
+                    try { localStorage.setItem(OPS_LAYOUT_KEY, JSON.stringify(saved)); } catch (error) {}
+                }
+                return saved;
+            }
+        } catch (error) {}
+        return {};
+    }
+
+    function applyOpsLayout(source) {
+        const saved = source || opsLayout();
+        document.querySelectorAll('.ops-panel').forEach(function (panel) {
+            panel.style.gridColumn = '';
+            const id = panel.getAttribute('data-ops');
+            const base = OPS_LAYOUT_DEFAULT[id] || { span: 3, open: true, height: 0 };
+            const spec = Object.assign({}, base, saved[id] || {});
+            if (id === 'news' || id === 'machine') spec.open = true;
+            panel.classList.toggle('is-closed', !spec.open);
+            const toggle = panel.querySelector('.ops-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', spec.open ? 'true' : 'false');
+            const body = panel.querySelector('.ops-body');
+            if (body) body.style.height = '';
+        });
+    }
+
+    function setOpsOpen(id, open) {
+        const layout = opsLayout();
+        const base = OPS_LAYOUT_DEFAULT[id] || { span: 12, open: true, height: 0 };
+        const spec = Object.assign({}, base, layout[id] || {});
+        spec.open = !!open;
+        layout[id] = spec;
+        opsLayout(layout);
+        applyOpsLayout(layout);
+    }
+
+    function opsSnapSpan(width, boardWidth) {
+        const raw = Math.round((width / boardWidth) * 12);
+        let best = 12;
+        OPS_SPANS.forEach(function (span) {
+            if (Math.abs(span - raw) < Math.abs(best - raw)) best = span;
+        });
+        return best;
+    }
+
+    function paintOpsAccess() {
+        const status = $('opsAccessStatus');
+        const ask = $('opsAccessAsk');
+        const choice = opsDeviceChoice();
+        if (choice === 'allow') {
+            if (status) status.textContent = 'Allowed. This computer shows what the browser can see.';
+            if (ask) ask.textContent = 'Access on';
+        } else if (choice === 'deny') {
+            if (status) status.textContent = 'Not collected. This device stays unread.';
+            if (ask) ask.textContent = 'Allow access';
+        } else {
+            if (status) status.textContent = 'Nothing about this device is read yet.';
+            if (ask) ask.textContent = 'Allow access';
+        }
+    }
+
+    function paintOpsMachineHeld() {
+        opsFinger = '';
+        opsText('opsMachineStatus', 'Not collected');
+        const box = $('opsMachine');
+        if (box) box.innerHTML = '<p class="ops-note">Nothing about this device is read until you allow access.</p>';
+    }
+
+    function openOpsAsk() {
+        const ask = $('opsAsk');
+        if (!ask) return;
+        ask.hidden = false;
+        const deny = $('opsAskDeny');
+        if (deny) deny.focus();
+    }
+
+    function closeOpsAsk() {
+        const ask = $('opsAsk');
+        if (ask) ask.hidden = true;
+    }
+
+    function paintOpsMachine() {
+        const box = $('opsMachine');
+        if (!box) return;
+        if (!opsDeviceAllowed()) {
+            paintOpsMachineHeld();
+            return;
+        }
+        const nav = navigator;
+        const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
+        const gpu = opsGpu();
+        const screenBits = window.screen
+            ? (window.screen.width + '×' + window.screen.height + ' @ ' + (window.devicePixelRatio || 1) + 'x')
+            : '';
+        let zone = '';
+        try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (error) {}
+        const net = conn
+            ? [conn.effectiveType, conn.downlink ? conn.downlink + ' Mb/s' : ''].filter(Boolean).join(' · ')
+            : '';
+        const platform = nav.platform || (nav.userAgentData && nav.userAgentData.platform) || '';
+        const rows = [
+            ['User agent', nav.userAgent || ''],
+            ['Platform', platform],
+            ['CPU cores', nav.hardwareConcurrency ? String(nav.hardwareConcurrency) : ''],
+            ['Device memory', nav.deviceMemory ? nav.deviceMemory + ' GB (browser hint)' : ''],
+            ['Screen', screenBits],
+            ['Language', nav.language || ''],
+            ['Timezone', zone],
+            ['GPU', gpu],
+            ['Network', net],
+            ['CPU usage', ''],
+            ['Disk usage', ''],
+            ['Live network usage', '']
+        ];
+        const place = opsUserFix
+            ? opsUserFix.lat.toFixed(5) + ', ' + opsUserFix.lng.toFixed(5) + (isFinite(opsUserFix.accuracy) ? ' ± ' + Math.round(opsUserFix.accuracy) + ' m' : '')
+            : (opsUserNote || 'Locating…');
+        opsFinger = opsHash(rows.slice(0, 9).map(function (row) { return row[0] + ':' + row[1]; }).join('|'));
+        const bits = [platform, nav.hardwareConcurrency ? nav.hardwareConcurrency + ' cores' : ''].filter(Boolean);
+        opsText('opsMachineStatus', bits.join(' · ') || 'Browser specs');
+        box.innerHTML = rows.map(function (row) {
+            return '<div class="ops-row"><span>' + esc(row[0]) + '</span><strong>' + esc(row[1] || 'Unavailable') + '</strong></div>';
+        }).join('') + '<div class="ops-row"><span>Location</span><strong id="opsUserPlace">' + esc(place) + '</strong></div>' +
+            '<div class="ops-row"><span>Fingerprint</span><strong>' + esc(opsFinger) + '</strong></div>' +
+            '<div class="ops-row"><span>Storage</span><strong id="opsStorage">Checking…</strong></div>';
+        if (nav.storage && nav.storage.estimate) {
+            nav.storage.estimate().then(function (est) {
+                const node = $('opsStorage');
+                if (!node) return;
+                const used = opsBytes(est && est.usage);
+                const quota = opsBytes(est && est.quota);
+                node.textContent = used && quota ? used + ' used of ' + quota : 'Unavailable';
+            }).catch(function () {
+                const node = $('opsStorage');
+                if (node) node.textContent = 'Unavailable';
+            });
+        } else {
+            const node = $('opsStorage');
+            if (node) node.textContent = 'Unavailable';
+        }
+        paintOpsRail();
+    }
+
+    function renderOperations() {
+        applyOpsLayout();
+        paintOpsAccess();
+        paintOpsMachine();
+        loadOpsNews(false);
+        loadOpsAttacks(false);
+        loadOpsOutages(false);
+        opsMapStatusLine();
+        paintOpsMapList();
+        startOpsMap();
+        if (opsDeviceAllowed()) opsLocateUser(false);
+    }
+
+    function opsNewsCache(next) {
+        if (next) {
+            try { localStorage.setItem(OPS_NEWS_KEY, JSON.stringify(next)); } catch (error) {}
+            return next;
+        }
+        try {
+            const saved = JSON.parse(localStorage.getItem(OPS_NEWS_KEY) || '');
+            if (saved && Array.isArray(saved.items)) return saved;
+        } catch (error) {}
+        return null;
+    }
+
+    function opsAbsUrl(url) {
+        const value = String(url || '').trim();
+        return /^https?:\/\//i.test(value) ? value : '';
+    }
+
+    function opsPlain(html) {
+        return String(html || '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+    }
+
+    function opsResolveUrl(url, page) {
+        const value = String(url || '').trim();
+        if (!value) return '';
+        if (value.indexOf('//') === 0) return 'https:' + value;
+        if (/^https?:\/\//i.test(value)) return value;
+        try { return new URL(value, page).href; } catch (error) { return ''; }
+    }
+
+    function opsNewsImage(item) {
+        const direct = opsAbsUrl(item && item.thumbnail);
+        if (direct) return direct;
+        const enc = item && item.enclosure;
+        const encLink = enc && (enc.link || enc.url);
+        const encType = String(enc && enc.type || '');
+        if (opsAbsUrl(encLink) && (!encType || encType.indexOf('image') === 0 || /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(encLink))) return encLink;
+        const html = String(item && (item.content || item.description) || '');
+        const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+        return match ? opsAbsUrl(opsResolveUrl(match[1], item && item.link)) : '';
+    }
+
+    function opsOgImage(html, page) {
+        const tags = String(html || '').match(/<meta\b[^>]*>/gi) || [];
+        let found = '';
+        tags.forEach(function (tag) {
+            if (found) return;
+            const image = /property\s*=\s*["']og:image(?::secure_url)?["']/i.test(tag) || /name\s*=\s*["']twitter:image(?::src)?["']/i.test(tag);
+            if (!image) return;
+            const content = tag.match(/content\s*=\s*["']([^"']+)["']/i);
+            if (!content) return;
+            const url = opsAbsUrl(opsResolveUrl(opsPlain(content[1]), page));
+            if (url && !/sprite|pixel|spacer|favicon/i.test(url)) found = url;
+        });
+        return found;
+    }
+
+    function opsFilterNews(items) {
+        const topic = OPS_TOPICS.filter(function (row) { return row.id === opsNewsTopic; })[0] || OPS_TOPICS[0];
+        if (!topic.test) return items || [];
+        return (items || []).filter(function (item) {
+            return topic.test.test((item.title || '') + ' ' + (item.text || ''));
+        });
+    }
+
+    function opsQueueImages(items) {
+        const deck = opsFilterNews(items).slice(0, 8);
+        const ordered = deck.concat((items || []).filter(function (item) { return deck.indexOf(item) < 0; }));
+        ordered.forEach(function (item) {
+            if (!item || item.image || item.imageTried || !item.link) return;
+            if (opsImageQueue.indexOf(item) >= 0) return;
+            opsImageQueue.push(item);
+        });
+        opsDrainImages();
+    }
+
+    function opsDrainImages() {
+        if (opsImageBusy) return;
+        const item = opsImageQueue.shift();
+        if (!item) return;
+        opsImageBusy = true;
+        item.imageTries = (item.imageTries || 0) + 1;
+        fetch('https://proxy.corsfix.com/?' + item.link).then(function (res) {
+            if (res.status === 429 && item.imageTries < 3) {
+                opsImageQueue.push(item);
+                return '';
+            }
+            if (!res.ok) throw new Error('image');
+            return res.text();
+        }).then(function (html) {
+            if (!html) return 1200;
+            const image = opsOgImage(html, item.link);
+            if (!image || image === item.imageBroken) {
+                item.imageTried = true;
+                return 900;
+            }
+            item.image = image;
+            item.imageTried = true;
+            opsNewsCache({ at: opsNewsAt || Date.now(), items: opsNewsAll });
+            paintOpsNews(opsNewsAll, opsNewsNote, true);
+            if (opsHover && opsHover.ip && opsTipPoint) {
+                opsTipKey = '';
+                opsPlaceTip(opsHover, opsTipPoint);
+            }
+            return 900;
+        }).catch(function () {
+            item.imageTried = true;
+            return 900;
+        }).then(function (wait) {
+            opsImageBusy = false;
+            setTimeout(opsDrainImages, wait || 900);
+        });
+    }
+
+    function opsChapterKey(stories) {
+        return stories.map(function (item) { return encodeURIComponent(item.link || ''); }).join(',');
+    }
+
+    function opsNewsElapsed() {
+        let elapsed = Date.now() - (opsNewsStamp || Date.now());
+        if (opsNewsPaused && opsNewsHold) elapsed -= Date.now() - opsNewsHold;
+        if (elapsed < 0) elapsed = 0;
+        if (elapsed > OPS_NEWS_MS) elapsed = OPS_NEWS_MS;
+        return elapsed;
+    }
+
+    function resetOpsChapterFill(elapsed) {
+        const fill = document.querySelector('#opsNews .ops-chapter-fill');
+        if (!fill) return;
+        fill.style.animation = 'none';
+        void fill.offsetWidth;
+        fill.style.animation = '';
+        fill.style.animationDelay = '-' + (elapsed || 0) + 'ms';
+    }
+
+    function mountOpsChapters(box, stories, chapters, slide) {
+        const move = ++opsChapterMove;
+        const wrap = box.querySelector('.ops-feature-wrap');
+        if (!chapters) {
+            const key = opsChapterKey(stories);
+            const style = '--ops-news-ms:' + OPS_NEWS_MS + 'ms';
+            const html = '<div class="ops-chapters" data-key="' + esc(key) + '"><div class="ops-chapter-track" role="tablist" aria-label="Stories" style="' + style + '">' +
+                stories.map(function (item, index) {
+                    const on = index === opsNewsIndex;
+                    const fill = on ? '<span class="ops-chapter-fill" style="animation-delay:-' + opsNewsElapsed() + 'ms"></span>' : '';
+                    return '<button type="button" class="ops-dot' + (on ? ' is-on' : '') + '" role="tab" data-news="' + index + '" aria-selected="' + (on ? 'true' : 'false') + '" aria-label="' + esc(item.title || 'Story') + '">' + fill + '</button>';
+                }).join('') + '</div></div>';
+            if (wrap) wrap.insertAdjacentHTML('afterend', html);
+            else box.insertAdjacentHTML('beforeend', html);
+            return;
+        }
+        if (wrap) wrap.insertAdjacentElement('afterend', chapters);
+        else box.appendChild(chapters);
+        const buttons = chapters.querySelectorAll('.ops-dot');
+        buttons.forEach(function (button, index) {
+            const on = index === opsNewsIndex;
+            button.classList.toggle('is-on', on);
+            button.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        const on = buttons[opsNewsIndex];
+        if (!on) return;
+        let fill = chapters.querySelector('.ops-chapter-fill');
+        if (!fill) {
+            fill = document.createElement('span');
+            fill.className = 'ops-chapter-fill';
+        }
+        const moved = fill.parentNode !== on;
+        if (moved) on.appendChild(fill);
+        if (move !== opsChapterMove || !on.isConnected) return;
+        if (slide) resetOpsChapterFill(0);
+        else if (moved) resetOpsChapterFill(opsNewsElapsed());
+    }
+
+    let opsNewsSkelTimer = 0;
+
+    function paintOpsNewsSkeleton() {
+        const box = $('opsNews');
+        if (!box) return;
+        box.innerHTML = '<div class="ops-lead ops-skel" aria-hidden="true"><span class="ops-pill">Source</span><h3>Story</h3><p>Summary</p></div>';
+    }
+
+    function opsNewsBlurb(text) {
+        const value = String(text || '').replace(/\s+/g, ' ').trim();
+        if (value.length <= 220) return value;
+        return value.slice(0, 217).replace(/\s+\S*$/, '') + '…';
+    }
+
+    function paintOpsNews(items, note, keep) {
+        clearTimeout(opsNewsSkelTimer);
+        opsNewsSkelTimer = 0;
+        const box = $('opsNews');
+        if (!box) return;
+        opsNewsAll = items || [];
+        opsNewsNote = note || '';
+        const filtered = opsFilterNews(opsNewsAll);
+        const stories = filtered.slice(0, 12);
+        opsNewsItems = stories;
+        if (opsNewsIndex >= stories.length) opsNewsIndex = 0;
+        const feature = stories[opsNewsIndex];
+        const paintKey = opsNewsTopic + ':' + opsNewsIndex + ':' + (feature && feature.link || '');
+        const changed = opsNewsPaintKey !== paintKey;
+        opsNewsPaintKey = paintKey;
+        if (changed && !keep) {
+            opsNewsStamp = Date.now();
+            if (opsNewsPaused) opsNewsHold = opsNewsStamp;
+        }
+        if (!opsNewsStamp) opsNewsStamp = Date.now();
+        const filters = '<div class="ops-filters" role="group" aria-label="Topics">' + OPS_TOPICS.map(function (topic) {
+            return '<button type="button" data-topic="' + topic.id + '"' + (topic.id === opsNewsTopic ? ' class="is-on"' : '') + '>' + esc(topic.label) + '</button>';
+        }).join('') + '</div>';
+        const label = opsNewsTopic === 'all' ? ' stories' : ' in topic';
+        opsText('opsNewsStatus', filtered.length ? filtered.length + label : (note || 'No stories yet'));
+        if (!stories.length) {
+            box.innerHTML = filters + '<p class="ops-status">' + esc(note || 'No stories in this topic yet.') + '</p>';
+            paintOpsRail();
+            return;
+        }
+        const when = opsAgo(feature.date) || '';
+        const blurb = opsNewsBlurb(feature.text);
+        const photo = feature.image
+            ? '<img class="ops-lead-photo" src="' + esc(feature.image) + '" alt="" width="184" height="144" referrerpolicy="no-referrer">'
+            : '';
+        const progress = stories.length > 1
+            ? '<span class="ops-lead-progress" aria-hidden="true"><span class="ops-chapter-fill" style="animation-delay:-' + opsNewsElapsed() + 'ms"></span></span>'
+            : '';
+        const wire = stories.filter(function (item, index) { return index !== opsNewsIndex; }).map(function (item) {
+            const meta = [item.source || '', opsAgo(item.date) || ''].filter(Boolean).join(' · ');
+            return '<a href="' + esc(item.link) + '" target="_blank" rel="noopener noreferrer"><b>' + esc(item.title || 'Untitled') + '</b><small>' + esc(meta) + '</small></a>';
+        }).join('');
+        const updated = opsNewsAt ? opsAgo(opsNewsAt) : '';
+        const sources = [];
+        filtered.forEach(function (item) {
+            if (item.source && sources.indexOf(item.source) < 0) sources.push(item.source);
+        });
+        const meta = '<p class="ops-news-meta">' + esc(sources.join(', ')) + ' · ' + filtered.length + (opsNewsTopic === 'all' ? ' stories' : ' in this topic') + (updated ? ' · updated ' + esc(updated) : '') + '</p>';
+        box.innerHTML = filters + meta +
+            '<article class="ops-lead' + (photo ? ' has-photo' : '') + '"><a href="' + esc(feature.link) + '" target="_blank" rel="noopener noreferrer"><p class="ops-lead-meta"><span>' +
+            esc(feature.source || 'Security') + '</span>' + (when ? '<time>' + esc(when) + '</time>' : '') + '</p><h3>' +
+            esc(feature.title || 'Untitled') + '</h3>' + (blurb ? '<p class="ops-lead-text">' + esc(blurb) + '</p>' : '') + photo + '</a>' + progress + '</article>' +
+            (wire ? '<div class="ops-wire">' + wire + '</div>' : '') +
+            (note ? '<p class="ops-status">' + esc(note) + '</p>' : '');
+        box.querySelectorAll('img').forEach(function (img) {
+            img.addEventListener('error', function () {
+                const failed = img.getAttribute('src');
+                const current = opsNewsAll.filter(function (item) { return item.image === failed; })[0];
+                if (current && !current.imageBroken) {
+                    current.imageBroken = failed;
+                    current.image = '';
+                    if (!current.imageTried) opsQueueImages([current]);
+                }
+                const lead = img.closest('.ops-lead');
+                if (lead) lead.classList.remove('has-photo');
+                img.remove();
+            });
+        });
+        opsQueueImages(opsNewsAll);
+        paintOpsRail();
+    }
+
+    function opsNewsDayKey() {
+        const now = new Date();
+        return now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
+    }
+
+    function opsNewsFeeds() {
+        const now = new Date();
+        const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
+        const count = Math.min(4, OPS_FEEDS.length);
+        const start = day % OPS_FEEDS.length;
+        const picked = [];
+        for (let i = 0; i < count; i++) picked.push(OPS_FEEDS[(start + i) % OPS_FEEDS.length]);
+        return picked;
+    }
+
+    let opsNewsMiss = 0;
+
+    function loadOpsNews(force) {
+        const cached = opsNewsCache();
+        const today = opsNewsDayKey();
+        const staleShape = cached && cached.items && cached.items.some(function (item) { return !('image' in item) || !('text' in item); });
+        const sameDay = cached && cached.day === today;
+        if (cached && cached.items) {
+            opsNewsAt = cached.at || 0;
+            paintOpsNews(cached.items, '');
+        } else {
+            clearTimeout(opsNewsSkelTimer);
+            opsNewsSkelTimer = setTimeout(function () {
+                opsNewsSkelTimer = 0;
+                if (!opsNewsAll.length) paintOpsNewsSkeleton();
+            }, 300);
+        }
+        if (opsNewsBusy) return;
+        if (!force && !sameDay && opsNewsMiss && Date.now() - opsNewsMiss < 30 * 60 * 1000) return;
+        if (!force && sameDay && cached.at && Date.now() - cached.at < 30 * 60 * 1000 && !staleShape) return;
+        opsNewsBusy = true;
+        Promise.all(opsNewsFeeds().map(function (feed) {
+            const endpoint = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url);
+            return fetch(endpoint).then(function (res) {
+                if (!res.ok) throw new Error('feed');
+                return res.json();
+            }).then(function (payload) {
+                const list = payload && payload.items;
+                if (!Array.isArray(list)) return [];
+                return list.slice(0, 8).map(function (item) {
+                    const text = opsPlain(item.description || item.content || '');
+                    return {
+                        title: String(item.title || ''),
+                        link: String(item.link || feed.home),
+                        date: item.pubDate || '',
+                        source: feed.name,
+                        text: text.slice(0, 420),
+                        image: opsNewsImage(item)
+                    };
+                });
+            }).catch(function () { return []; });
+        })).then(function (groups) {
+            const items = groups.reduce(function (all, group) { return all.concat(group); }, []);
+            items.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+            if (items.length) {
+                opsNewsMiss = 0;
+                opsNewsAt = Date.now();
+                opsNewsCache({ at: opsNewsAt, day: opsNewsDayKey(), items: items });
+                paintOpsNews(items, '');
+            } else if (!(cached && cached.items && cached.items.length)) {
+                opsNewsMiss = Date.now();
+                paintOpsNews([], 'The feeds did not load. Open a publication directly.');
+            } else opsNewsMiss = Date.now();
+        }).then(function () { opsNewsBusy = false; }, function () { opsNewsBusy = false; });
+    }
+
+    window.addEventListener('focus', function () { loadOpsNews(true); });
+    window.addEventListener('online', function () { loadOpsNews(true); });
+
+    function opsReduceMotion() {
+        return document.documentElement.classList.contains('reduce-motion') ||
+            (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function opsCountryName(code) {
+        const value = String(code || '').toUpperCase();
+        if (!value) return '';
+        try {
+            if (!opsCountryName.names) opsCountryName.names = new Intl.DisplayNames(undefined, { type: 'region' });
+            return opsCountryName.names.of(value) || value;
+        } catch (error) {
+            return value;
+        }
+    }
+
+    function opsFresh(at) {
+        const sec = Math.round((Date.now() - Number(at)) / 1000);
+        if (!isFinite(sec) || sec < 0) return '';
+        if (sec < 10) return 'just now';
+        if (sec < 60) return sec + 's ago';
+        return opsAgo(at);
+    }
+
+    function opsMapStatusLine() {
+        if (opsMapMode === 'cameras') {
+            opsText('opsMapStatus', opsCameraMiss ? 'Camera locations did not load' : (opsUserNote || ''));
+            return;
+        }
+        opsText('opsMapStatus', opsMapMode === 'outages' ? (opsOutageNote || '') : (opsAttackNote || ''));
+    }
+
+    function opsModeThumb(instant) {
+        const wrap = document.querySelector('.ops-mode');
+        if (!wrap) return;
+        const thumb = wrap.querySelector('.ops-mode-thumb');
+        const on = wrap.querySelector('button.is-on');
+        if (!thumb || !on || !(on.offsetWidth > 0)) return;
+        const snap = instant || opsReduceMotion();
+        if (snap) thumb.classList.add('is-instant');
+        else thumb.classList.remove('is-instant');
+        thumb.style.top = on.offsetTop + 'px';
+        thumb.style.left = on.offsetLeft + 'px';
+        thumb.style.width = on.offsetWidth + 'px';
+        thumb.style.height = on.offsetHeight + 'px';
+        if (snap && !opsReduceMotion()) {
+            void thumb.offsetWidth;
+            thumb.classList.remove('is-instant');
+        }
+    }
+
+    function setOpsMapMode(mode) {
+        opsMapMode = mode === 'outages' ? 'outages' : (mode === 'cameras' ? 'cameras' : 'attacks');
+        const attacks = $('opsMapAttacks');
+        const outages = $('opsMapOutages');
+        const cameras = $('opsMapCameras');
+        if (attacks) attacks.classList.toggle('is-on', opsMapMode === 'attacks');
+        if (outages) outages.classList.toggle('is-on', opsMapMode === 'outages');
+        if (cameras) cameras.classList.toggle('is-on', opsMapMode === 'cameras');
+        opsModeThumb(false);
+        const range = $('opsRange');
+        if (range) range.hidden = opsMapMode === 'cameras';
+        const canvas = $('opsMap');
+        if (canvas) canvas.setAttribute('aria-label', opsMapMode === 'cameras' ? 'Camera map' : 'World map');
+        opsHideTip();
+        closeOpsReport();
+        opsMapStatusLine();
+        paintOpsMapList();
+        opsShowPinLayers();
+        if (opsMapMode === 'cameras') opsEnsureCameras();
+        else if (opsMapMode === 'outages') loadOpsOutages(false);
+        else loadOpsAttacks(false);
+    }
+
+    let opsRealMap = null;
+    let opsMapTouched = false;
+
+    function opsFitWorld() {
+        if (!opsRealMap || opsMapTouched) return;
+        opsRealMap.fitBounds([[-168, -46], [180, 72]], { padding: 8, animate: false, maxZoom: 2 });
+    }
+
+    function opsScreenPoint(lon, lat) {
+        if (!opsRealMap || !isFinite(Number(lon)) || !isFinite(Number(lat))) return null;
+        const point = opsRealMap.project([opsNormLon(lon), Math.max(-85, Math.min(85, Number(lat)))]);
+        if (!point || !isFinite(point.x) || !isFinite(point.y)) return null;
+        return [point.x, point.y];
+    }
+
+    function opsOnScreen(x, y) {
+        const canvas = $('opsMapDraw');
+        if (!canvas) return false;
+        const w = canvas.clientWidth || 0;
+        const h = canvas.clientHeight || 0;
+        return x >= -48 && y >= -48 && x <= w + 48 && y <= h + 48;
+    }
+
+    function opsInView(lon, lat) {
+        if (!opsRealMap) return true;
+        let bounds = null;
+        try { bounds = opsRealMap.getBounds(); } catch (error) { return true; }
+        if (!bounds) return true;
+        const margin = 3;
+        if (lat < bounds.getSouth() - margin || lat > bounds.getNorth() + margin) return false;
+        const west = bounds.getWest();
+        const east = bounds.getEast();
+        if (west <= east) return lon >= west - margin && lon <= east + margin;
+        return lon >= west - margin || lon <= east + margin;
+    }
+
+    function opsBindRealMap(map) {
+        if (map.__orbintBound) return;
+        map.__orbintBound = true;
+        map.on('mousemove', function (event) {
+            const hit = opsHitAt(event.point.x, event.point.y);
+            const surface = map.getCanvas();
+            if (surface) surface.style.cursor = hit ? 'pointer' : '';
+            if (!hit) { opsHideTip(); return; }
+            opsHoverHit = hit;
+            opsHover = { kind: hit.kind, id: hit.id, ip: hit.ip || '' };
+            opsPlaceTip(hit, event.originalEvent);
+        });
+        map.on('mouseout', function () { opsHideTip(); });
+        map.on('click', function (event) {
+            const hit = opsHitAt(event.point.x, event.point.y);
+            if (!hit) {
+                opsCameraFocus = null;
+                opsSyncCameraFocus();
+                closeOpsReport();
+                return;
+            }
+            if (hit.kind === 'flock') {
+                closeOpsReport();
+                opsStreetAtCamera(hit);
+                return;
+            }
+            opsOpenMapHit(hit);
+        });
+    }
+
+    const OPS_MAP_JS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js';
+    const OPS_MAP_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css';
+    const OPS_MAP_JS_SRI = 'sha384-/L1njH4bbgNt9Uk3HwJ272N9fxJzRBQCxhtwGkZiqgl+Nxpq2ETUNZhNMNV1RgyW';
+    const OPS_MAP_CSS_SRI = 'sha384-Nq6PQ+9vJPvw7U/VfDELyrWoGQMsy0gi6QShhaSrGzkpF5KkM40csg2leky+YMTd';
+
+    function opsLoadMapLibre() {
+        if (window.maplibregl) return Promise.resolve();
+        if (opsLoadMapLibre.wait) return opsLoadMapLibre.wait;
+        opsLoadMapLibre.wait = new Promise(function (resolve, reject) {
+            if (!document.querySelector('link[data-orbint-maplibre]')) {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = OPS_MAP_CSS;
+                link.integrity = OPS_MAP_CSS_SRI;
+                link.crossOrigin = 'anonymous';
+                link.setAttribute('data-orbint-maplibre', '1');
+                document.head.appendChild(link);
+            }
+            const script = document.createElement('script');
+            script.src = OPS_MAP_JS;
+            script.integrity = OPS_MAP_JS_SRI;
+            script.crossOrigin = 'anonymous';
+            script.onload = function () { resolve(); };
+            script.onerror = function () { reject(new Error('map')); };
+            document.head.appendChild(script);
+        });
+        return opsLoadMapLibre.wait;
+    }
+
+    function opsEnsureMap() {
+        if (opsRealMap) return opsRealMap;
+        const host = $('opsMap');
+        if (!host) return null;
+        if (!window.maplibregl) {
+            if (!host.dataset.loading) {
+                host.dataset.loading = '1';
+                opsLoadMapLibre().then(function () {
+                    delete host.dataset.loading;
+                    opsEnsureMap();
+                }).catch(function () {
+                    host.classList.add('is-map-missing');
+                    if (!host.dataset.warned) {
+                        host.dataset.warned = '1';
+                        host.textContent = 'The map library did not load. Check the network connection and refresh.';
+                    }
+                });
+            }
+            return null;
+        }
+        host.classList.remove('is-map-missing');
+        if (host.dataset.warned) {
+            host.textContent = '';
+            delete host.dataset.warned;
+        }
+        opsRealMap = new maplibregl.Map({
+            container: host,
+            style: 'https://tiles.openfreemap.org/styles/dark',
+            center: [0, 18],
+            zoom: 0.8,
+            minZoom: 0.4,
+                maxZoom: 18,
+            attributionControl: false,
+            dragRotate: false,
+            pitchWithRotate: false,
+            fadeDuration: 0
+        });
+        opsRealMap.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+        const attrib = host.querySelector('.maplibregl-ctrl-attrib');
+        if (attrib) {
+            attrib.classList.add('maplibregl-compact');
+            attrib.classList.remove('maplibregl-compact-show');
+            attrib.removeAttribute('open');
+        }
+        if (opsRealMap.touchZoomRotate) opsRealMap.touchZoomRotate.disableRotation();
+        if (opsRealMap.dragRotate) opsRealMap.dragRotate.disable();
+        opsRealMap.on('dragstart', function () { opsMapTouched = true; });
+        opsRealMap.on('zoomstart', function (event) {
+            if (event.originalEvent) opsMapTouched = true;
+        });
+        function opsRaisePins(map) {
+            ['ops-cameras', 'ops-attacks', 'ops-outages', 'ops-user-ring', 'ops-user-dot', 'ops-camera-focus'].forEach(function (id) {
+                if (map.getLayer(id)) map.moveLayer(id);
+            });
+        }
+        function opsRestorePins() {
+            if (!opsRealMap || !opsRealMap.isStyleLoaded()) return;
+            if (!opsRealMap.getSource('ops-attacks')) {
+                try { opsInstallPinLayers(opsRealMap); } catch (error) {}
+            }
+            opsRaisePins(opsRealMap);
+        }
+        opsRealMap.on('style.load', opsRestorePins);
+        opsRealMap.on('styledata', opsRestorePins);
+        opsRealMap.on('idle', opsRestorePins);
+        opsRealMap.on('load', function () {
+            opsSyncMapSize();
+            opsInstallPinLayers(opsRealMap);
+        });
+        opsBindRealMap(opsRealMap);
+        if (typeof ResizeObserver !== 'undefined') {
+            const watch = new ResizeObserver(function () { opsSyncMapSize(); });
+            watch.observe(host);
+        }
+        requestAnimationFrame(function () { opsSyncMapSize(); });
+        return opsRealMap;
+    }
+
+    function opsSyncMapSize() {
+        const map = opsRealMap;
+        const host = $('opsMap');
+        if (!map || !host) return;
+        const width = host.clientWidth;
+        const height = host.clientHeight;
+        if (width < 20 || height < 20) return;
+        const canvas = host.querySelector('.maplibregl-canvas');
+        const stale = !canvas || Math.abs(canvas.clientWidth - width) > 1 || Math.abs(canvas.clientHeight - height) > 1;
+        if (!stale) return;
+        map.resize();
+        opsFitWorld();
+    }
+
+    let opsPinGl = null;
+    let opsPinProgram = null;
+    let opsPinVariant = '';
+    let opsPinMatrix = null;
+    let opsPinWorld = null;
+    let opsPinSize = null;
+    let opsPinColor = null;
+    let opsPinPos = null;
+    let opsFlockMesh = null;
+    let opsOsmMesh = null;
+    let opsFlockDraw = 0;
+    let opsOsmDraw = 0;
+
+    function opsClearPinCanvas() {
+        const canvas = $('opsMapDraw');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function opsPinFeatures(items, mapItem) {
+        const features = [];
+        items.forEach(function (item, index) {
+            const feature = mapItem(item, index);
+            if (feature) features.push(feature);
+        });
+        return { type: 'FeatureCollection', features: features };
+    }
+
+    function opsSyncAttackPins() {
+        const map = opsRealMap;
+        if (!map || !map.getSource('ops-attacks')) return;
+        map.getSource('ops-attacks').setData(opsPinFeatures(opsAttacks, function (item) {
+            const spot = opsAttackSpot(item);
+            if (!spot || !item.ip) return null;
+            return {
+                type: 'Feature',
+                properties: { ip: item.ip, link: opsAttackLink(item) || '' },
+                geometry: { type: 'Point', coordinates: [spot.lon, spot.lat] }
+            };
+        }));
+    }
+
+    function opsSyncOutagePins() {
+        const map = opsRealMap;
+        if (!map || !map.getSource('ops-outages')) return;
+        map.getSource('ops-outages').setData(opsPinFeatures(opsOutages, function (item, index) {
+            const place = item.country && OPS_PLACES[item.country];
+            const lon = isFinite(item.lon) ? item.lon : (place && place[0]);
+            const lat = isFinite(item.lat) ? item.lat : (place && place[1]);
+            if (!isFinite(lon) || !isFinite(lat)) return null;
+            const meta = OPS_OUTAGE_META[item.source] || { color: '#e4e4e7' };
+            return {
+                type: 'Feature',
+                properties: { index: index, link: item.link || '', color: meta.color },
+                geometry: { type: 'Point', coordinates: [lon, lat] }
+            };
+        }));
+    }
+
+    function opsShowPinLayers() {
+        const map = opsRealMap;
+        if (!map || !map.getLayer('ops-attacks')) return;
+        map.setLayoutProperty('ops-attacks', 'visibility', opsMapMode === 'attacks' ? 'visible' : 'none');
+        map.setLayoutProperty('ops-outages', 'visibility', opsMapMode === 'outages' ? 'visible' : 'none');
+        map.triggerRepaint();
+    }
+
+    function opsCompileShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            const log = gl.getShaderInfoLog(shader) || 'shader';
+            gl.deleteShader(shader);
+            throw new Error(log);
+        }
+        return shader;
+    }
+
+    function opsMercatorMesh(view, offset, count) {
+        const data = new Float32Array(count * 2);
+        for (let i = 0; i < count; i++) {
+            const base = offset + i * 8;
+            const lat = view.getInt32(base, true) / 1000000;
+            const lon = view.getInt32(base + 4, true) / 1000000;
+            const coord = maplibregl.MercatorCoordinate.fromLngLat([lon, lat]);
+            data[i * 2] = coord.x;
+            data[i * 2 + 1] = coord.y;
+        }
+        return data;
+    }
+
+    function opsUploadMesh(gl, buffer, data) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    }
+
+    function opsUploadCameraPins() {
+        if (!opsPinGl || !opsCameraBuf || !opsFlockMesh) return;
+        const view = opsCameraBuf.view;
+        opsUploadMesh(opsPinGl, opsFlockMesh, opsMercatorMesh(view, opsCameraBuf.flockAt, opsCameraBuf.flock));
+        opsUploadMesh(opsPinGl, opsOsmMesh, opsMercatorMesh(view, opsCameraBuf.osmAt, opsCameraBuf.osm));
+        opsFlockDraw = opsCameraBuf.flock;
+        opsOsmDraw = opsCameraBuf.osm;
+        const host = $('opsMap');
+        if (host) host.dataset.pinCount = String(opsFlockDraw + opsOsmDraw);
+    }
+
+    function opsUseCameraProgram(gl) {
+        if (opsPinProgram && opsPinVariant === 'mercator') return;
+        const webgl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+        const vertex = (webgl2 ? '#version 300 es\n' : '') +
+            (webgl2 ? 'in vec2 a_pos;\n' : 'attribute vec2 a_pos;\n') +
+            'uniform mat4 u_matrix;\nuniform float u_size;\nuniform float u_world;\nvoid main(){gl_Position=u_matrix*vec4(a_pos*u_world,0.0,1.0);gl_PointSize=u_size;}';
+        const fragment = webgl2
+            ? '#version 300 es\nprecision mediump float;\nuniform vec4 u_color;\nout vec4 fragColor;\nvoid main(){vec2 p=gl_PointCoord*2.0-1.0;if(dot(p,p)>1.0)discard;fragColor=u_color;}'
+            : 'precision mediump float;\nuniform vec4 u_color;\nvoid main(){vec2 p=gl_PointCoord*2.0-1.0;if(dot(p,p)>1.0)discard;gl_FragColor=u_color;}';
+        const program = gl.createProgram();
+        gl.attachShader(program, opsCompileShader(gl, gl.VERTEX_SHADER, vertex));
+        gl.attachShader(program, opsCompileShader(gl, gl.FRAGMENT_SHADER, fragment));
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) || 'link');
+        opsPinProgram = program;
+        opsPinVariant = 'mercator';
+        opsPinMatrix = gl.getUniformLocation(program, 'u_matrix');
+        opsPinWorld = gl.getUniformLocation(program, 'u_world');
+        opsPinSize = gl.getUniformLocation(program, 'u_size');
+        opsPinColor = gl.getUniformLocation(program, 'u_color');
+        opsPinPos = gl.getAttribLocation(program, 'a_pos');
+    }
+
+    function opsInstallPinLayers(map) {
+        if (map.getSource('ops-attacks')) return;
+        map.addSource('ops-attacks', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addSource('ops-outages', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        const dot = { 'circle-radius': 4.5, 'circle-opacity': 1, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#09090b' };
+        map.addLayer({
+            id: 'ops-attacks',
+            type: 'circle',
+            source: 'ops-attacks',
+            paint: {
+                'circle-radius': dot['circle-radius'],
+                'circle-color': '#fb7185',
+                'circle-opacity': dot['circle-opacity'],
+                'circle-stroke-width': dot['circle-stroke-width'],
+                'circle-stroke-color': dot['circle-stroke-color']
+            }
+        });
+        map.addLayer({
+            id: 'ops-outages',
+            type: 'circle',
+            source: 'ops-outages',
+            paint: {
+                'circle-radius': dot['circle-radius'],
+                'circle-color': ['coalesce', ['get', 'color'], '#e4e4e7'],
+                'circle-opacity': dot['circle-opacity'],
+                'circle-stroke-width': dot['circle-stroke-width'],
+                'circle-stroke-color': dot['circle-stroke-color']
+            }
+        });
+        map.addLayer({
+            id: 'ops-cameras',
+            type: 'custom',
+            renderingMode: '2d',
+            onAdd: function (mapObj, gl) {
+                opsPinGl = gl;
+                opsPinProgram = null;
+                opsPinVariant = '';
+                opsFlockMesh = gl.createBuffer();
+                opsOsmMesh = gl.createBuffer();
+                opsUploadCameraPins();
+            },
+            render: function (gl, options) {
+                const matrix = options && options.modelViewProjectionMatrix;
+                if (opsMapMode !== 'cameras' || !matrix || (!opsFlockDraw && !opsOsmDraw)) return;
+                try {
+                    opsUseCameraProgram(gl);
+                } catch (error) {
+                    const host = $('opsMap');
+                    if (host) host.dataset.pinError = String(error && error.message || error);
+                    return;
+                }
+                const size = Math.max(4, 3.5 * (window.devicePixelRatio || 1));
+                gl.useProgram(opsPinProgram);
+                gl.uniformMatrix4fv(opsPinMatrix, false, matrix);
+                gl.uniform1f(opsPinWorld, opsRealMap ? 512 * Math.pow(2, opsRealMap.getZoom()) : 512);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                gl.enableVertexAttribArray(opsPinPos);
+                const draw = function (buffer, count, color, point) {
+                    if (!count) return;
+                    gl.uniform1f(opsPinSize, point);
+                    gl.uniform4fv(opsPinColor, color);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                    gl.vertexAttribPointer(opsPinPos, 2, gl.FLOAT, false, 0, 0);
+                    gl.drawArrays(gl.POINTS, 0, count);
+                };
+                draw(opsOsmMesh, opsOsmDraw, [0, 0, 0, 0.72], size + 3);
+                draw(opsFlockMesh, opsFlockDraw, [0, 0, 0, 0.72], size + 3);
+                draw(opsOsmMesh, opsOsmDraw, [56 / 255, 189 / 255, 248 / 255, 1], size);
+                draw(opsFlockMesh, opsFlockDraw, [245 / 255, 158 / 255, 11 / 255, 1], size);
+                gl.disableVertexAttribArray(opsPinPos);
+            }
+        });
+        map.addSource('ops-user', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            id: 'ops-user-ring',
+            type: 'fill',
+            source: 'ops-user',
+            filter: ['==', ['get', 'kind'], 'ring'],
+            paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.18 }
+        });
+        map.addLayer({
+            id: 'ops-user-dot',
+            type: 'circle',
+            source: 'ops-user',
+            filter: ['==', ['get', 'kind'], 'dot'],
+            paint: {
+                'circle-radius': 6,
+                'circle-color': '#38bdf8',
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#fafafa'
+            }
+        });
+        map.addSource('ops-camera-focus', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            id: 'ops-camera-focus',
+            type: 'circle',
+            source: 'ops-camera-focus',
+            paint: {
+                'circle-radius': 8,
+                'circle-color': '#f59e0b',
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#fafafa'
+            }
+        });
+        opsClearPinCanvas();
+        opsSyncAttackPins();
+        opsSyncOutagePins();
+        opsShowPinLayers();
+        opsSyncUserPin();
+        opsSyncCameraFocus();
+    }
+
+    let opsBasemap = 'dark';
+    let opsCameraFocus = null;
+    let opsUserFix = null;
+    let opsUserNote = '';
+
+    function opsBasemapStyle(id) {
+        if (id === 'streets') return 'https://tiles.openfreemap.org/styles/liberty';
+        if (id === 'satellite') {
+            return {
+                version: 8,
+                sources: {
+                    esri: {
+                        type: 'raster',
+                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                        tileSize: 256,
+                        attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+                        maxzoom: 19
+                    }
+                },
+                layers: [{ id: 'satellite', type: 'raster', source: 'esri' }]
+            };
+        }
+        return 'https://tiles.openfreemap.org/styles/dark';
+    }
+
+    function opsSetBasemap(id) {
+        const map = opsRealMap;
+        if (!map) return;
+        opsBasemap = id || 'dark';
+        document.querySelectorAll('[data-basemap]').forEach(function (button) {
+            const on = button.getAttribute('data-basemap') === opsBasemap;
+            button.classList.toggle('is-on', on);
+            button.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+        map.setMaxZoom(18);
+        opsPinProgram = null;
+        opsPinVariant = '';
+        map.setStyle(opsBasemapStyle(opsBasemap));
+    }
+
+    function opsAccuracyRing(lng, lat, meters) {
+        const steps = 64;
+        const coords = [];
+        const radius = Math.max(meters || 30, 20);
+        const latRad = lat * Math.PI / 180;
+        for (let step = 0; step <= steps; step++) {
+            const bearing = (step / steps) * Math.PI * 2;
+            const east = radius * Math.cos(bearing);
+            const north = radius * Math.sin(bearing);
+            coords.push([
+                lng + east / (111320 * Math.cos(latRad)),
+                lat + north / 110540
+            ]);
+        }
+        return coords;
+    }
+
+    function opsSyncUserPin() {
+        const map = opsRealMap;
+        if (!map || !map.getSource('ops-user')) return;
+        if (!opsUserFix) {
+            map.getSource('ops-user').setData({ type: 'FeatureCollection', features: [] });
+            return;
+        }
+        map.getSource('ops-user').setData({
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: { kind: 'ring' },
+                    geometry: { type: 'Polygon', coordinates: [opsAccuracyRing(opsUserFix.lng, opsUserFix.lat, opsUserFix.accuracy)] }
+                },
+                {
+                    type: 'Feature',
+                    properties: { kind: 'dot' },
+                    geometry: { type: 'Point', coordinates: [opsUserFix.lng, opsUserFix.lat] }
+                }
+            ]
+        });
+    }
+
+    function opsPaintUserRow() {
+        const node = $('opsUserPlace');
+        if (!node) return;
+        if (opsUserFix) {
+            const meters = isFinite(opsUserFix.accuracy) ? ' ± ' + Math.round(opsUserFix.accuracy) + ' m' : '';
+            node.textContent = opsUserFix.lat.toFixed(5) + ', ' + opsUserFix.lng.toFixed(5) + meters;
+            return;
+        }
+        node.textContent = opsUserNote || 'Locating…';
+    }
+
+    function opsSyncCameraFocus() {
+        const map = opsRealMap;
+        if (!map || !map.getSource('ops-camera-focus')) return;
+        if (!opsCameraFocus) {
+            map.getSource('ops-camera-focus').setData({ type: 'FeatureCollection', features: [] });
+            return;
+        }
+        map.getSource('ops-camera-focus').setData({
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'Point', coordinates: [opsCameraFocus.lon, opsCameraFocus.lat] }
+            }]
+        });
+    }
+
+    function opsStreetAtCamera(hit) {
+        if (!hit || !isFinite(hit.lat) || !isFinite(hit.lon)) return;
+        opsCameraFocus = { lon: hit.lon, lat: hit.lat };
+        opsSyncCameraFocus();
+        const lat = hit.lat.toFixed(6);
+        const lon = hit.lon.toFixed(6);
+        const link = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(lat + ',' + lon);
+        const opened = window.open(link, '_blank', 'noopener,noreferrer');
+        if (opened) opened.opener = null;
+    }
+
+    function opsLocateUser(fly) {
+        if (!navigator.geolocation) {
+            opsUserNote = 'This browser has no location service';
+            opsPaintUserRow();
+            opsText('opsMapStatus', opsUserNote);
+            return;
+        }
+        opsUserNote = 'Locating…';
+        opsPaintUserRow();
+        navigator.geolocation.getCurrentPosition(function (pos) {
+            opsUserFix = {
+                lng: pos.coords.longitude,
+                lat: pos.coords.latitude,
+                accuracy: pos.coords.accuracy
+            };
+            opsUserNote = '';
+            opsSyncUserPin();
+            opsPaintUserRow();
+            if (fly && opsRealMap) {
+                opsMapTouched = true;
+                opsRealMap.flyTo({
+                    center: [opsUserFix.lng, opsUserFix.lat],
+                    zoom: 15,
+                    essential: true
+                });
+            }
+        }, function () {
+            opsUserFix = null;
+            opsUserNote = 'Location was denied';
+            opsSyncUserPin();
+            opsPaintUserRow();
+            opsText('opsMapStatus', opsUserNote);
+        }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 });
+    }
+
+    let opsCameraMiss = false;
+    let opsCameraBuf = null;
+    let opsCameraLoad = null;
+    let opsPinChecked = false;
+    let opsPinUseMap = false;
+
+    let opsFlockMeta = null;
+    let opsOsmCameras = [];
+    let opsCameraDetails = null;
+    let opsDetailsReady = false;
+    let opsHoverHit = null;
+
+    function opsEnsureCameraDetails() {
+        if (opsCameraDetails) return opsCameraDetails;
+        const meta = fetch('data/cameras-flock.meta').then(function (res) {
+            if (!res.ok) throw new Error('meta');
+            return res.arrayBuffer();
+        }).then(function (buffer) {
+            const view = new DataView(buffer);
+            if (view.byteLength < 8 || view.getUint32(0, true) !== 0x4D42524F) throw new Error('meta');
+            const count = view.getUint32(4, true);
+            opsFlockMeta = { view: view, buffer: buffer, count: count, base: 8 + count * 4 };
+        }).catch(function () { opsFlockMeta = null; });
+        const osm = fetch('data/cameras-osm.json').then(function (res) {
+            if (!res.ok) throw new Error('osm');
+            return res.json();
+        }).then(function (rows) {
+            opsOsmCameras = Array.isArray(rows) ? rows : [];
+        }).catch(function () { opsOsmCameras = []; });
+        opsCameraDetails = Promise.all([meta, osm]).then(function () {
+            opsDetailsReady = true;
+            if (opsHoverHit && opsTipPoint) {
+                opsTipKey = '';
+                opsPlaceTip(opsHoverHit, opsTipPoint);
+            }
+        });
+        return opsCameraDetails;
+    }
+
+    function opsFlockDetail(index) {
+        const meta = opsFlockMeta;
+        if (!meta || index < 0 || index >= meta.count) return null;
+        const view = meta.view;
+        const at = meta.base + view.getUint32(8 + index * 4, true);
+        const angle10 = view.getInt16(at + 4, true);
+        const typeLen = view.getUint8(at + 7);
+        const nameLen = view.getUint16(at + 8, true);
+        const bytes = new Uint8Array(meta.buffer, at + 10, typeLen + nameLen);
+        const decode = new TextDecoder('utf-8');
+        return {
+            id: view.getUint32(at, true),
+            angle: angle10 === -32768 ? null : angle10 / 10,
+            service: (view.getUint8(at + 6) & 1) === 1,
+            type: decode.decode(bytes.subarray(0, typeLen)),
+            name: decode.decode(bytes.subarray(typeLen))
+        };
+    }
+
+    function opsOsmDetail(lat, lon) {
+        let best = null;
+        let bestDist = 0.00015 * 0.00015;
+        opsOsmCameras.forEach(function (cam) {
+            const dLat = cam.lat - lat;
+            const dLon = cam.lon - lon;
+            const dist = dLat * dLat + dLon * dLon;
+            if (dist > bestDist) return;
+            bestDist = dist;
+            best = cam;
+        });
+        return best;
+    }
+
+    function opsEnsureCameras() {
+        opsEnsureCameraDetails();
+        if (opsCameraBuf) return Promise.resolve(opsCameraBuf);
+        if (opsCameraLoad) return opsCameraLoad;
+        opsCameraLoad = fetch(OPS_FLOCK.file || 'data/cameras.bin').then(function (res) {
+            if (!res.ok) throw new Error('cameras');
+            return res.arrayBuffer();
+        }).then(function (buffer) {
+            const view = new DataView(buffer);
+            if (view.byteLength < 12 || view.getUint32(0, true) !== 0x3142524F) throw new Error('cameras');
+            const flock = view.getUint32(4, true);
+            const osm = view.getUint32(8, true);
+            if (12 + (flock + osm) * 8 !== view.byteLength) throw new Error('cameras');
+            opsCameraBuf = { view: view, flock: flock, osm: osm, flockAt: 12, osmAt: 12 + flock * 8 };
+            opsUploadCameraPins();
+            if (opsRealMap) opsRealMap.triggerRepaint();
+            return opsCameraBuf;
+        }).catch(function () {
+            opsCameraLoad = null;
+            opsCameraMiss = true;
+            opsMapStatusLine();
+        });
+        return opsCameraLoad;
+    }
+
+    function opsPinFrame() {
+        const map = opsRealMap;
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const scale = 512 * Math.pow(2, zoom);
+        const lat = Math.max(-85.051129, Math.min(85.051129, center.lat));
+        const sine = Math.sin(lat * Math.PI / 180);
+        const host = map.getContainer();
+        return {
+            lng: center.lng,
+            scale: scale,
+            cx: (center.lng + 180) / 360 * scale,
+            cy: (0.5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI)) * scale,
+            hw: (host.clientWidth || 0) / 2,
+            hh: (host.clientHeight || 0) / 2
+        };
+    }
+
+    function opsPinPoint(lon, lat, frame) {
+        let xLon = lon;
+        const turn = xLon - frame.lng;
+        if (turn > 180) xLon -= 360;
+        else if (turn < -180) xLon += 360;
+        const clamped = Math.max(-85.051129, Math.min(85.051129, lat));
+        const sine = Math.sin(clamped * Math.PI / 180);
+        const x = (xLon + 180) / 360 * frame.scale - frame.cx + frame.hw;
+        const y = (0.5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI)) * frame.scale - frame.cy + frame.hh;
+        return [x, y];
+    }
+
+    function opsPinTrust() {
+        if (opsPinChecked || !opsRealMap) return;
+        opsPinChecked = true;
+        const frame = opsPinFrame();
+        const samples = [[-122.4194, 37.7749], [-0.1276, 51.5072], [139.6917, 35.6895], [4.9041, 52.3676]];
+        let worst = 0;
+        samples.forEach(function (pair) {
+            const exact = opsRealMap.project(pair);
+            const fast = opsPinPoint(pair[0], pair[1], frame);
+            worst = Math.max(worst, Math.abs(exact.x - fast[0]), Math.abs(exact.y - fast[1]));
+        });
+        opsPinUseMap = worst > 1.5;
+        const canvas = $('opsMapDraw');
+        if (canvas) canvas.dataset.pin = worst.toFixed(2);
+    }
+
+    function opsFlockPlace(lat, lon) {
+        const latAbs = Math.abs(lat).toFixed(5);
+        const lonAbs = Math.abs(lon).toFixed(5);
+        return latAbs + '°' + (lat >= 0 ? 'N' : 'S') + ', ' + lonAbs + '°' + (lon >= 0 ? 'E' : 'W');
+    }
+
+    function opsCameraXY(lon, lat, frame) {
+        if (opsPinUseMap && opsRealMap) {
+            const point = opsRealMap.project([lon, lat]);
+            return [point.x, point.y];
+        }
+        return opsPinPoint(lon, lat, frame);
+    }
+
+    let opsCameraStamp = '';
+    let opsCameraSheet = null;
+
+    function paintOpsFlockDots(ctx) {
+        if (!opsCameraBuf) {
+            opsEnsureCameras();
+            return;
+        }
+        opsPinTrust();
+        const frame = opsPinFrame();
+        const canvas = $('opsMapDraw');
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = canvas.width;
+        const height = canvas.height;
+        const center = opsRealMap.getCenter();
+        const stamp = center.lng.toFixed(6) + ',' + center.lat.toFixed(6) + ',' + opsRealMap.getZoom().toFixed(4) + ',' + width + 'x' + height + (opsPinUseMap ? ':m' : ':f');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (opsCameraSheet && opsCameraStamp === stamp) {
+            ctx.drawImage(opsCameraSheet, 0, 0);
+            return;
+        }
+        const img = ctx.createImageData(width, height);
+        const data = img.data;
+        const view = opsCameraBuf.view;
+        const plot = function (offset, count, red, green, blue) {
+            const end = offset + count * 8;
+            for (let cursor = offset; cursor < end; cursor += 8) {
+                const lat = view.getInt32(cursor, true) / 1000000;
+                const lon = view.getInt32(cursor + 4, true) / 1000000;
+                const xy = opsCameraXY(lon, lat, frame);
+                const x = (xy[0] * dpr) | 0;
+                const y = (xy[1] * dpr) | 0;
+                if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                const index = (y * width + x) * 4;
+                data[index] = red;
+                data[index + 1] = green;
+                data[index + 2] = blue;
+                data[index + 3] = 235;
+            }
+        };
+        plot(opsCameraBuf.osmAt, opsCameraBuf.osm, 56, 189, 248);
+        plot(opsCameraBuf.flockAt, opsCameraBuf.flock, 245, 158, 11);
+        if (!opsCameraSheet) opsCameraSheet = document.createElement('canvas');
+        opsCameraSheet.width = width;
+        opsCameraSheet.height = height;
+        opsCameraSheet.getContext('2d').putImageData(img, 0, 0);
+        opsCameraStamp = stamp;
+        ctx.drawImage(opsCameraSheet, 0, 0);
+    }
+
+    function opsCameraHit(x, y) {
+        if (!opsCameraBuf || !opsRealMap) return null;
+        opsPinTrust();
+        const frame = opsPinFrame();
+        const here = opsRealMap.unproject([x, y]);
+        const span = Math.max(0.02, (14 * 360) / frame.scale);
+        const view = opsCameraBuf.view;
+        let best = null;
+        let bestDist = 36;
+        const scan = function (offset, count, osm) {
+            const end = offset + count * 8;
+            for (let cursor = offset; cursor < end; cursor += 8) {
+                const lat = view.getInt32(cursor, true) / 1000000;
+                const lon = view.getInt32(cursor + 4, true) / 1000000;
+                if (Math.abs(lat - here.lat) > span) continue;
+                let turn = Math.abs(lon - here.lng);
+                if (turn > 180) turn = 360 - turn;
+                if (turn > span) continue;
+                const xy = opsCameraXY(lon, lat, frame);
+                const dx = xy[0] - x;
+                const dy = xy[1] - y;
+                const dist = dx * dx + dy * dy;
+                if (dist > bestDist) continue;
+                bestDist = dist;
+                best = {
+                    x: xy[0],
+                    y: xy[1],
+                    r: 6,
+                    kind: 'flock',
+                    id: lat + '|' + lon + '|' + (osm ? 'osm' : 'flock'),
+                    lat: lat,
+                    lon: lon,
+                    index: (cursor - offset) / 8,
+                    flock: osm ? 0 : 1,
+                    osm: osm ? 1 : 0
+                };
+            }
+        };
+        scan(opsCameraBuf.osmAt, opsCameraBuf.osm, true);
+        scan(opsCameraBuf.flockAt, opsCameraBuf.flock, false);
+        return best;
+    }
+
+    function opsSeed(text) {
+        let n = 0;
+        const value = String(text || '');
+        for (let i = 0; i < value.length; i++) n = (n * 33 + value.charCodeAt(i)) >>> 0;
+        return n;
+    }
+
+    function paintOpsMapFrame(now) {
+        const stage = document.querySelector('.ops-globe-stage');
+        const canvas = $('opsMapDraw');
+        if (!stage || !canvas) return;
+        const bounds = stage.getBoundingClientRect();
+        if (bounds.width < 20 || bounds.height < 20) return;
+        const map = opsEnsureMap();
+        if (!map) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.max(1, Math.round(bounds.width * dpr));
+        const h = Math.max(1, Math.round(bounds.height * dpr));
+        if (canvas.width !== w || canvas.height !== h || opsMapBox.w !== w || opsMapBox.h !== h) {
+            canvas.width = w;
+            canvas.height = h;
+            opsMapBox.w = w;
+            opsMapBox.h = h;
+            map.resize();
+            opsFitWorld();
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, bounds.width, bounds.height);
+        opsMapHits = [];
+        if (opsMapMode === 'outages') paintOpsOutageDots(ctx);
+        else if (opsMapMode === 'cameras') paintOpsFlockDots(ctx);
+        else paintOpsAttackDots(ctx);
+    }
+
+    function opsQuad(a, b, c, t) {
+        const u = 1 - t;
+        return [
+            u * u * a[0] + 2 * u * t * b[0] + t * t * c[0],
+            u * u * a[1] + 2 * u * t * b[1] + t * t * c[1]
+        ];
+    }
+
+    function opsPortDetail(port) {
+        const n = String(port || '').replace(/\D/g, '');
+        if (!n) return '';
+        const name = OPS_PORTS[n];
+        return name ? 'port ' + n + ' (' + name + ')' : 'port ' + n;
+    }
+
+    function opsNormLon(lon) {
+        let x = Number(lon) || 0;
+        while (x < -180) x += 360;
+        while (x > 180) x -= 360;
+        return x;
+    }
+
+    function opsLandOn(lon, lat) {
+        if (!opsLandRaw) opsLandRaw = atob(OPS_LAND.bits);
+        const cols = OPS_LAND.cols;
+        const rows = OPS_LAND.rows;
+        const col = Math.floor(((opsNormLon(lon) + 180) / 360) * cols);
+        const row = Math.floor(((90 - Number(lat)) / 180) * rows);
+        if (col < 0 || row < 0 || col >= cols || row >= rows) return false;
+        const i = row * cols + col;
+        return (opsLandRaw.charCodeAt(i >> 3) & (1 << (i % 8))) !== 0;
+    }
+
+    function opsCountryAt(lon, lat) {
+        if (!opsCountryRaw) opsCountryRaw = atob(OPS_COUNTRY.bits);
+        const cols = OPS_COUNTRY.cols;
+        const rows = OPS_COUNTRY.rows;
+        const col = Math.floor(((opsNormLon(lon) + 180) / 360) * cols);
+        const row = Math.floor(((90 - Number(lat)) / 180) * rows);
+        if (col < 0 || row < 0 || col >= cols || row >= rows) return '';
+        return OPS_COUNTRY.codes[opsCountryRaw.charCodeAt(row * cols + col)] || '';
+    }
+
+    function opsLandCell(lon, lat) {
+        const cols = OPS_LAND.cols;
+        const rows = OPS_LAND.rows;
+        const col = Math.max(0, Math.min(cols - 1, Math.floor(((opsNormLon(lon) + 180) / 360) * cols)));
+        const row = Math.max(0, Math.min(rows - 1, Math.floor(((90 - Number(lat)) / 180) * rows)));
+        return [-180 + (col + 0.5) * (360 / cols), 90 - (row + 0.5) * (180 / rows)];
+    }
+
+    function opsAttackAim(lon, lat, bearing, code) {
+        const east = Math.cos(bearing);
+        const north = Math.sin(bearing);
+        const trail = [];
+        for (let step = 1; step <= 48; step++) {
+            const dist = step * 1.4;
+            const nextLat = lat + north * dist;
+            if (nextLat > 78 || nextLat < -70) break;
+            const nextLon = lon + east * dist;
+            if (opsCountryAt(nextLon, nextLat) !== code || !opsLandOn(nextLon, nextLat)) {
+                if (trail.length || step > 4) break;
+                continue;
+            }
+            const cell = opsLandCell(nextLon, nextLat);
+            const prev = trail[trail.length - 1];
+            if (!prev || prev[0] !== cell[0] || prev[1] !== cell[1]) trail.push(cell);
+        }
+        return trail.length ? trail[trail.length - 1] : null;
+    }
+
+    function opsStrokeArc(ctx, a, b, c, from, to) {
+        const steps = 16;
+        let point = opsQuad(a, b, c, from);
+        ctx.beginPath();
+        ctx.moveTo(point[0], point[1]);
+        for (let step = 1; step <= steps; step++) {
+            point = opsQuad(a, b, c, from + (to - from) * (step / steps));
+            ctx.lineTo(point[0], point[1]);
+        }
+        ctx.stroke();
+    }
+
+    function opsAttackSpot(item, slot, w, h) {
+        const hasLon = item.lon !== null && item.lon !== undefined && item.lon !== '' && isFinite(Number(item.lon));
+        const hasLat = item.lat !== null && item.lat !== undefined && item.lat !== '' && isFinite(Number(item.lat));
+        let lon = hasLon ? Number(item.lon) : NaN;
+        let lat = hasLat ? Number(item.lat) : NaN;
+        if (!isFinite(lon) || !isFinite(lat)) return null;
+        while (lon < -180) lon += 360;
+        while (lon > 180) lon -= 360;
+        if (lat < -90 || lat > 90) return null;
+        return { lon: lon, lat: lat };
+    }
+
+    function opsMapDot(ctx, x, y, color) {
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function opsAttackLink(item) {
+        const story = item && opsStoryForAttack(item);
+        if (story && story.link) return story.link;
+        if (!item || !item.ip) return '';
+        return 'https://isc.sans.edu/ipdetails.html?ip=' + encodeURIComponent(item.ip);
+    }
+
+    function paintOpsAttackDots(ctx) {
+        opsAttacks.forEach(function (item) {
+            if (!item.ip) return;
+            const spot = opsAttackSpot(item);
+            const point = spot && opsScreenPoint(spot.lon, spot.lat);
+            if (!point || !opsOnScreen(point[0], point[1])) return;
+            opsMapDot(ctx, point[0], point[1], '#fb7185');
+            opsMapHits.push({
+                x: point[0],
+                y: point[1],
+                r: 8,
+                kind: 'ip',
+                id: item.ip,
+                ip: item.ip,
+                link: opsAttackLink(item)
+            });
+        });
+    }
+
+    function paintOpsOutageDots(ctx) {
+        opsOutages.forEach(function (item, index) {
+            if (!item.country || !OPS_PLACES[item.country]) return;
+            const meta = OPS_OUTAGE_META[item.source] || { color: '#e4e4e7' };
+            const place = OPS_PLACES[item.country];
+            const lon = isFinite(item.lon) ? item.lon : place[0];
+            const lat = isFinite(item.lat) ? item.lat : place[1];
+            const point = opsScreenPoint(lon, lat);
+            if (!point || !opsOnScreen(point[0], point[1])) return;
+            opsMapDot(ctx, point[0], point[1], meta.color);
+            opsMapHits.push({
+                x: point[0],
+                y: point[1],
+                r: 8,
+                kind: 'outage',
+                id: String(index),
+                link: item.link || 'https://ioda.inetintel.cc.gatech.edu/ioda/dashboard'
+            });
+        });
+    }
+
+    function paintOpsMapList() {
+        const key = $('opsMapKey');
+        if (!key) return;
+        key.hidden = false;
+        if (opsMapMode === 'outages') {
+            key.innerHTML = Object.keys(OPS_OUTAGE_META).map(function (id) {
+                const meta = OPS_OUTAGE_META[id];
+                return '<span><i style="background:' + meta.color + '"></i>' + esc(meta.label) + '</span>';
+            }).join('');
+            return;
+        }
+        if (opsMapMode === 'cameras') {
+            key.innerHTML = '<span><i style="background:#f59e0b"></i>Flock</span><span><i style="background:#38bdf8"></i>ALPR</span>';
+            return;
+        }
+        key.innerHTML = '<span><i style="background:#fb7185"></i>Attack</span>';
+    }
+
+    function opsSessionCache(key, next, ttl) {
+        const life = ttl || 10 * 60 * 1000;
+        if (next) {
+            try { sessionStorage.setItem(key, JSON.stringify(next)); } catch (error) {}
+            return next;
+        }
+        try {
+            const saved = JSON.parse(sessionStorage.getItem(key) || '');
+            if (saved && saved.at && Date.now() - saved.at < life) return saved;
+        } catch (error) {}
+        return null;
+    }
+
+    function opsPortCacheGet() {
+        if (opsPortCache) return opsPortCache;
+        try { opsPortCache = JSON.parse(sessionStorage.getItem('orbint-ops-ports2') || '{}') || {}; }
+        catch (error) { opsPortCache = {}; }
+        return opsPortCache;
+    }
+
+    function opsRememberPort(ip, port) {
+        const cache = opsPortCacheGet();
+        cache[ip] = { port: String(port || ''), at: Date.now() };
+        try { sessionStorage.setItem('orbint-ops-ports2', JSON.stringify(cache)); } catch (error) {}
+    }
+
+    function opsKnownPort(ip) {
+        const row = opsPortCacheGet()[ip];
+        if (!row || Date.now() - row.at > 30 * 60 * 1000) return null;
+        return String(row.port || '');
+    }
+
+    function opsTopPort(payload) {
+        let rows = payload;
+        if (payload && !Array.isArray(payload)) {
+            const root = payload.ipdetails || payload;
+            rows = root && (root.report || root.reports);
+        }
+        if (!rows) return '';
+        if (!Array.isArray(rows)) rows = [rows];
+        const counts = {};
+        rows.forEach(function (row) {
+            const port = String((row && (row.targetport || row.target_port)) || '').replace(/\D/g, '');
+            if (!port) return;
+            counts[port] = (counts[port] || 0) + 1;
+        });
+        let best = '';
+        let n = 0;
+        Object.keys(counts).forEach(function (port) {
+            if (counts[port] > n) { best = port; n = counts[port]; }
+        });
+        return best;
+    }
+
+    function opsFillPorts(items) {
+        opsPortStop = false;
+        const pending = [];
+        (items || []).forEach(function (item) {
+            const known = opsKnownPort(item.ip);
+            if (known !== null) { item.port = known; return; }
+            pending.push(item);
+        });
+        let chain = Promise.resolve();
+        pending.slice(0, 6).forEach(function (item) {
+            chain = chain.then(function () {
+                if (opsPortStop || !item.ip) return null;
+                return fetch('https://isc.sans.edu/api/ipdetails/' + encodeURIComponent(item.ip) + '?json').then(function (res) {
+                    if (res.status === 429) { opsPortStop = true; return null; }
+                    if (!res.ok) return null;
+                    const type = res.headers.get('content-type') || '';
+                    if (type.indexOf('json') < 0) return null;
+                    return res.json();
+                }).then(function (payload) {
+                    if (!payload) {
+                        opsPortMiss[item.ip] = true;
+                        if (opsReportKey) paintOpsReport();
+                        return;
+                    }
+                    const port = opsTopPort(payload);
+                    item.port = port;
+                    delete opsPortMiss[item.ip];
+                    opsRememberPort(item.ip, port);
+                    paintOpsMapList();
+                    if (opsReportKey) paintOpsReport();
+                }).catch(function () {
+                    opsPortMiss[item.ip] = true;
+                    if (opsReportKey) paintOpsReport();
+                });
+            });
+        });
+    }
+
+    function closeOpsReport() {
+        opsReportKey = '';
+        const box = $('opsReport');
+        if (!box) return;
+        box.hidden = true;
+        box.innerHTML = '';
+    }
+
+    function opsOpenMapHit(hit) {
+        if (!hit) return;
+        let link = hit.link || '';
+        if (!link && hit.kind === 'outage') {
+            const item = opsOutages[Number(hit.id)];
+            link = (item && item.link) || 'https://ioda.inetintel.cc.gatech.edu/ioda/dashboard';
+        }
+        if (!link && hit.ip) link = opsAttackLink(opsAttacks.filter(function (row) { return row.ip === hit.ip; })[0]);
+        if (!link) return;
+        const opened = window.open(link, '_blank', 'noopener,noreferrer');
+        if (opened) opened.opener = null;
+    }
+
+    function paintOpsReport() {
+        const box = $('opsReport');
+        if (!box || !opsReportKey) return;
+        const split = opsReportKey.indexOf(':');
+        const kind = opsReportKey.slice(0, split);
+        const id = opsReportKey.slice(split + 1);
+        let html = '';
+        if (kind === 'flock') {
+            const parts = id.split('|');
+            const lat = Number(parts[0]);
+            const lon = Number(parts[1]);
+            if (!isFinite(lat) || !isFinite(lon)) { closeOpsReport(); return; }
+            const which = parts[2] === 'osm' ? 'an OSM ALPR camera' : 'a Flock camera';
+            html = '<button type="button" class="ops-report-close" data-report="close">Close</button><h3>Camera at ' + esc(opsFlockPlace(lat, lon)) +
+                '</h3><p>This dot is ' + which + ', plotted on its published coordinates. A click opens that exact point in Google Maps.</p><p>Flock coordinates are the public inventory from Joshua Michael, 2026, the set published at Flock Surveillance. OSM points are DeFlock and OpenStreetMap contributors.</p><p>' +
+                '<a href="https://flocksurveillance.org/" target="_blank" rel="noopener noreferrer">Flock Surveillance</a> · ' +
+                '<a href="https://github.com/FoggedLens/deflock" target="_blank" rel="noopener noreferrer">DeFlock</a> · ' +
+                '<a href="https://dontgetflocked.com/" target="_blank" rel="noopener noreferrer">DeFlock map</a></p>';
+        } else if (kind === 'outage') {
+            const item = opsOutages[Number(id)];
+            if (!item) { closeOpsReport(); return; }
+            const meta = OPS_OUTAGE_META[item.source] || { label: 'Outage' };
+            const where = item.country ? opsCountryName(item.country) : '';
+            const link = item.link || 'https://ioda.inetintel.cc.gatech.edu/ioda/dashboard';
+            html = '<button type="button" class="ops-report-close" data-report="close">Close</button><h3>' + esc(item.name || 'Outage') +
+                '</h3><p>' + esc([meta.label, item.level, where, item.time ? opsAgo(item.time) : ''].filter(Boolean).join(' · ')) +
+                '</p><p>This is a live IODA alert for this network.</p><a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">Open the IODA record</a>';
+        } else {
+            const rows = kind === 'ip'
+                ? opsAttacks.filter(function (item) { return item.ip === id; })
+                : opsAttacks.filter(function (item) { return item.country === id; });
+            if (!rows.length) { closeOpsReport(); return; }
+            const place = rows[0].country ? opsCountryName(rows[0].country) : 'Unlocated source';
+            html = '<button type="button" class="ops-report-close" data-report="close">Close</button><h3>' + esc(rows[0].ip) +
+                '</h3><p>' + esc([rows[0].city, place !== 'Unlocated source' ? place : '', (rows[0].count || 0) + ' reports', opsAttackWindowLabel()].filter(Boolean).join(' · ')) +
+                '</p><p>The dot is the located address SANS recorded as an attack source. Sensor locations are not published.</p><ul>' +
+                rows.map(function (item) {
+                    const aim = item.port
+                        ? ('Most often ' + opsPortDetail(item.port) + '.')
+                        : (opsKnownPort(item.ip) === '' ? 'The latest report has no destination port.' : (opsPortMiss[item.ip] ? 'The destination port did not load. Open the SANS report.' : 'Reading the destination port…'));
+                    const link = 'https://isc.sans.edu/ipdetails.html?ip=' + encodeURIComponent(item.ip);
+                    return '<li><b>' + esc(item.ip) + '</b><span>' + esc((item.count || 0) + ' reports. ' + aim) +
+                        '</span><a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">Open the SANS report</a></li>';
+                }).join('') + '</ul>';
+        }
+        box.innerHTML = html;
+        box.hidden = false;
+    }
+
+    function opsFlagImg(code) {
+        const value = String(code || '').toUpperCase();
+        if (!/^[A-Z]{2}$/.test(value)) return '';
+        return '<img alt="" src="https://flagcdn.com/w320/' + value.toLowerCase() + '.png" onerror="this.remove()">';
+    }
+
+    function opsAttackWindowLabel() {
+        return ({ live: 'Live', day: 'Last day', week: 'Last week', month: 'Last month', year: 'Last year', decade: 'Last decade' })[opsAttackRange] || 'Live';
+    }
+
+    function opsStoryForAttack(item) {
+        const country = item.country ? opsCountryName(item.country).toLowerCase() : '';
+        const city = String(item.city || '').toLowerCase();
+        const port = item.port ? String(opsPortDetail(item.port) || '').toLowerCase() : '';
+        let best = null;
+        let bestScore = 0;
+        opsNewsAll.forEach(function (story) {
+            const hay = ((story.title || '') + ' ' + (story.text || '')).toLowerCase();
+            let points = 0;
+            if (country && country.length > 3 && hay.indexOf(country) >= 0) points += 3;
+            if (city && city.length > 2 && hay.indexOf(city) >= 0) points += 2;
+            if (port && port.length > 2 && hay.indexOf(port) >= 0) points += 1;
+            if (points > bestScore || (points && points === bestScore && (story.date || 0) > ((best && best.date) || 0))) {
+                best = story;
+                bestScore = points;
+            }
+        });
+        return bestScore ? best : null;
+    }
+
+    function opsAttackTip(hit) {
+        const item = opsAttacks.filter(function (row) { return row.ip === hit.ip; })[0];
+        if (!item) return '';
+        const story = opsStoryForAttack(item);
+        if (story && !story.image && !story.imageTried) opsQueueImages([story]);
+        const picture = story && story.image
+            ? '<img alt="" referrerpolicy="no-referrer" src="' + esc(story.image) + '" onerror="this.remove()">'
+            : opsFlagImg(item.country);
+        const headline = story && story.title ? story.title : 'No matching article yet';
+        const where = [item.city, item.country ? opsCountryName(item.country) : ''].filter(Boolean).join(', ');
+        const port = item.port ? opsPortDetail(item.port) : 'port still loading';
+        const facts = [item.ip, (item.count || 0) + ' reports', port, where].filter(Boolean).join(' · ');
+        const note = story && story.link ? 'Click to open the article.' : 'Click to open the SANS source.';
+        return picture + '<strong>' + esc(headline) + '</strong><p>' + esc(facts) + '</p><p>' + esc(note) + '</p>';
+    }
+
+    function opsCameraCard(hit) {
+        const titleCase = function (text) {
+            const value = String(text || '').replace(/[_-]+/g, ' ').trim();
+            if (!value) return '';
+            return value.charAt(0).toUpperCase() + value.slice(1);
+        };
+        const row = function (label, value) {
+            if (!value) return '';
+            return '<div class="ops-cam-row"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+        };
+        let title = 'ALPR Camera';
+        let id = '';
+        let maker = hit.osm ? 'OpenStreetMap' : 'Flock Safety';
+        let zone = '';
+        let kind = '';
+        let facing = '';
+        if (hit.osm) {
+            const found = opsOsmDetail(hit.lat, hit.lon);
+            if (found) {
+                id = found.id ? String(found.id) : '';
+                if (found.maker) maker = found.maker;
+                if (found.zone) zone = titleCase(found.zone);
+                if (found.kind) title = titleCase(found.kind) + ' Camera';
+                if (found.facing != null && found.facing !== '') facing = found.facing + '°';
+            }
+        } else {
+            const found = opsFlockDetail(hit.index);
+            if (found) {
+                if (found.name) title = found.name;
+                if (found.id) id = String(found.id);
+                if (found.type) kind = titleCase(found.type);
+                if (found.angle != null) facing = Math.round(found.angle) + '°';
+            }
+        }
+        const mark = '<svg class="ops-cam-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="8" fill="#18181b"/><path fill="#e4e4e7" d="M10 16h18a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3zm20 5 9-4v16l-9-4V21z"/></svg>';
+        return '<div class="ops-cam"><div class="ops-cam-top">' + mark +
+            '<div><strong>' + esc(title) + '</strong>' +
+            (id ? '<p class="ops-cam-id">ID: ' + esc(id) + '</p>' : '') +
+            '</div></div>' +
+            row('Made by', maker) +
+            row('Zone', zone) +
+            row('Type', kind) +
+            row('Facing', facing) +
+            row('Coords', hit.lat.toFixed(5) + ', ' + hit.lon.toFixed(5)) +
+            '<p class="ops-cam-go">Click to open this camera in Google Maps.</p></div>';
+    }
+
+    function opsFlockTip(hit) {
+        return opsCameraCard(hit);
+    }
+
+    function opsOutageTip(hit) {
+        const item = opsOutages[Number(hit.id)];
+        if (!item) return '';
+        const meta = OPS_OUTAGE_META[item.source] || { label: 'Outage' };
+        const where = item.country ? opsCountryName(item.country) : '';
+        return opsFlagImg(item.country) + '<strong>' + esc(item.name || 'Outage') + '</strong><p>' +
+            esc([meta.label, item.level, where, item.time ? opsAgo(item.time) : ''].filter(Boolean).join(' · ')) +
+            '</p><p>IODA alert for this network.</p>';
+    }
+
+    function opsHideTip() {
+        const tip = $('opsMapTip');
+        opsHover = null;
+        opsHoverHit = null;
+        if (!tip || tip.hidden) return;
+        opsTipKey = '';
+        tip.hidden = true;
+        tip.innerHTML = '';
+        tip.classList.remove('is-cam');
+    }
+
+    function opsPlaceTip(hit, event) {
+        const tip = $('opsMapTip');
+        const stage = tip && tip.parentElement;
+        if (!tip || !stage) return;
+        opsTipPoint = event;
+        const html = hit.kind === 'flock' ? opsFlockTip(hit) : (hit.kind === 'outage' ? opsOutageTip(hit) : opsAttackTip(hit));
+        if (!html) { opsHideTip(); return; }
+        tip.classList.toggle('is-cam', hit.kind === 'flock');
+        const key = hit.kind + ':' + (hit.ip || hit.id) + (hit.kind === 'flock' && opsDetailsReady ? ':d' : '');
+        if (opsTipKey !== key) {
+            opsTipKey = key;
+            tip.innerHTML = html;
+        }
+        tip.hidden = false;
+        const bounds = stage.getBoundingClientRect();
+        const width = tip.offsetWidth;
+        const height = tip.offsetHeight;
+        let left = event.clientX - bounds.left + 16;
+        let top = event.clientY - bounds.top + 16;
+        if (left + width > bounds.width - 8) left = event.clientX - bounds.left - width - 14;
+        if (top + height > bounds.height - 8) top = Math.max(8, bounds.height - height - 8);
+        if (left < 8) left = 8;
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+    }
+
+    function opsLayerHit(x, y) {
+        if (!opsRealMap) return null;
+        const layer = opsMapMode === 'outages' ? 'ops-outages' : 'ops-attacks';
+        if (!opsRealMap.getLayer(layer)) return null;
+        let found = [];
+        try { found = opsRealMap.queryRenderedFeatures([x, y], { layers: [layer] }); } catch (error) { return null; }
+        if (!found.length) return null;
+        const props = found[0].properties || {};
+        if (opsMapMode === 'outages') {
+            return { x: x, y: y, r: 8, kind: 'outage', id: String(props.index), link: props.link || '' };
+        }
+        return { x: x, y: y, r: 8, kind: 'ip', id: props.ip || '', ip: props.ip || '', link: props.link || '' };
+    }
+
+    function opsHitAt(x, y) {
+        if (opsMapMode === 'cameras') return opsCameraHit(x, y);
+        const layered = opsLayerHit(x, y);
+        if (layered) return layered;
+        let best = null;
+        let bestDist = Infinity;
+        opsMapHits.forEach(function (hit) {
+            const dx = x - hit.x;
+            const dy = y - hit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist <= hit.r && dist < bestDist) { best = hit; bestDist = dist; }
+        });
+        return best;
+    }
+
+    function opsAttackStartDate() {
+        const days = { day: 1, week: 7, month: 30, year: 365, decade: 3650 }[opsAttackRange];
+        if (!days) return '';
+        const date = new Date(Date.now() - days * 86400000);
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return date.getUTCFullYear() + '-' + month + '-' + day;
+    }
+
+    function opsUtcDay(offset) {
+        const date = new Date(Date.now() - (offset || 0) * 86400000);
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return date.getUTCFullYear() + '-' + month + '-' + day;
+    }
+
+    function opsAttackPlaceNote(items, range) {
+        const list = items || [];
+        const placed = list.filter(function (item) { return isFinite(item.lat) && isFinite(item.lon); }).length;
+        if (!placed) return '';
+        const windowNote = (range === 'month' || range === 'year' || range === 'decade') ? ' · public feed covers 30 days' : (range === 'live' ? ' · today and 30-day sources' : '');
+        const of = list.length > placed ? ' of ' + list.length : '';
+        return opsAttackWindowLabel() + windowNote + ' · ' + placed + of + ' sources · SANS ISC';
+    }
+
+    function opsAttackRecord(row, seen) {
+        const ip = String(row.ip || row.source || '').trim();
+        if (!ip) return null;
+        const known = opsKnownPort(ip);
+        return {
+            ip: ip,
+            count: Number(row.attacks || row.reports) || 0,
+            country: '',
+            city: '',
+            lat: NaN,
+            lon: NaN,
+            port: known === null ? '' : known,
+            seen: String(row.lastseen || seen || '')
+        };
+    }
+
+    function opsReadAttackJson(url) {
+        return fetch(url).then(function (res) {
+            if (!res.ok) throw new Error('feed');
+            return res.json();
+        });
+    }
+
+    function opsMergeAttackDays(lists) {
+        const byIp = {};
+        lists.forEach(function (rows) {
+            (Array.isArray(rows) ? rows : []).forEach(function (row) {
+                const item = opsAttackRecord(row, '');
+                if (!item) return;
+                const prev = byIp[item.ip];
+                if (!prev) byIp[item.ip] = item;
+                else if (item.count > prev.count) {
+                    item.count += prev.count;
+                    byIp[item.ip] = item;
+                } else prev.count += item.count;
+            });
+        });
+        return Object.keys(byIp).map(function (ip) { return byIp[ip]; }).sort(function (a, b) { return b.count - a.count; });
+    }
+
+    function opsFetchAttackList(range) {
+        const dayLists = function (count, limit) {
+            const jobs = [];
+            for (let day = 0; day < count; day++) {
+                jobs.push(opsReadAttackJson('https://isc.sans.edu/api/topips/attacks/' + limit + '/' + opsUtcDay(day) + '?json').catch(function () { return []; }));
+            }
+            return jobs;
+        };
+        let jobs = [];
+        if (range === 'week') jobs = dayLists(7, 500);
+        else if (range === 'live' || range === 'day') {
+            const day = range === 'live' ? opsUtcDay(0) : opsAttackStartDate();
+            jobs = [
+                opsReadAttackJson('https://isc.sans.edu/api/topips/attacks/1000/' + day + '?json').catch(function () { return []; }),
+                opsReadAttackJson('https://isc.sans.edu/api/sources/attacks/500?json').catch(function () { return []; })
+            ];
+        } else {
+            jobs = [opsReadAttackJson('https://isc.sans.edu/api/sources/attacks/500?json').catch(function () { return []; })].concat(dayLists(14, 200));
+        }
+        return Promise.all(jobs).then(opsMergeAttackDays);
+    }
+
+    function opsGeoCacheKey() {
+        return 'orbint-ops-geo-city';
+    }
+
+    function opsCoarsePoint(lat, lon) {
+        return Math.abs(lat - 37.751) < 0.02 && Math.abs(lon + 97.822) < 0.02;
+    }
+
+    function opsReadGeo(item, geo) {
+        const lat = Number(geo.latitude != null ? geo.latitude : geo.lat);
+        const lon = Number(geo.longitude != null ? geo.longitude : geo.lon);
+        if (!isFinite(lat) || !isFinite(lon) || opsCoarsePoint(lat, lon)) return false;
+        item.lat = lat;
+        item.lon = lon;
+        item.city = String(geo.city || '');
+        const code = String(geo.country_code || geo.country || '').toUpperCase();
+        if (/^[A-Z]{2}$/.test(code)) item.country = code;
+        return true;
+    }
+
+    function opsFetchGeo(item) {
+        const primary = 'https://json.geoiplookup.io/' + encodeURIComponent(item.ip);
+        const timed = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(8000) } : {};
+        return fetch(primary, timed).then(function (res) {
+            if (!res.ok) throw new Error('geo');
+            return res.json();
+        }).then(function (geo) {
+            opsReadGeo(item, geo);
+        }).catch(function () {});
+    }
+
+    function opsApplyGeoRow(item, geo) {
+        if (!geo) return false;
+        return opsReadGeo(item, {
+            latitude: geo.lat != null ? geo.lat : geo.latitude,
+            longitude: geo.lon != null ? geo.lon : geo.longitude,
+            city: geo.city,
+            country_code: geo.countryCode || geo.country_code || geo.country
+        });
+    }
+
+    function opsLocateSerial(items) {
+        let cursor = 0;
+        const worker = function () {
+            if (cursor >= items.length) return Promise.resolve();
+            const item = items[cursor++];
+            return opsFetchGeo(item).then(worker);
+        };
+        const lanes = [];
+        const width = Math.min(6, items.length || 1);
+        for (let lane = 0; lane < width; lane++) lanes.push(worker());
+        return Promise.all(lanes);
+    }
+
+    function opsGeoBatch(items) {
+        if (!items.length) return Promise.resolve();
+        if (location.protocol === 'https:') return opsLocateSerial(items);
+        const timed = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(12000) } : {};
+        return fetch('http://ip-api.com/batch?fields=status,countryCode,city,lat,lon,query', Object.assign({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(items.map(function (item) { return item.ip; }))
+        }, timed)).then(function (res) {
+            if (!res.ok) throw new Error('geo');
+            return res.json();
+        }).then(function (rows) {
+            const byIp = {};
+            (Array.isArray(rows) ? rows : []).forEach(function (row) {
+                if (row && row.query && row.status === 'success') byIp[row.query] = row;
+            });
+            const missed = [];
+            items.forEach(function (item) {
+                if (!opsApplyGeoRow(item, byIp[item.ip])) missed.push(item);
+            });
+            if (missed.length) return opsLocateSerial(missed.slice(0, 12));
+        });
+    }
+
+    function opsLocateAttacks(items, onPaint) {
+        let cache = {};
+        try {
+            const raw = sessionStorage.getItem(opsGeoCacheKey());
+            const data = raw ? JSON.parse(raw) : {};
+            if (data && typeof data === 'object') cache = data;
+        } catch (error) { cache = {}; }
+        const need = [];
+        items.forEach(function (item) {
+            const saved = cache[item.ip];
+            if (saved && isFinite(saved.lat) && isFinite(saved.lon) && !opsCoarsePoint(saved.lat, saved.lon) && Date.now() - (saved.at || 0) < 6 * 3600000) {
+                item.lat = saved.lat;
+                item.lon = saved.lon;
+                item.city = saved.city || '';
+                if (!item.country) item.country = saved.country || '';
+                return;
+            }
+            need.push(item);
+        });
+        need.sort(function (a, b) { return (b.count || 0) - (a.count || 0); });
+        const todo = need.slice(0, 1000);
+        const save = function () {
+            items.forEach(function (item) {
+                if (!isFinite(item.lat) || !isFinite(item.lon)) return;
+                cache[item.ip] = { lat: item.lat, lon: item.lon, city: item.city, country: item.country, at: Date.now() };
+            });
+            try { sessionStorage.setItem(opsGeoCacheKey(), JSON.stringify(cache)); } catch (error) { /* the dots still use this response */ }
+        };
+        if (onPaint) onPaint();
+        let failed = false;
+        const step = function () {
+            if (!todo.length || failed) {
+                save();
+                return Promise.resolve(items);
+            }
+            const chunk = todo.splice(0, 100);
+            return opsGeoBatch(chunk).catch(function () {
+                failed = true;
+                return opsLocateSerial(chunk.slice(0, 12));
+            }).then(function () {
+                save();
+                if (onPaint) onPaint();
+                return step();
+            });
+        };
+        return step();
+    }
+
+    let opsAttackToken = 0;
+
+    function loadOpsAttacks(force) {
+        const range = opsAttackRange;
+        const token = ++opsAttackToken;
+        const key = 'orbint-ops-attacks6-' + range;
+        const ttl = range === 'live' ? 20000 : 300000;
+        const cached = !force && opsSessionCache(key, null, ttl);
+        if (cached && Array.isArray(cached.items)) {
+            opsAttacks = cached.items;
+            opsAttackAt = cached.at || Date.now();
+            opsAttackNote = opsAttackPlaceNote(opsAttacks, range) || 'No located attack sources';
+            opsAttacks.forEach(function (item) {
+                const known = opsKnownPort(item.ip);
+                if (known !== null) item.port = known;
+            });
+            opsMapStatusLine();
+            paintOpsMapList();
+            opsSyncAttackPins();
+            opsFillPorts(opsAttacks);
+            return;
+        }
+        opsAttackNote = 'Loading ' + opsAttackWindowLabel().toLowerCase() + ' sources';
+        opsMapStatusLine();
+        opsFetchAttackList(range).then(function (picked) {
+            if (token !== opsAttackToken || range !== opsAttackRange) return [];
+            opsAttacks = picked || [];
+            opsAttackNote = 'Locating ' + opsAttacks.length + ' sources';
+            opsMapStatusLine();
+            opsSyncAttackPins();
+            return opsLocateAttacks(opsAttacks, function () {
+                if (token !== opsAttackToken || range !== opsAttackRange) return;
+                opsAttackNote = opsAttackPlaceNote(opsAttacks, range) || ('Locating ' + opsAttacks.length + ' sources');
+                opsMapStatusLine();
+                paintOpsMapList();
+                opsSyncAttackPins();
+            });
+        }).then(function (items) {
+            if (token !== opsAttackToken || range !== opsAttackRange) return;
+            opsAttacks = items || [];
+            opsAttackAt = Date.now();
+            opsAttackNote = opsAttackPlaceNote(opsAttacks, range) || 'No attack sources returned';
+            opsSessionCache(key, { at: opsAttackAt, items: opsAttacks }, ttl);
+            opsMapStatusLine();
+            paintOpsMapList();
+            opsSyncAttackPins();
+            opsFillPorts(opsAttacks);
+        }).catch(function () {
+            if (token !== opsAttackToken || range !== opsAttackRange) return;
+            opsAttackNote = opsAttackPlaceNote(opsAttacks, range) || 'Attack sources did not load';
+            opsMapStatusLine();
+            paintOpsMapList();
+        });
+    }
+
+    function opsOutageCountry(entity) {
+        entity = entity || {};
+        const attrs = entity.attrs || {};
+        const type = String(entity.type || '');
+        const code = String(entity.code || '').toUpperCase();
+        if (type === 'country' && /^[A-Z]{2}$/.test(code) && OPS_PLACES[code]) return code;
+        const named = String(attrs.country_code || '').toUpperCase();
+        if (/^[A-Z]{2}$/.test(named) && OPS_PLACES[named]) return named;
+        if (type === 'geoasn') {
+            const tail = code.split('-').pop();
+            if (/^[A-Z]{2}$/.test(tail) && OPS_PLACES[tail]) return tail;
+        }
+        return '';
+    }
+
+    function opsSpreadOutages(items) {
+        const seen = {};
+        items.forEach(function (item) {
+            const place = item.country && OPS_PLACES[item.country];
+            if (!place) return;
+            const n = seen[item.country] || 0;
+            seen[item.country] = n + 1;
+            if (!n) {
+                item.lon = place[0];
+                item.lat = place[1];
+                return;
+            }
+            const ring = Math.floor((n - 1) / 8) + 1;
+            const angle = ((n - 1) % 8) / 8 * Math.PI * 2;
+            const step = 0.42 * ring;
+            item.lon = place[0] + Math.cos(angle) * step;
+            item.lat = Math.max(-85, Math.min(85, place[1] + Math.sin(angle) * step * 0.65));
+        });
+    }
+
+    function opsFetchOutagePages(from, until, pages) {
+        const jobs = [];
+        for (let page = 1; page <= pages; page++) {
+            const url = 'https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=' + from + '&until=' + until + '&limit=200&page=' + page;
+            jobs.push(fetch(url).then(function (res) {
+                if (!res.ok) throw new Error('feed');
+                return res.json();
+            }).then(function (payload) {
+                return payload && Array.isArray(payload.data) ? payload.data : [];
+            }).catch(function () { return []; }));
+        }
+        return Promise.all(jobs).then(function (lists) {
+            const rows = [];
+            const seen = {};
+            lists.forEach(function (list) {
+                list.forEach(function (row) {
+                    const entity = row.entity || {};
+                    const key = [row.datasource, entity.type, entity.code, row.time].join('|');
+                    if (seen[key]) return;
+                    seen[key] = true;
+                    rows.push(row);
+                });
+            });
+        return rows;
+        });
+    }
+
+    function opsOutageSpan() {
+        const days = { live: 1, day: 1, week: 7, month: 30, year: 365, decade: 365 }[opsAttackRange] || 1;
+        const limit = days <= 1 ? 6 : 8;
+        return { days: days, limit: limit };
+    }
+
+    function opsOutagePlaceNote(items) {
+        const placed = (items || []).filter(function (item) { return OPS_PLACES[item.country]; }).length;
+        if (!placed) return opsAttackWindowLabel() + ' · no outages with a country';
+        return opsAttackWindowLabel() + ' · ' + placed + ' outages · IODA';
+    }
+
+    function loadOpsOutages(force) {
+        const range = opsAttackRange;
+        const span = opsOutageSpan();
+        const cached = !force && opsSessionCache('orbint-ops-outages3-' + range, null, 55000);
+        if (cached && Array.isArray(cached.items)) {
+            opsOutages = cached.items;
+            opsOutageAt = cached.at || Date.now();
+            opsOutageNote = opsOutagePlaceNote(opsOutages);
+            opsMapStatusLine();
+            paintOpsMapList();
+            opsSyncOutagePins();
+            return;
+        }
+        opsOutageNote = 'Loading ' + opsAttackWindowLabel().toLowerCase() + ' outages';
+        opsMapStatusLine();
+        const until = Math.floor(Date.now() / 1000);
+        const from = until - span.days * 24 * 60 * 60;
+        const pages = span.limit;
+        opsFetchOutagePages(from, until, pages).then(function (rows) {
+            if (range !== opsAttackRange) return;
+            opsOutages = rows.map(function (row) {
+                const entity = row.entity || {};
+                const type = String(entity.type || '');
+                const code = String(entity.code || '');
+                const link = type && code
+                    ? 'https://ioda.inetintel.cc.gatech.edu/ioda/dashboard#view=inspect&entity=' + encodeURIComponent(type + '/' + code)
+                    : 'https://ioda.inetintel.cc.gatech.edu/ioda/dashboard';
+                return {
+                    name: entity.name || 'Outage',
+                    country: opsOutageCountry(entity),
+                    source: String(row.datasource || ''),
+                    level: String(row.level || ''),
+                    time: (Number(row.time) || 0) * 1000,
+                    link: link
+                };
+            }).filter(function (item) { return item.country; });
+            opsSpreadOutages(opsOutages);
+            opsOutageAt = Date.now();
+            opsOutageNote = opsOutagePlaceNote(opsOutages);
+            opsSessionCache('orbint-ops-outages3-' + range, { at: opsOutageAt, items: opsOutages }, 55000);
+            opsMapStatusLine();
+            paintOpsMapList();
+            opsSyncOutagePins();
+        }).catch(function () {
+            if (range !== opsAttackRange) return;
+            opsOutageNote = opsOutages.length ? opsOutagePlaceNote(opsOutages) : 'Internet outages did not load';
+            opsMapStatusLine();
+            paintOpsMapList();
+        });
+    }
+
+    function startOpsMap() {
+        opsEnsureMap();
+        opsClearPinCanvas();
+        opsSyncAttackPins();
+        opsSyncOutagePins();
+        opsShowPinLayers();
+        if (opsMapMode === 'cameras') opsEnsureCameras();
+        requestAnimationFrame(function () { opsSyncMapSize(); });
+    }
+
+    function bindOperations() {
+        applyOpsLayout();
+        const ask = $('opsAccessAsk');
+        if (ask) ask.addEventListener('click', openOpsAsk);
+        const deny = $('opsAskDeny');
+        const allow = $('opsAskAllow');
+        if (deny) deny.addEventListener('click', function () {
+            setOpsDeviceChoice('deny');
+            paintOpsAccess();
+            paintOpsMachineHeld();
+            closeOpsAsk();
+        });
+        if (allow) allow.addEventListener('click', function () {
+            setOpsDeviceChoice('allow');
+            paintOpsAccess();
+            paintOpsMachine();
+            setOpsOpen('machine', true);
+            closeOpsAsk();
+            opsLocateUser(true);
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeOpsAsk();
+                closeOpsReport();
+                closeOpsBasemap();
+            }
+        });
+        const news = $('opsNews');
+        if (news) {
+            news.addEventListener('click', function (event) {
+                const topic = event.target.closest('[data-topic]');
+                if (topic) {
+                    opsNewsTopic = topic.getAttribute('data-topic') || 'all';
+                    opsNewsIndex = 0;
+                    opsNewsDir = 1;
+                    paintOpsNews(opsNewsAll, opsNewsNote);
+                    return;
+                }
+                const jump = event.target.closest('[data-news]');
+                if (!jump || !opsNewsItems.length) return;
+                event.preventDefault();
+                const action = jump.getAttribute('data-news');
+                const total = opsNewsItems.length;
+                if (action === 'prev') {
+                    opsNewsIndex = (opsNewsIndex + total - 1) % total;
+                    opsNewsDir = -1;
+                } else if (action === 'next') {
+                    opsNewsIndex = (opsNewsIndex + 1) % total;
+                    opsNewsDir = 1;
+                } else {
+                    const next = Number(action) || 0;
+                    opsNewsDir = next >= opsNewsIndex ? 1 : -1;
+                    opsNewsIndex = next;
+                }
+                paintOpsNews(opsNewsAll, opsNewsNote);
+            });
+        }
+        const newsPanel = document.querySelector('[data-ops="news"]');
+        if (newsPanel) {
+            newsPanel.addEventListener('pointerenter', function () {
+                if (!opsNewsPaused) opsNewsHold = Date.now();
+                opsNewsPaused = true;
+            });
+            newsPanel.addEventListener('pointerleave', function () {
+                if (opsNewsHold) {
+                    opsNewsStamp += Date.now() - opsNewsHold;
+                    opsNewsHold = 0;
+                }
+                opsNewsPaused = false;
+            });
+        }
+        const reset = $('opsLayoutReset');
+        if (reset) {
+            reset.addEventListener('click', function () {
+                try { localStorage.removeItem(OPS_LAYOUT_KEY); } catch (error) {}
+                applyOpsLayout(OPS_LAYOUT_DEFAULT);
+            });
+        }
+        document.querySelectorAll('.ops-toggle').forEach(function (toggle) {
+            toggle.addEventListener('click', function () {
+                const panel = toggle.closest('.ops-panel');
+                if (!panel) return;
+                setOpsOpen(panel.getAttribute('data-ops'), panel.classList.contains('is-closed'));
+            });
+        });
+        let drag = null;
+        document.addEventListener('pointerdown', function (event) {
+            const handle = event.target.closest('.ops-resize-x, .ops-resize-y');
+            if (!handle || window.innerWidth <= 900) return;
+            const panel = handle.closest('.ops-panel');
+            if (!panel) return;
+            event.preventDefault();
+            drag = {
+                axis: handle.classList.contains('ops-resize-x') ? 'x' : 'y',
+                panel: panel,
+                id: panel.getAttribute('data-ops'),
+                body: panel.querySelector('.ops-body')
+            };
+            document.body.classList.add('ops-resizing');
+            handle.setPointerCapture(event.pointerId);
+        });
+        document.addEventListener('pointermove', function (event) {
+            if (!drag) return;
+            if (drag.axis === 'x') {
+                const board = document.querySelector('.ops-board');
+                if (!board) return;
+                const span = opsSnapSpan(event.clientX - drag.panel.getBoundingClientRect().left, board.getBoundingClientRect().width);
+                drag.panel.style.gridColumn = 'span ' + span;
+                drag.span = span;
+            } else if (drag.body) {
+                const height = Math.max(140, Math.min(640, event.clientY - drag.body.getBoundingClientRect().top));
+                drag.body.style.height = height + 'px';
+                drag.height = height;
+            }
+        });
+        function endOpsDrag() {
+            if (!drag) return;
+            const layout = opsLayout();
+            const base = OPS_LAYOUT_DEFAULT[drag.id] || { span: 12, open: true, height: 0 };
+            const spec = Object.assign({}, base, layout[drag.id] || {});
+            if (drag.span) spec.span = drag.span;
+            if (drag.height) spec.height = drag.height;
+            layout[drag.id] = spec;
+            opsLayout(layout);
+            document.body.classList.remove('ops-resizing');
+            drag = null;
+        }
+        document.addEventListener('pointerup', endOpsDrag);
+        document.addEventListener('pointercancel', endOpsDrag);
+        setInterval(function () {
+            if (!document.body || document.body.getAttribute('data-page') !== 'operations') return;
+            const reduce = opsReduceMotion();
+            const panel = document.querySelector('[data-ops="news"]');
+            const closed = !panel || panel.classList.contains('is-closed');
+            if (closed) {
+                opsNewsStamp = Date.now();
+                if (!opsNewsClosed) {
+                    opsNewsClosed = true;
+                    resetOpsChapterFill(0);
+                }
+            } else if (opsNewsClosed) {
+                opsNewsClosed = false;
+                opsNewsStamp = Date.now();
+                resetOpsChapterFill(0);
+            }
+            if (!opsNewsPaused && !reduce && !closed && opsNewsItems.length > 1 && Date.now() - opsNewsStamp >= OPS_NEWS_MS) {
+                opsNewsIndex = (opsNewsIndex + 1) % opsNewsItems.length;
+                opsNewsDir = 1;
+                paintOpsNews(opsNewsAll, opsNewsNote);
+            }
+            opsMapStatusLine();
+            const modeThumb = document.querySelector('.ops-mode-thumb');
+            if (modeThumb && !(modeThumb.offsetWidth > 0)) opsModeThumb(true);
+        }, 100);
+        setInterval(function () {
+            if (!document.body || document.body.getAttribute('data-page') !== 'operations' || document.hidden) return;
+            loadOpsAttacks(false);
+            loadOpsOutages(false);
+            loadOpsNews(false);
+        }, 60000);
+        const stage = document.querySelector('.ops-globe-stage');
+        if (stage) {
+            stage.addEventListener('click', function (event) {
+                if (event.target.closest('[data-report="close"]')) {
+                    closeOpsReport();
+                    return;
+                }
+                const hit = event.target.closest('[data-hit]');
+                if (!hit) return;
+                const kind = hit.getAttribute('data-hit') || '';
+                const id = hit.getAttribute('data-id') || '';
+                opsOpenMapHit({ kind: kind, id: id, ip: kind === 'ip' ? id : '' });
+            });
+        }
+        window.addEventListener('resize', function () { opsModeThumb(true); });
+        const basemapBtn = $('opsBasemapBtn');
+        const basemapMenu = $('opsBasemap');
+        function closeOpsBasemap() {
+            if (!basemapMenu || basemapMenu.hidden) return;
+            basemapMenu.hidden = true;
+            if (basemapBtn) basemapBtn.setAttribute('aria-expanded', 'false');
+        }
+        if (basemapBtn && basemapMenu) {
+            basemapBtn.addEventListener('click', function (event) {
+                event.stopPropagation();
+                const open = basemapMenu.hidden;
+                basemapMenu.hidden = !open;
+                basemapBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+        }
+        document.addEventListener('click', function (event) {
+            if (!basemapMenu || basemapMenu.hidden) return;
+            if (event.target.closest('.ops-basemap-pop')) return;
+            closeOpsBasemap();
+        });
+        document.querySelectorAll('[data-basemap]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                opsSetBasemap(button.getAttribute('data-basemap') || 'dark');
+                closeOpsBasemap();
+            });
+        });
+        const locate = $('opsLocate');
+        if (locate) locate.addEventListener('click', function () { opsLocateUser(true); });
+        document.querySelectorAll('[data-map]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                setOpsMapMode(button.getAttribute('data-map'));
+            });
+        });
+        document.querySelectorAll('[data-range]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                opsAttackRange = button.getAttribute('data-range') || 'live';
+                document.querySelectorAll('[data-range]').forEach(function (other) {
+                    other.classList.toggle('is-on', other === button);
+                });
+                opsHideTip();
+                if (opsMapMode === 'outages') loadOpsOutages(true);
+                else if (opsMapMode !== 'cameras') loadOpsAttacks(true);
+            });
+        });
+        const mapRefresh = $('opsMapRefresh');
+        if (mapRefresh) {
+            mapRefresh.addEventListener('click', function () {
+                if (opsMapMode === 'outages') loadOpsOutages(true);
+                else if (opsMapMode !== 'cameras') loadOpsAttacks(true);
+            });
+        }
+        startOpsMap();
+    }
+
+    bindOperations();
 
     function openDomainIntel(seed) {
         const hostValue = hostName(seed || data.intel.host || firstValue('domain'));
@@ -9534,7 +14618,9 @@
                 id: item.id,
                 label: reportFactLabel(item),
                 value: value,
+                raw: String(item.value || '').trim(),
                 source: prettyPdfValue(item.source),
+                sourceRaw: String(item.source || '').trim(),
                 confidence: prettyConfidence(item.confidence),
                 method: prettyMethod(item.method),
                 captured: item.capturedAt ? prettyCaptured(item.capturedAt) : '',
@@ -9557,12 +14643,20 @@
         return numberedTimeline().map(function (ev) {
             var title = prettyPdfValue(ev.title || '');
             if (SKIP_TITLES[title]) title = '';
+            var bodyRaw = String(ev.body || '').trim();
+            var bodyShow = [prettyPdfValue(ev.body || '')].concat((ev.moreNotes || []).map(function (note) {
+                return prettyPdfValue(note && note.text);
+            })).filter(Boolean).join('  ');
             return {
+                id: ev.id,
                 date: prettyPdfValue(ev.date || ''),
                 time: prettyPdfValue(ev.time || ''),
                 title: title,
-                body: prettyPdfValue(ev.body || ''),
-                source: prettyPdfValue(ev.source || '')
+                titleRaw: String(ev.title || '').trim(),
+                body: bodyShow,
+                bodyRaw: bodyRaw,
+                source: prettyPdfValue(ev.source || ''),
+                sourceRaw: String(ev.source || '').trim()
             };
         }).filter(function (row) {
             return row.date || row.time || row.body || row.title;
@@ -9595,48 +14689,121 @@
             '</button>';
     }
 
-    function pushReportNote(notes, text) {
+    function pushReportNote(notes, text, ref) {
+        var raw = String(text || '').trim();
         var t = prettyPdfValue(text);
         if (!t) return;
         if (notes.some(function (item) { return item.text === t; })) return;
-        notes.push({ text: t });
+        notes.push({ text: t, raw: raw, ref: ref || null });
     }
 
     function reportNotes() {
         var notes = [];
         filedFacts().forEach(function (item) {
             if (item.id === 'notes' || /^notes?$/i.test(item.label || '')) {
-                pushReportNote(notes, item.value);
+                pushReportNote(notes, item.value, { key: 'fact', id: item.id });
             }
         });
-        pushReportNote(notes, profile().analysis);
-        numberedTimeline().forEach(function (ev) {
-            var title = String(ev.title || '').trim();
-            if (SKIP_TITLES[title]) title = '';
-            function addTl(text) {
-                var t = prettyPdfValue(text);
-                if (!t) return;
-                pushReportNote(notes, title ? title + '. ' + t : t);
-            }
-            addTl(ev.body);
-            (ev.moreNotes || []).forEach(function (note) {
-                addTl(note && note.text);
-            });
-        });
-        (data.evidence || []).forEach(function (item) {
-            pushReportNote(notes, item && item.note);
-        });
-        ((data.whiteboard && data.whiteboard.nodes) || []).forEach(function (node) {
-            if (!node || node.type !== 'note') return;
-            var title = String(node.title || '').trim();
-            if (SKIP_TITLES[title]) title = '';
-            var body = String(node.body || '').trim();
-            var bits = [];
-            if (title) bits.push(title);
-            if (body) bits.push(body);
-            pushReportNote(notes, bits.join('. '));
+        pushReportNote(notes, profile().analysis, { key: 'analysis', id: '' });
+        (data.evidence || []).forEach(function (item, idx) {
+            pushReportNote(notes, item && item.note, { key: 'evidence', id: String(idx) });
         });
         return notes;
+    }
+
+    function reportNamed(text) {
+        var value = prettyPdfValue(text || '');
+        if (!value || SKIP_TITLES[value]) return '';
+        return value;
+    }
+
+    function reportBoardItems() {
+        var board = data.whiteboard || {};
+        var nodes = board.nodes || [];
+        var byId = {};
+        var items = [];
+        nodes.forEach(function (node) {
+            if (!node || node.type === 'image' || node.type === 'draw') return;
+            var title = reportNamed(node.title);
+            var body = prettyPdfValue(node.body || '');
+            if (!title && !body) return;
+            byId[node.id] = title || body.slice(0, 48);
+            items.push({
+                label: title || 'Card',
+                value: body,
+                redact: body ? 'notes' : '',
+                edit: { kind: 'board', id: node.id, key: body ? 'body' : 'title', raw: body || String(node.title || '').trim(), show: body || title }
+            });
+        });
+        (board.links || []).forEach(function (link) {
+            var from = byId[link && link.from];
+            var to = byId[link && link.to];
+            if (!from || !to) return;
+            var label = prettyPdfValue(link.label || '');
+            items.push({ label: from + ' → ' + to, value: label });
+        });
+        return items;
+    }
+
+    function reportPadItems() {
+        var pad = data.notepad || {};
+        var byId = {};
+        var items = [];
+        (pad.notes || []).forEach(function (note) {
+            if (!note) return;
+            var title = reportNamed(note.title);
+            var body = prettyPdfValue(note.body || '');
+            if (!title && !body) return;
+            byId[note.id] = title || 'Note';
+            items.push({
+                label: title || 'Note',
+                value: body,
+                redact: body ? 'notes' : '',
+                edit: { kind: 'pad', id: note.id, key: body ? 'body' : 'title', raw: body || String(note.title || '').trim(), show: body || title }
+            });
+        });
+        (pad.links || []).forEach(function (link) {
+            var from = byId[link && link.from];
+            var to = byId[link && link.to];
+            if (!from || !to) return;
+            items.push({ label: from + ' → ' + to, value: '' });
+        });
+        return items;
+    }
+
+    function reportHarvestItems() {
+        var names = {
+            name: 'Name', alias: 'Alias', email: 'Email', phone: 'Phone', username: 'Username',
+            password: 'Password', address: 'Address', dob: 'Date of birth', date: 'Date', time: 'Time',
+            company: 'Company', occupation: 'Occupation', ip: 'IP address', url: 'URL', domain: 'Domain',
+            id: 'Identifier', os: 'System', vin: 'VIN'
+        };
+        var redact = { name: 'name', alias: 'name', email: 'email', phone: 'phone', username: 'username', password: 'password', address: 'address', dob: 'dob', ip: 'ip', id: 'id' };
+        var hits = (data.harvester && data.harvester.hits) || [];
+        var out = [];
+        hits.forEach(function (hit, index) {
+            if (!hit) return;
+            var value = prettyPdfValue(hit.value || '');
+            if (!value) return;
+            var kind = String(hit.kind || '');
+            var label = names[kind] || (kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : 'Item');
+            if (hit.platform) label += ' / ' + prettyPdfValue(hit.platform);
+            var note = prettyPdfValue(hit.note || '');
+            out.push({
+                label: label,
+                value: value,
+                note: note,
+                redact: redact[kind] || '',
+                edit: { kind: 'harvest', id: String(index), key: 'value', raw: String(hit.value || '').trim(), show: value },
+                noteEdit: note ? { kind: 'harvest', id: String(index), key: 'note', raw: String(hit.note || '').trim(), show: note } : null
+            });
+        });
+        return out;
+    }
+
+    function reportRoman(n) {
+        var romans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+        return romans[n - 1] || String(n);
     }
 
     function reportCaseMeta() {
@@ -9666,6 +14833,9 @@
             rows: reportOrderedFacts(),
             notes: reportNotes(),
             chronology: reportChronology(),
+            board: reportBoardItems(),
+            pad: reportPadItems(),
+            harvest: reportHarvestItems(),
             photos: collectReportPhotos()
         };
     }
@@ -10079,8 +15249,22 @@
             pageObj.y -= 3;
         });
 
+        var sectionNo = 2;
+        function nextHeading(title) {
+            sectionNo += 1;
+            pageObj = heading(pageObj, reportRoman(sectionNo) + '. ' + title);
+        }
+        function paintItems(items) {
+            items.forEach(function (row, idx) {
+                pageObj = ensure(pageObj, 28);
+                pageObj = fillLine(pageObj, String(idx + 1).padStart(2, '0') + '  ' + pdfSafe(row.label), row.value || '--', { lead: 12 });
+                if (row.note) pageObj = fillLine(pageObj, 'Note', row.note, { indent: 18, size: 9, lead: 11, width: WIDTH - 18 });
+                pageObj.y -= 3;
+            });
+        }
+
         if (chrono.length) {
-            pageObj = heading(pageObj, 'III. Chronology');
+            nextHeading('Timeline');
             chrono.forEach(function (row, idx) {
                 var when = [row.date, row.time].filter(Boolean).join('  ') || '--';
                 pageObj = ensure(pageObj, 28);
@@ -10097,8 +15281,21 @@
             });
         }
 
+        if ((doc.board || []).length) {
+            nextHeading('Whiteboard');
+            paintItems(doc.board);
+        }
+        if ((doc.pad || []).length) {
+            nextHeading('Notepad');
+            paintItems(doc.pad);
+        }
+        if ((doc.harvest || []).length) {
+            nextHeading('Harvester');
+            paintItems(doc.harvest);
+        }
+
         if (morePhotos.length || (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption))) {
-            pageObj = heading(pageObj, 'IV. Photographs');
+            nextHeading('Photographs');
             morePhotos.forEach(function (item) {
                 pageObj = placePhoto(pageObj, item.jpeg, 180, 160);
                 if (item.caption) {
@@ -10109,7 +15306,7 @@
         }
 
         if (notes.length) {
-            pageObj = heading(pageObj, 'V. Notes');
+            nextHeading('Notes');
             notes.forEach(function (item) {
                 pageObj = flow(pageObj, item.text, { size: 10, lead: 13, after: 8 });
             });
@@ -10186,12 +15383,20 @@
             used += h;
         }
 
-        function fillHtml(label, valueHtml) {
-            return '<div class="ds-fill"><span class="ds-fill-k">' + esc(label) + '</span><span class="ds-fill-dots" aria-hidden="true"></span><span class="ds-fill-v">' + valueHtml + '</span></div>';
+        function dsEditAttrs(edit) {
+            if (!edit) return '';
+            function attr(text) {
+                return esc(String(text == null ? '' : text)).replace(/\r?\n/g, '&#10;');
+            }
+            return ' data-ds-edit="' + attr(edit.kind) + '" data-ds-id="' + attr(edit.id) + '" data-ds-key="' + attr(edit.key) + '" data-ds-match="' + attr(edit.match) + '" data-ds-raw="' + attr(edit.raw) + '" data-ds-show="' + attr(edit.show) + '"';
+        }
+
+        function fillHtml(label, valueHtml, edit) {
+            return '<div class="ds-fill' + (edit ? ' is-editable' : '') + '"' + dsEditAttrs(edit) + '><span class="ds-fill-k">' + esc(label) + '</span><span class="ds-fill-dots" aria-hidden="true"></span><span class="ds-fill-v">' + valueHtml + '</span></div>';
         }
 
         function pairHtml(a, b) {
-            return '<div class="ds-pair">' + fillHtml(a[0], a[1]) + fillHtml(b[0], b[1]) + '</div>';
+            return '<div class="ds-pair">' + fillHtml(a[0], a[1], a[2]) + fillHtml(b[0], b[1], b[2]) + '</div>';
         }
 
         function addRows(pairs) {
@@ -10206,7 +15411,9 @@
 
         function addFact(row, idx) {
             var title = String(idx + 1).padStart(2, '0') + '  ' + String(row.label || '').toUpperCase();
-            var html = '<div class="ds-item">' + fillHtml(title, redactHtml(row.id, row.value));
+            var html = '<div class="ds-item">' + fillHtml(title, redactHtml(row.id, row.value), {
+                kind: 'fact', id: row.id, key: 'value', raw: row.raw || '', show: row.value || '', match: row.raw || ''
+            });
             var h = 16;
             var bits = [row.confidence, row.method, row.captured].filter(Boolean);
             if (bits.length) {
@@ -10214,7 +15421,9 @@
                 h += 11;
             }
             if (row.source) {
-                html += fillHtml('Note', esc(row.source));
+                html += fillHtml('Note', esc(row.source), {
+                    kind: 'fact', id: row.id, key: 'source', raw: row.sourceRaw || '', show: row.source || '', match: row.raw || ''
+                });
                 h += 13 * Math.max(1, wrapPdf(row.source, 280, 9).length);
             }
             html += '</div>';
@@ -10241,14 +15450,16 @@
 
         section('I. Case file');
         (function () {
+            var live = (profile().case) || {};
+            var subjectRaw = firstValue('name') || '';
             var meta = pairHtml(
-                ['Case no.', rec.number ? esc(rec.number) : '<span class="ds-empty">--</span>'],
-                ['Status', rec.status ? esc(rec.status) : '<span class="ds-empty">--</span>']
+                ['Case no.', rec.number ? esc(rec.number) : '<span class="ds-empty">--</span>', { kind: 'case', key: 'number', raw: live.number || '', show: live.number || '' }],
+                ['Status', rec.status ? esc(rec.status) : '<span class="ds-empty">--</span>', { kind: 'case', key: 'status', raw: live.status || 'open', show: rec.status || 'Open' }]
             ) + pairHtml(
-                ['Offense', rec.offense ? esc(rec.offense) : '<span class="ds-empty">--</span>'],
-                ['Investigator', rec.investigator ? esc(rec.investigator) : '<span class="ds-empty">--</span>']
+                ['Offense', rec.offense ? esc(rec.offense) : '<span class="ds-empty">--</span>', { kind: 'case', key: 'offense', raw: live.offense || '', show: live.offense || '' }],
+                ['Investigator', rec.investigator ? esc(rec.investigator) : '<span class="ds-empty">--</span>', { kind: 'case', key: 'investigator', raw: live.investigator || '', show: live.investigator || '' }]
             ) + pairHtml(
-                ['Subject', redactHtml('name', doc.subject || 'UNKNOWN')],
+                ['Subject', redactHtml('name', doc.subject || 'UNKNOWN'), { kind: 'fact', id: 'name', key: 'value', raw: subjectRaw, show: subjectRaw, match: subjectRaw }],
                 ['Recorded', esc(doc.dateLong)]
             ) + (rec.openedAt ? fillHtml('Opened', esc(rec.openedAt)) : '');
             var html = '<div class="ds-case"><div class="ds-case-meta">' + meta + '</div>';
@@ -10263,20 +15474,40 @@
             addFact(row, idx);
         });
 
+        var sectionNo = 2;
+        function nextSection(title) {
+            sectionNo += 1;
+            section(reportRoman(sectionNo) + '. ' + title);
+        }
+        function addItems(rows) {
+            rows.forEach(function (row, idx) {
+                var label = String(idx + 1).padStart(2, '0') + '  ' + row.label;
+                var valueHtml = row.redact ? redactHtml(row.redact, row.value) : (row.value ? esc(row.value) : '<span class="ds-empty">--</span>');
+                var html = '<div class="ds-item">' + fillHtml(label, valueHtml, row.edit || null);
+                var h = 16 + 13 * Math.max(0, wrapPdf(row.value || '', 220, 10).length - 1);
+                if (row.note) {
+                    html += fillHtml('Note', esc(row.note), row.noteEdit || null);
+                    h += 13;
+                }
+                html += '</div>';
+                add(html, h + 4);
+            });
+        }
+
         if (chrono.length) {
-            section('III. Chronology');
+            nextSection('Timeline');
             chrono.forEach(function (row, idx) {
                 var when = [row.date, row.time].filter(Boolean).join('  ') || '--';
                 var html = '<div class="ds-item">' + (row.title
-                    ? fillHtml(String(idx + 1).padStart(2, '0') + '  ' + when, esc(row.title))
+                    ? fillHtml(String(idx + 1).padStart(2, '0') + '  ' + when, esc(row.title), { kind: 'event', id: row.id, key: 'title', raw: row.titleRaw || '', show: row.title || '' })
                     : '<div class="ds-fill"><span class="ds-fill-k">' + esc(String(idx + 1).padStart(2, '0') + '  ' + when) + '</span></div>');
                 var h = 16;
                 if (row.body) {
-                    html += fillHtml('Entry', redactHtml('notes', row.body));
+                    html += fillHtml('Entry', redactHtml('notes', row.body), { kind: 'event', id: row.id, key: 'body', raw: row.bodyRaw || '', show: row.body || '' });
                     h += 12;
                 }
                 if (row.source) {
-                    html += fillHtml('Source', esc(row.source));
+                    html += fillHtml('Source', esc(row.source), { kind: 'event', id: row.id, key: 'source', raw: row.sourceRaw || '', show: row.source || '' });
                     h += 12;
                 }
                 html += '</div>';
@@ -10284,8 +15515,21 @@
             });
         }
 
+        if ((doc.board || []).length) {
+            nextSection('Whiteboard');
+            addItems(doc.board);
+        }
+        if ((doc.pad || []).length) {
+            nextSection('Notepad');
+            addItems(doc.pad);
+        }
+        if ((doc.harvest || []).length) {
+            nextSection('Harvester');
+            addItems(doc.harvest);
+        }
+
         if (morePhotos.length || (portrait && portrait.caption && /^https?:\/\//i.test(portrait.caption))) {
-            section('IV. Photographs');
+            nextSection('Photographs');
             morePhotos.forEach(function (item) {
                 add(redactPhotoHtml(item.src, true), 220);
                 if (item.caption) add('<div class="ds-cap">' + esc(item.caption) + '</div>', 14);
@@ -10296,10 +15540,11 @@
         }
 
         if (doc.notes.length) {
-            section('V. Notes');
+            nextSection('Notes');
             doc.notes.forEach(function (item) {
+                var ref = item.ref || {};
                 var h = wrapPdf(item.text, WIDTH, 10).length * 13 + 8;
-                add('<p class="ds-p ds-note">' + redactHtml('notes', item.text) + '</p>', h);
+                add('<p class="ds-p ds-note is-editable"' + dsEditAttrs({ kind: 'note', id: ref.id || '', key: ref.key || '', raw: item.raw || item.text, show: item.text }) + '>' + redactHtml('notes', item.text) + '</p>', h);
             });
         }
 
@@ -10427,6 +15672,7 @@
             if (!event.target.closest('[data-tl-rs]')) {
                 if (event.target.closest('button, input, textarea, [contenteditable="true"], .tl-attach, .tl-media, .tl-acts')) return;
             }
+            stopTimelineCamAnim();
             if (event.button === 1) {
                 event.preventDefault();
                 const cam = timelineCam();
@@ -10615,6 +15861,7 @@
         });
         view.addEventListener('wheel', function (event) {
             event.preventDefault();
+            stopTimelineCamAnim();
             const cam = timelineCam();
             const rect = view.getBoundingClientRect();
             const prev = cam.z || 1;
@@ -11049,7 +16296,8 @@
             hideBoardMore();
             hideBoardAddMenu();
             boardDrawToShape = false;
-            boardTool = tool.getAttribute('data-board-tool');
+            const nextTool = tool.getAttribute('data-board-tool');
+            boardTool = boardTool === nextTool && nextTool !== 'select' ? 'select' : nextTool;
             boardConnect = '';
             boardConnectPort = '';
             renderWhiteboard();
@@ -11073,11 +16321,6 @@
                 const raw = window.prompt('Wireframe to code\nOne section per line. HTML is copied to the clipboard.', 'Header\nSearch\nResults\nFooter');
                 if (raw) wireframeToCode(raw);
             }
-            return;
-        }
-        if (event.target.closest('[data-board-lock]')) {
-            boardToolLock = !boardToolLock;
-            syncBoardTools();
             return;
         }
         if (event.target.closest('[data-board-undo]')) {
@@ -11156,6 +16399,7 @@
             if (menu) menu.hidden = true;
         }
         if (event.target.id === 'timelineZoomIn') {
+            stopTimelineCamAnim();
             const cam = timelineCam();
             cam.z = Math.min(3.2, cam.z * 1.12);
             applyTimelineCam();
@@ -11163,6 +16407,7 @@
             return;
         }
         if (event.target.id === 'timelineZoomOut') {
+            stopTimelineCamAnim();
             const cam = timelineCam();
             cam.z = Math.max(0.2, cam.z / 1.12);
             applyTimelineCam();
@@ -11505,7 +16750,7 @@
             duplicateBoardNode(boardSelected);
             return;
         }
-        if (meta && (key === 'k' || key === 'K') && boardSelected) {
+        if (meta && event.shiftKey && (key === 'k' || key === 'K') && boardSelected) {
             event.preventDefault();
             setBoardHref(boardSelected);
             return;
@@ -11616,11 +16861,208 @@
         }
     }
 
+    let fieldMenuEl = null;
+    let fieldMenuTarget = null;
+    let fieldMenuRange = null;
+
+    function editableField(node) {
+        if (!node || !node.closest) return null;
+        const field = node.closest('textarea, input, [contenteditable="true"]');
+        if (!field || field.disabled) return null;
+        if (field.matches('input')) {
+            const type = (field.getAttribute('type') || 'text').toLowerCase();
+            if (/^(button|submit|reset|checkbox|radio|file|range|color|hidden|image)$/.test(type)) return null;
+        }
+        return field;
+    }
+
+    function fieldHasSelection(field) {
+        if (!field) return false;
+        if (field.selectionStart != null) return field.selectionEnd > field.selectionStart;
+        const sel = window.getSelection();
+        return !!(sel && !sel.isCollapsed && field.contains(sel.anchorNode));
+    }
+
+    function captureFieldRange(field) {
+        if (!field) return null;
+        if (field.selectionStart != null) return { kind: 'input', start: field.selectionStart, end: field.selectionEnd };
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return null;
+        const range = sel.getRangeAt(0);
+        if (!field.contains(range.commonAncestorContainer)) return null;
+        return { kind: 'range', range: range.cloneRange() };
+    }
+
+    function restoreFieldRange(field, saved) {
+        if (!field) return;
+        field.focus();
+        if (!saved) return;
+        if (saved.kind === 'input' && field.setSelectionRange) {
+            field.setSelectionRange(saved.start, saved.end);
+            return;
+        }
+        if (saved.kind === 'range') {
+            const sel = window.getSelection();
+            if (!sel) return;
+            sel.removeAllRanges();
+            sel.addRange(saved.range);
+        }
+    }
+
+    function armFieldEdit(field) {
+        fieldMenuTarget = field;
+        fieldMenuRange = captureFieldRange(field);
+    }
+
+    function fieldEditRows(field) {
+        const secret = field && field.type === 'password';
+        const locked = !!(field && (field.readOnly || field.disabled));
+        const selected = fieldHasSelection(field);
+        function row(act, label, keys, off) {
+            return '<button type="button" role="menuitem" data-field-act="' + act + '"' + (off ? ' disabled' : '') + '><span>' + label + '</span><kbd>' + keys + '</kbd></button>';
+        }
+        return '<p>Edit</p>' +
+            row('undo', 'Undo', 'Ctrl+Z', locked) +
+            row('redo', 'Redo', 'Ctrl+Shift+Z', locked) +
+            '<hr>' +
+            row('cut', 'Cut', 'Ctrl+X', locked || secret || !selected) +
+            row('copy', 'Copy', 'Ctrl+C', secret || !selected) +
+            row('paste', 'Paste', 'Ctrl+V', locked) +
+            '<hr>' +
+            row('select', 'Select all', 'Ctrl+A', false);
+    }
+
+    function hideFieldMenu() {
+        if (fieldMenuEl) fieldMenuEl.hidden = true;
+    }
+
+    function placeAppMenu(menu, x, y) {
+        if (!menu) return;
+        menu.hidden = false;
+        const width = menu.offsetWidth || 196;
+        const height = menu.offsetHeight || 40;
+        const left = Math.min(Math.max(8, x), window.innerWidth - width - 8);
+        const top = y + height > window.innerHeight - 8 ? Math.max(8, y - height) : Math.max(8, y);
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+    }
+
+    function fieldMenuHost() {
+        if (fieldMenuEl) return fieldMenuEl;
+        const menu = document.createElement('div');
+        menu.id = 'editMenu';
+        menu.className = 'app-menu';
+        menu.hidden = true;
+        menu.setAttribute('role', 'menu');
+        menu.addEventListener('mousedown', function (event) { event.preventDefault(); });
+        menu.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-field-act]');
+            if (!button || button.disabled) return;
+            const field = fieldMenuTarget;
+            const act = button.getAttribute('data-field-act');
+            hideFieldMenu();
+            if (field) runFieldEdit(field, act);
+        });
+        document.body.appendChild(menu);
+        fieldMenuEl = menu;
+        return menu;
+    }
+
+    function showFieldMenu(field, x, y) {
+        if (!field) return;
+        closeNoteMenu();
+        armFieldEdit(field);
+        const menu = fieldMenuHost();
+        menu.innerHTML = fieldEditRows(field);
+        placeAppMenu(menu, x, y);
+    }
+
+    function runFieldEdit(field, action) {
+        if (!field || field.disabled) return;
+        const saved = fieldMenuRange;
+        restoreFieldRange(field, saved);
+        if (action === 'select') {
+            if (field.select) field.select();
+            else document.execCommand('selectAll');
+            return;
+        }
+        if (action === 'undo' || action === 'redo') {
+            if (field.readOnly) return;
+            document.execCommand(action);
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
+        const secret = field.type === 'password';
+        if ((action === 'cut' || action === 'copy') && !secret) {
+            let text = '';
+            if (field.selectionStart != null) text = field.value.slice(field.selectionStart, field.selectionEnd);
+            else text = String(window.getSelection() || '');
+            if (!text) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function () {});
+            else document.execCommand('copy');
+            if (action === 'cut' && !field.readOnly) {
+                if (field.selectionStart != null) {
+                    const start = field.selectionStart;
+                    field.value = field.value.slice(0, start) + field.value.slice(field.selectionEnd);
+                    field.setSelectionRange(start, start);
+                    field.dispatchEvent(new Event('input', { bubbles: true }));
+                } else {
+                    document.execCommand('delete');
+                    field.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+            return;
+        }
+        if (action !== 'paste' || field.readOnly) return;
+        function insert(text) {
+            restoreFieldRange(field, saved);
+            if (field.selectionStart != null) {
+                const start = field.selectionStart;
+                const end = field.selectionEnd;
+                field.value = field.value.slice(0, start) + text + field.value.slice(end);
+                const caret = start + text.length;
+                field.setSelectionRange(caret, caret);
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+            document.execCommand('insertText', false, text);
+        }
+        if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then(insert).catch(function () {
+                restoreFieldRange(field, saved);
+                document.execCommand('paste');
+            });
+            return;
+        }
+        document.execCommand('paste');
+    }
+
+    function bindPageContextMenu() {
+        document.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+            hideFieldMenu();
+            if (!event.target.closest('#noteMenu')) closeNoteMenu();
+        }, true);
+        document.addEventListener('contextmenu', function (event) {
+            if (event.target.closest('#timelineView, #boardView, #mapStage, #noteView, #noteMenu, #noteFormat, #editMenu, #fieldMenu, #peerHubs, .board-add-menu')) return;
+            const field = editableField(event.target);
+            if (field) showFieldMenu(field, event.clientX, event.clientY);
+        });
+        document.addEventListener('pointerdown', function (event) {
+            if (event.target.closest('#editMenu')) return;
+            hideFieldMenu();
+        }, true);
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') hideFieldMenu();
+        });
+    }
+
     function init(api) {
         host = api || {};
         injectToolkit();
         window.addEventListener('orbint-toolkit-ready', injectToolkit);
         document.addEventListener('click', onClick);
+        bindPageContextMenu();
         document.addEventListener('change', onChange);
         document.addEventListener('input', onInput);
         document.addEventListener('focusout', function (event) {
@@ -11653,9 +17095,16 @@
             }
         } catch (error) {}
         if (saved === 'compiler') saved = 'harvester';
-        if (['orbit', 'timeline', 'whiteboard', 'harvester', 'datasheet'].indexOf(saved) < 0) saved = 'orbit';
+        if (['operations', 'orbit', 'timeline', 'whiteboard', 'notepad', 'harvester', 'datasheet', 'guide'].indexOf(saved) < 0) saved = 'orbit';
+        restoreSplit(saved);
         setPage(saved);
         renderAll();
+        document.addEventListener('click', function (event) {
+            const jump = event.target.closest('[data-guide-jump]');
+            if (!jump || page !== 'guide') return;
+            const target = document.getElementById(jump.getAttribute('data-guide-jump'));
+            if (target) target.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+        });
         window.addEventListener('resize', function () {
             renderPageSwitch({ instant: true });
             syncBoardToolThumb(true);
@@ -11698,7 +17147,9 @@
             return true;
         }
         if (page === 'datasheet') return true;
+        if (page === 'notepad') return true;
         if (page === 'harvester') return true;
+        if (page === 'operations') return true;
         return false;
     }
 
@@ -11707,6 +17158,7 @@
         load: load,
         snapshot: snapshot,
         setPage: setPage,
+        toggleSplit: toggleSplit,
         page: currentPage,
         downloadReport: downloadReport,
         showPhotoMeta: showPhotoMeta,

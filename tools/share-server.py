@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -118,11 +119,33 @@ def check_host(meta: dict, token: str) -> bool:
     return bool(token) and host_digest(token) == expected
 
 
+RATE_WINDOW = 60.0
+RATE_MAX = 60
+_rate_hits: dict[str, list[float]] = {}
+_rate_lock = threading.Lock()
+
+
+def client_allowed(handler: BaseHTTPRequestHandler) -> bool:
+    now = time.time()
+    ip = handler.client_address[0]
+    with _rate_lock:
+        hits = [stamp for stamp in _rate_hits.get(ip, []) if now - stamp < RATE_WINDOW]
+        if len(hits) >= RATE_MAX:
+            _rate_hits[ip] = hits
+            return False
+        hits.append(now)
+        _rate_hits[ip] = hits
+        return True
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args) -> None:
         return
+
+    def _too_many(self) -> None:
+        self._send(429, b"Try again in a minute.", "text/plain")
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
@@ -130,6 +153,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
+        if not client_allowed(self):
+            return self._too_many()
         path = unquote(self.path.split("?", 1)[0])
         if path == "/health":
             return self._send(200, b'{"ok":true}', "application/json")
@@ -142,6 +167,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"not found", "text/plain")
 
     def do_PUT(self) -> None:
+        if not client_allowed(self):
+            return self._too_many()
         path = unquote(self.path.split("?", 1)[0])
         if path.startswith("/v1/session/"):
             return self._put_session(path.split("/v1/session/", 1)[1])

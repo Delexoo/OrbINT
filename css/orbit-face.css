@@ -1,0 +1,375 @@
+/* Profile face and dossier facts */
+.profile-face:hover .target-face::after,
+.profile-face:focus-within .target-face::after { opacity: 1; }
+
+
+
+.face-gallery {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+}
+
+
+.profile-face:hover .face-gallery,
+.profile-face:focus-within .face-gallery { opacity: 1; }
+
+
+
+.face-view {
+    appearance: none;
+    height: 22px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(24, 24, 27, 0.88);
+    color: #fafafa;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    line-height: 20px;
+    pointer-events: auto;
+}
+
+
+
+.face-view:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    background: rgba(9, 9, 11, 0.92);
+}
+
+
+
+.target-face.visible { display: block; }
+
+
+
+.target-face img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+}
+
+
+
+.target-face-hint { display: none; }
+
+
+
+.target-id { min-width: 0; flex: 1; padding-top: 2px; }
+
+
+
+.subject-name-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+
+
+.subject-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    cursor: default;
+}
+
+
+
+.subject-edit,
+.subject-find {
+    appearance: none;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    margin-top: 1px;
+    padding: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #71717a;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+
+
+.subject-edit svg,
+.subject-find svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+
+
+.subject-find svg {
+    width: 15px;
+    height: 15px;
+}
+
+
+
+.subject-find.ready { color: #4ade80; }
+
+
+
+.subject-edit:hover,
+.subject-find:hover,
+.subject-name-row:hover .subject-edit,
+.subject-name-row:hover .subject-find { color: #e4e4e7; }
+
+
+
+.subject-find.ready:hover,
+.subject-name-row:hover .subject-find.ready { color: #86efac; }
+
+
+
+.subject-name-input {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0 0 3px;
+    border: 0;
+    border-bottom: 1px solid #3f3f46;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    outline: none;
+}
+
+
+
+.subject-name-row.editing .subject-name,
+.subject-name-row.editing .subject-edit,
+.subject-name-row.editing .subject-find { display: none; }
+
+
+
+.subject-name-label {
+    display: none;
+    width: 100%;
+    font-size: 12px;
+    color: var(--muted);
+}
+.subject-name-row.editing { flex-wrap: wrap; }
+.subject-name-row.editing .subject-name-label { display: block; }
+
+.subject-name-row:not(.editing) .subject-name-input { display: none; }
+
+
+
+.profile-socials,
+.case-kicker,
+.coverage { display: none !important; }
+
+
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.profile-rail-item:focus-visible,
+.profile-rail-tools button:focus-visible,
+.node:focus-within {
+    outline: 1px solid var(--text);
+    outline-offset: 2px;
+}
+
+
+
+.profile-body {
+    overflow: auto;
+    padding: 0 20px 48px;
+    flex: 1;
+}
+
+
+
+.dossier .group {
+    padding: 0;
+}
+
+
+
+.dossier .group + .group {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid #18181b;
+}
+
+
+
+.dossier .group-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #71717a;
+    margin: 0 0 8px;
+}
+
+
+.fact-item {
+    position: relative;
+    padding: 0;
+}
+
+
+.fact-control {
+    min-width: 0;
+}
+
+
+.fact-detail {
+    display: grid;
+    grid-template-rows: 0fr;
+    gap: 0;
+    min-width: 0;
+    padding: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: grid-template-rows 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.2s ease,
+                padding 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+.fact-item.is-open .fact-detail {
+    grid-template-rows: 1fr;
+    padding: 2px 0 10px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+
+.fact-detail-body {
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(7.5rem, 34%) minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 6px 12px;
+    min-width: 0;
+    container-type: inline-size;
+    container-name: fact-detail;
+}
+
+
+.fact-detail-body::after {
+    content: '';
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 78px;
+}
+
+
+.fact-source {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    height: 26px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid #27272a;
+    border-radius: 0;
+    background: transparent;
+    color: #d4d4d8;
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+}
+
+
+.fact-source:focus {
+    border-bottom-color: #52525b;
+    color: #fafafa;
+}
+
+
+.fact-source::placeholder { color: #52525b; }
+
+
+.fact-detail-row {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+}
+
+
+.fact-picks {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+
+.fact-picks .sheet-pick,
+.fact-picks .fact-dup,
+.fact-picks .fact-stamp {
+    flex: 0 0 auto;
+    min-width: 0;
+    height: 26px;
+}
+
+
+.fact-picks .sheet-pick {
+    flex: 0 1 auto;
+    max-width: 6.75rem;
+    padding: 0 6px 0 8px;
+    gap: 4px;
+}
+
+
+.fact-picks .fact-dup {
+    flex: 0 0 auto;
+    padding: 0 8px;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+
+.fact-picks .fact-stamp {
+    flex: 0 0 auto;
+    margin-left: 0;
+}
+
+
+.fact-picks .fact-captured {
+    padding: 4px 4px;
+}
+
+

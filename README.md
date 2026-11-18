@@ -10,7 +10,7 @@ A local desk for collecting, organizing, and managing open-source reconnaissance
 
 [Open OrbINT](https://orbint.net/)
 
-<img src="media/orbint.gif" alt="OrbINT in use" width="720">
+<img src="media/orbint.webp" alt="OrbINT in use" width="400" height="252">
 
 </div>
 
@@ -39,6 +39,33 @@ It runs entirely in the browser. There is no account, no remote database, and no
 
 Cases are stored in this browser. Clear site data and they are gone.
 
+Export JSON downloads the case. Upload JSON on the profile rail restores that file. The browser does not keep an automatic backup.
+
 ```bash
 git clone https://github.com/Delexoo/OrbINT.git
 ```
+
+## Project map
+
+- `index.html` is the assembled desk. `python tools/bundle.py` rebuilds it from the pieces below.
+- `pages/` holds the desk markup.
+- `js/` holds the behavior. The bundler writes `investigation.js` and `app.js`.
+- `css/` holds the appearance.
+- `tools/` holds the bundler, the share relay (`tools/share-server.py`), and `node tools/test_harvester.js`.
+
+## DNS
+
+There is no DNS zone in this repository. At the host that serves `orbint.net`, review the records that point the name at GitHub Pages and delete any record that still points at a host you removed.
+
+## Host headers
+
+GitHub Pages does not send these from a file in the repository. A proxy in front of Pages can:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; worker-src 'self' blob:; frame-ancestors 'none'
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+```
+
+`frame-ancestors` and `nosniff` cannot be set from HTML. The public pages send a referrer meta tag of `strict-origin-when-cross-origin`.

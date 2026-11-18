@@ -6,9 +6,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CASE_ORDER = ["core", "datasheet", "timeline", "whiteboard", "harvester", "intel", "report", "boot"]
-APP_ORDER = ["orbit-settings", "orbit-fields", "orbit-library", "crypto-share", "orbit-map"]
-PAGES = ["orbit", "timeline", "whiteboard", "harvester", "datasheet", "chrome"]
+CASE_ORDER = ["core-catalog", "core-state", "core-board-shape", "core-board-edit", "core-board-hit", "core-pages", "datasheet", "timeline-layout", "timeline-pickers", "timeline-render", "timeline-events", "whiteboard-render", "whiteboard-presets", "whiteboard-input", "notepad-notes", "notepad-graph", "notepad-format", "notepad-bind", "harvester-classify", "harvester-scan", "harvester-view", "harvester-export", "ops-world", "ops-flock", "operations-lounge", "operations-news", "operations-map", "operations-map-live", "intel", "report-pdf", "report-build", "report-preview", "boot-timeline", "boot-click", "boot-input", "boot-init"]
+APP_ORDER = ["orbit-settings", "orbit-platforms", "orbit-field-stock", "orbit-find-links", "orbit-field-presets", "orbit-zones", "orbit-field-tools", "orbit-field-menus", "orbit-profile-store", "orbit-library-store", "search-desk", "orbit-profiles", "orbit-facts", "orbit-media", "orbit-dossier", "orbit-peers", "orbit-icons", "orbit-pickers", "crypto-share", "orbit-nodes", "orbit-camera", "orbit-pack", "orbit-motion", "orbit-export", "orbit-reset", "orbit-case-ui", "orbit-dock", "orbit-drag", "orbit-chrome", "orbit-zoom"]
+PAGES = ["operations", "orbit", "timeline", "whiteboard", "notepad", "harvester", "datasheet", "guide", "chrome"]
 HEADER_RE = re.compile(r"^/\*.*?\*/\n", re.S)
 
 
@@ -50,14 +50,14 @@ def bundle() -> None:
         CASE_ORDER,
         ROOT / "investigation.js",
         True,
-        "/* Assembled from js/{core,datasheet,timeline,whiteboard,harvester,intel,report,boot}.js\n"
+        "/* Assembled from the js/* files listed in CASE_ORDER.\n"
         "   Edit those files, then run: python tools/bundle.py */\n",
     )
     assemble(
         APP_ORDER,
         ROOT / "app.js",
         False,
-        "/* Assembled from js/orbit-settings.js, orbit-fields.js, orbit-library.js, crypto-share.js, orbit-map.js\n"
+        "/* Assembled from the js/* files listed in APP_ORDER.\n"
         "   Edit those files, then run: python tools/bundle.py */\n",
     )
     index_path = ROOT / "index.html"

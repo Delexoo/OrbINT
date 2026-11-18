@@ -1,0 +1,388 @@
+/* Profile rail and casebook head */
+
+
+
+.profile-panel {
+    position: relative;
+    height: 100vh;
+    height: 100dvh;
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+    display: flex;
+    flex-direction: row;
+    min-width: 0;
+    z-index: 9;
+    padding-top: var(--safe-t);
+    padding-bottom: var(--safe-b);
+    padding-left: var(--safe-l);
+}
+
+
+
+.profile-rail {
+    width: var(--rail);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 0 14px;
+    border-right: 1px solid var(--line);
+    background: #09090b;
+    min-height: 0;
+    user-select: none;
+}
+
+
+
+.profile-rail-list {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+}
+
+
+
+.profile-rail-item {
+    appearance: none;
+    position: relative;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: #141416;
+    color: #a1a1aa;
+    overflow: visible;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+}
+
+
+
+.profile-rail-face {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: inherit;
+    display: grid;
+    place-items: center;
+}
+
+
+
+.profile-rail-face img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+
+
+.profile-rail-face span {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+
+
+.profile-link-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #111113;
+    border: 1.5px solid #09090b;
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(103, 232, 249, 0.28);
+    z-index: 1;
+}
+
+
+
+.profile-link-badge svg {
+    width: 9px;
+    height: 9px;
+    display: block;
+}
+
+
+
+.profile-rail-item:hover {
+    background: #1c1c20;
+    color: #e4e4e7;
+}
+
+
+
+.profile-rail-item.active {
+    color: #e4e4e7;
+    background: #18181b;
+}
+
+
+
+.profile-rail-tools {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    flex-shrink: 0;
+}
+
+
+
+.profile-rail-tools button {
+    appearance: none;
+    position: relative;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--faint);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+
+
+.profile-rail-tools button svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+}
+
+
+
+.profile-rail-tools button:hover {
+    background: #18181b;
+    color: var(--text);
+}
+
+
+
+.profile-rail-tools button::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #18181b;
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 20;
+}
+
+
+
+.profile-rail-tools button:hover::after,
+.profile-rail-tools button:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+
+
+.profile-menu {
+    position: fixed;
+    z-index: 45;
+    width: 168px;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #111113;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+
+
+.profile-menu[hidden] { display: none !important; }
+
+
+
+.profile-menu button {
+    appearance: none;
+    width: 100%;
+    display: block;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+
+
+.profile-menu button:hover { background: #1c1c20; }
+
+
+.profile-menu button:disabled {
+    color: #52525b;
+    cursor: default;
+}
+
+
+.profile-menu button:disabled:hover { background: transparent; }
+
+
+.profile-menu button.field-danger { color: #fca5a5; }
+
+
+
+.profile-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+
+
+.profile-resize {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 12;
+    touch-action: none;
+}
+
+
+
+.profile-resize::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    border-radius: 99px;
+    background: transparent;
+}
+
+
+
+.profile-resize:hover::after,
+body.resizing-sidebar .profile-resize::after,
+.profile-panel:has(#profileToggle:hover) .profile-resize::after {
+    background: #4ade80;
+}
+
+.profile-panel > .casebook-btn {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    z-index: 14;
+    transform: translate(-50%, -50%);
+}
+
+.profile-panel > .casebook-btn svg {
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.casebook-collapsed .profile-panel > .casebook-btn {
+    left: 10px;
+    transform: translateY(-50%);
+}
+
+body.casebook-collapsed .profile-panel > .casebook-btn svg {
+    transform: rotate(180deg);
+}
+
+
+
+.profile-head {
+    padding: 20px 20px 12px;
+}
+
+
+
+.profile-head-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+
+
+.profile-face {
+    display: flex;
+    flex-direction: column;
+    width: 88px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+
+
+.target-face {
+    appearance: none;
+    width: 100%;
+    height: 88px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #18181b;
+    flex-shrink: 0;
+    display: block;
+    position: relative;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+
+
+.target-face::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+}
+
+

@@ -6,6 +6,23 @@
     <title>OrbINT - Open-source Reconnaissance Bureau of Intelligence</title>
     <meta name="description" content="Collect, organize, analyze, and manage open-source reconnaissance. Local case files on this device — not cloud-based, no remote data-breach risk.">
     <meta name="theme-color" content="#09090b">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "OrbINT",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "https://orbint.net/",
+      "description": "Collect, organize, analyze, and manage open-source reconnaissance. Local case files on this device — not cloud-based, no remote data-breach risk.",
+      "author": {
+        "@type": "Person",
+        "name": "Delexoo",
+        "url": "https://github.com/Delexoo"
+      }
+    }
+    </script>
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -65,20 +82,47 @@
             } catch (e) {}
         })();
     </script>
-    <script src="investigation.js?v=263" defer></script>
-    <script src="app.js?v=263" defer></script>
+    <script src="investigation.js?v=377" defer></script>
+    <script src="app.js?v=352" defer></script>
     <style>
         html[data-orbint-wipe] body { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="css/base.css?v=263">
-    <link rel="stylesheet" href="css/orbit.css?v=263">
-    <link rel="stylesheet" href="css/timeline.css?v=263">
-    <link rel="stylesheet" href="css/whiteboard.css?v=263">
-    <link rel="stylesheet" href="css/harvester.css?v=263">
-    <link rel="stylesheet" href="css/datasheet.css?v=263">
+    <link rel="stylesheet" href="css/base-shell.css?v=360">
+    <link rel="stylesheet" href="css/base-leads.css?v=344">
+    <link rel="stylesheet" href="css/base-toolkit.css?v=344">
+    <link rel="stylesheet" href="css/base-menus.css?v=344">
+    <link rel="stylesheet" href="css/base-dock.css?v=369">
+    <link rel="stylesheet" href="css/base-export.css?v=344">
+    <link rel="stylesheet" href="css/base-workspace.css?v=344">
+    <link rel="stylesheet" href="css/base-calendar.css?v=344">
+    <link rel="stylesheet" href="css/base-share.css?v=344">
+    <link rel="stylesheet" href="css/base-guide.css?v=344">
+    <link rel="stylesheet" href="css/base-settings.css?v=369">
+    <link rel="stylesheet" href="css/base-phone.css?v=344">
+    <link rel="stylesheet" href="css/orbit-rail.css?v=344">
+    <link rel="stylesheet" href="css/orbit-face.css?v=344">
+    <link rel="stylesheet" href="css/orbit-picks.css?v=344">
+    <link rel="stylesheet" href="css/orbit-dossier.css?v=344">
+    <link rel="stylesheet" href="css/orbit-map.css?v=344">
+    <link rel="stylesheet" href="css/orbit-photos.css?v=344">
+    <link rel="stylesheet" href="css/orbit-nodes.css?v=344">
+    <link rel="stylesheet" href="css/orbit-field-ui.css?v=344">
+    <link rel="stylesheet" href="css/orbit-responsive.css?v=367">
+    <link rel="stylesheet" href="css/timeline-stage.css?v=344">
+    <link rel="stylesheet" href="css/timeline-cards.css?v=344">
+    <link rel="stylesheet" href="css/timeline-editor.css?v=344">
+    <link rel="stylesheet" href="css/whiteboard-bar.css?v=344">
+    <link rel="stylesheet" href="css/whiteboard-props.css?v=344">
+    <link rel="stylesheet" href="css/whiteboard-nodes.css?v=344">
+    <link rel="stylesheet" href="css/whiteboard-links.css?v=344">
+    <link rel="stylesheet" href="css/harvester.css?v=344">
+    <link rel="stylesheet" href="css/datasheet.css?v=344">
+    <link rel="stylesheet" href="css/notepad.css?v=344">
+    <link rel="stylesheet" href="css/operations.css?v=376">
 
 </head>
 <body data-page="orbit">
+    <a class="skip-link" href="#mapStage">Skip to content</a>
     <div class="backdrop" id="backdrop" hidden></div>
     <aside class="profile-panel" id="profilePanel">
         <nav class="profile-rail" id="profileRail" aria-label="Saved profiles">
@@ -101,7 +145,7 @@
                 <div class="profile-head-row">
                     <div class="profile-face">
                         <button type="button" class="target-face visible" id="targetFace" aria-label="View profile photos">
-                        <img alt="" src="icons/defaultprofile.jpg">
+                        <img alt="" src="icons/defaultprofile.jpg" width="88" height="88">
                     </button>
                         <div class="face-gallery" id="faceGallery">
                             <button type="button" class="face-view" data-face-view aria-label="View photos">View</button>
@@ -110,7 +154,8 @@
                     <input id="profilePhotoFile" type="file" accept="image/*" hidden multiple>
                     <div class="target-id">
                         <div class="subject-name-row" id="subjectNameRow">
-                            <h1 class="subject-name" id="subjectName">Anonymous</h1>
+                            <p class="subject-name" id="subjectName">Anonymous</p>
+                            <label class="subject-name-label" for="subjectNameInput">Full name</label>
                             <button type="button" class="subject-edit" id="subjectEdit" aria-label="Edit name">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                             </button>
@@ -163,25 +208,107 @@
             </div>
         </div>
         <div class="profile-resize" id="profileResize" role="separator" aria-orientation="vertical" aria-label="Resize casebook"></div>
+        <button class="casebook-btn map-toggle" id="profileToggle" type="button" aria-label="Casebook" title="Casebook" aria-expanded="false" aria-controls="profilePanel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6.5 9 12l5.5 5.5"/></svg>
+        </button>
     </aside>
 
     <div class="workspace" id="workspace">
     <div class="work-nav" id="workNav">
-        <button class="casebook-btn map-toggle" id="profileToggle" type="button" aria-expanded="false" aria-controls="profilePanel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8l2 3h3v13H5V7h3z"/><path d="M8 4v3h8"/></svg>
-            <span>Casebook</span>
-        </button>
         <nav class="page-switch" id="pageSwitch" aria-label="Investigation pages" role="tablist"><span class="page-switch-thumb" aria-hidden="true"></span></nav>
     </div>
     <div class="work-stage">
+    <!-- pages/operations.html -->
+<section class="work-page page-operations" id="page-operations" hidden>
+        <div class="ops-scroll">
+            <div class="ops-stage">
+                <section class="ops-globe" data-ops-fixed="world" aria-label="World map">
+                    <div class="ops-globe-stage">
+                        <div id="opsMap" role="region" aria-label="Camera map"></div>
+                        <canvas id="opsMapDraw" aria-hidden="true"></canvas>
+                        <div class="ops-tip" id="opsMapTip" hidden></div>
+                        <div class="ops-report" id="opsReport" hidden></div>
+                        <header class="ops-globe-head">
+                            <div class="ops-mode" role="group" aria-label="Map view">
+                                <span class="ops-mode-thumb" aria-hidden="true"></span>
+                                <button type="button" id="opsMapCameras" data-map="cameras" class="is-on">Cameras</button>
+                                <button type="button" id="opsMapOutages" data-map="outages">Outages</button>
+                                <button type="button" id="opsMapAttacks" data-map="attacks">Attacks</button>
+                            </div>
+                            <div class="ops-range" id="opsRange" role="group" aria-label="Time window" hidden>
+                                <button type="button" data-range="live" class="is-on">Live</button>
+                                <button type="button" data-range="day">Day</button>
+                                <button type="button" data-range="week">Week</button>
+                                <button type="button" data-range="month">Month</button>
+                                <button type="button" data-range="year">Year</button>
+                                <button type="button" data-range="decade">Decade</button>
+                            </div>
+                            <p class="ops-map-status" id="opsMapStatus"></p>
+                        </header>
+                        <div class="ops-map-corner">
+                            <div class="ops-map-tools">
+                                <div class="ops-basemap-pop">
+                                    <button type="button" id="opsBasemapBtn" aria-label="Map style" aria-expanded="false" aria-controls="opsBasemap" title="Map style">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 4.5-9 4.5L3 7.5 12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5L12 21l9-4.5"/></svg>
+                                    </button>
+                                    <div class="ops-basemap" id="opsBasemap" role="menu" aria-label="Map style" hidden>
+                                        <button type="button" role="menuitemradio" data-basemap="dark" class="is-on" aria-checked="true">Dark</button>
+                                        <button type="button" role="menuitemradio" data-basemap="streets" aria-checked="false">Streets</button>
+                                        <button type="button" role="menuitemradio" data-basemap="satellite" aria-checked="false">Satellite</button>
+                                    </div>
+                                </div>
+                                <button type="button" id="opsMapRefresh" aria-label="Refresh" title="Refresh">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.2-5.8"/><path d="M21 3v6h-6"/></svg>
+                                </button>
+                                <button type="button" id="opsLocate" aria-label="My location" title="My location">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                                </button>
+                            </div>
+                            <div class="ops-globe-key" id="opsMapKey"></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="ops-panel ops-news-card" data-ops="news" data-ops-fixed="news" aria-labelledby="opsNewsTitle">
+                    <header class="ops-panel-head">
+                        <span class="ops-heading"><h2 id="opsNewsTitle">Security news</h2></span>
+                    </header>
+                    <div class="ops-body" id="opsNewsBody">
+                        <div class="ops-news" id="opsNews"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="ops-board">
+                <section class="ops-panel" data-ops="machine" aria-labelledby="opsMachineTitle">
+                    <header class="ops-panel-head">
+                        <span class="ops-heading"><h2 id="opsMachineTitle">This computer</h2><small id="opsMachineStatus">Not collected</small></span>
+                        <button type="button" id="opsAccessAsk">Allow access</button>
+                    </header>
+                    <div class="ops-body" id="opsMachineBody">
+                        <div class="ops-grid" id="opsMachine"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="ops-ask" id="opsAsk" hidden>
+                <div class="ops-ask-card" role="dialog" aria-modal="true" aria-labelledby="opsAskTitle">
+                    <h2 id="opsAskTitle">Allow this device to be read?</h2>
+                    <p>This fills This computer with what the browser can already see: system, screen, language, graphics, and storage. Nothing about this device is read until you allow it. Your files are not included.</p>
+                    <div class="ops-ask-actions">
+                        <button type="button" id="opsAskDeny">Don't allow</button>
+                        <button type="button" id="opsAskAllow">Allow</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- /pages/operations.html -->
     <!-- pages/orbit.html -->
-    <main class="map" id="mapStage">
+    <main class="map" id="mapStage" tabindex="-1">
         <div class="map-grid" id="mapGrid" aria-hidden="true">
             <div class="map-grid-paper"></div>
             <div class="map-grid-spot"></div>
         </div>
-        <svg class="links" id="linkLayer"></svg>
-        <svg class="links peer-links" id="peerLinkLayer"></svg>
+        <svg class="links" id="linkLayer" preserveAspectRatio="none"></svg>
+        <svg class="links peer-links" id="peerLinkLayer" preserveAspectRatio="none"></svg>
         <div class="map-canvas" id="mapCanvas">
             <div class="peer-hubs" id="peerHubs"></div>
             <div class="hub" id="hub">
@@ -190,7 +317,7 @@
                     <circle class="hub-ring-fill" id="hubRingFill" cx="50" cy="50" r="46"></circle>
                     <circle class="hub-ring-null" id="hubRingNull" cx="50" cy="50" r="46"></circle>
                 </svg>
-                <img class="hub-face" id="hubFace" alt="" hidden>
+                <img class="hub-face" id="hubFace" alt="" width="120" height="120" hidden>
                 <div class="hub-title" id="hubTitle">OrbINT</div>
                 <button class="hub-add" id="hubAdd" type="button" aria-label="Add field">
                     <svg class="hub-add-ring" viewBox="0 0 40 40" aria-hidden="true">
@@ -452,10 +579,6 @@
         <div class="board-view" id="boardView">
             <div class="board-toolbar" role="toolbar" aria-label="Whiteboard">
                 <span class="board-tool-thumb" aria-hidden="true"></span>
-                <button type="button" class="board-ico" data-board-lock data-tip="Keep tool selected" aria-label="Keep tool selected">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="11" width="10" height="8" rx="1.5"/><path d="M9 11V8a3 3 0 0 1 6 0v3"/></svg>
-                </button>
-                <span class="board-rule" aria-hidden="true"></span>
                 <button type="button" class="board-ico" data-board-tool="pan" data-tip="Hand (H)" aria-label="Hand">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V7.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V6.5a1.5 1.5 0 0 1 3 0V11"/><path d="M14 10V8.5a1.5 1.5 0 0 1 3 0V14c0 3-1.7 5-4.5 5H12a5 5 0 0 1-5-4.2L6 11.5A1.6 1.6 0 0 1 8.8 10"/></svg>
                 </button>
@@ -617,6 +740,88 @@
     </section>
     <!-- /pages/whiteboard.html -->
 
+    <!-- pages/notepad.html -->
+    <section class="work-page page-notepad" id="page-notepad" hidden>
+        <div class="note-view" id="noteView">
+            <aside class="note-list-wrap">
+                <div class="note-list-bar">
+                    <button type="button" id="noteNew">New note</button>
+                </div>
+                <div class="note-list" id="noteList" role="listbox" aria-label="Notes"></div>
+                <p class="note-empty" id="noteEmpty">No notes yet. Start typing, or use New note.</p>
+            </aside>
+            <div class="note-split" data-note-split="list" role="separator" aria-orientation="vertical" aria-label="Resize notes" title="Drag to resize" tabindex="0" aria-valuemin="160" aria-valuemax="560" aria-valuenow="220"></div>
+            <div class="note-editor">
+                <div class="note-editor-bar">
+                    <input id="noteTitle" type="text" maxlength="80" placeholder="Title" autocomplete="off" spellcheck="true">
+                </div>
+                <div class="note-sheet">
+                    <button type="button" class="note-line-plus" id="noteLinePlus" hidden aria-label="Format line">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                    </button>
+                    <div id="noteBody" class="note-body is-empty" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Write a note for this case." spellcheck="true"></div>
+                </div>
+            </div>
+            <div class="note-split" data-note-split="graph" role="separator" aria-orientation="vertical" aria-label="Resize links" title="Drag to resize" tabindex="0" aria-valuemin="180" aria-valuemax="720" aria-valuenow="280"></div>
+            <aside class="note-graph" aria-label="Note links">
+                <p class="note-link-tip" id="noteLinkHint">Hold <kbd>Shift</kbd> and click notes to link</p>
+                <div class="note-graph-stage" id="noteGraph"></div>
+            </aside>
+        </div>
+        <div class="app-menu note-menu" id="noteMenu" hidden role="menu"></div>
+        <div class="note-format" id="noteFormat" hidden role="dialog" aria-label="Format text">
+            <div class="note-format-styles" role="group" aria-label="Style">
+                <button type="button" data-fmt="bold" aria-label="Bold"><b>B</b></button>
+                <button type="button" data-fmt="italic" aria-label="Italic"><i>I</i></button>
+                <button type="button" data-fmt="underline" aria-label="Underline"><u>U</u></button>
+                <button type="button" data-fmt="strike" aria-label="Strikethrough"><s>S</s></button>
+                <button type="button" data-fmt="sup" aria-label="Superscript">x<sup>2</sup></button>
+                <button type="button" data-fmt="sub" aria-label="Subscript">x<sub>2</sub></button>
+                <button type="button" data-fmt="code" aria-label="Code">&lt;/&gt;</button>
+                <button type="button" data-fmt="clear" class="note-format-clear">Clear</button>
+            </div>
+            <p>Size</p>
+            <div class="note-format-sizes" role="group" aria-label="Font size">
+                <button type="button" data-fmt="size" data-value="">Aa</button>
+                <button type="button" data-fmt="size" data-value="12px">12</button>
+                <button type="button" data-fmt="size" data-value="14px">14</button>
+                <button type="button" data-fmt="size" data-value="18px">18</button>
+                <button type="button" data-fmt="size" data-value="22px">22</button>
+                <button type="button" data-fmt="size" data-value="28px">28</button>
+            </div>
+            <p>Color</p>
+            <div class="note-format-swatches" role="group" aria-label="Text color">
+                <button type="button" class="is-clear" data-fmt="color" data-value="" aria-label="Default color"></button>
+                <button type="button" data-fmt="color" data-value="#a1a1aa" style="background:#a1a1aa" aria-label="Gray"></button>
+                <button type="button" data-fmt="color" data-value="#f87171" style="background:#f87171" aria-label="Red"></button>
+                <button type="button" data-fmt="color" data-value="#fb923c" style="background:#fb923c" aria-label="Orange"></button>
+                <button type="button" data-fmt="color" data-value="#facc15" style="background:#facc15" aria-label="Yellow"></button>
+                <button type="button" data-fmt="color" data-value="#4ade80" style="background:#4ade80" aria-label="Green"></button>
+                <button type="button" data-fmt="color" data-value="#67e8f9" style="background:#67e8f9" aria-label="Cyan"></button>
+                <button type="button" data-fmt="color" data-value="#60a5fa" style="background:#60a5fa" aria-label="Blue"></button>
+                <button type="button" data-fmt="color" data-value="#c084fc" style="background:#c084fc" aria-label="Violet"></button>
+                <button type="button" data-fmt="color" data-value="#f472b6" style="background:#f472b6" aria-label="Pink"></button>
+            </div>
+            <p>Highlight</p>
+            <div class="note-format-swatches" role="group" aria-label="Highlight">
+                <button type="button" class="is-clear" data-fmt="highlight" data-value="" aria-label="No highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#fde047" style="background:#fde047" aria-label="Yellow highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#86efac" style="background:#86efac" aria-label="Green highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#67e8f9" style="background:#67e8f9" aria-label="Cyan highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#fdba74" style="background:#fdba74" aria-label="Orange highlight"></button>
+                <button type="button" data-fmt="highlight" data-value="#f9a8d4" style="background:#f9a8d4" aria-label="Pink highlight"></button>
+            </div>
+            <p>Font</p>
+            <div class="note-format-fonts" role="group" aria-label="Font">
+                <button type="button" data-fmt="font" data-value="">Default</button>
+                <button type="button" data-fmt="font" data-value="serif">Serif</button>
+                <button type="button" data-fmt="font" data-value="sans">Sans</button>
+                <button type="button" data-fmt="font" data-value="mono">Mono</button>
+                <button type="button" data-fmt="font" data-value="narrow">Narrow</button>
+            </div>
+        </div>
+    </section>
+    <!-- /pages/notepad.html -->
     <!-- pages/harvester.html -->
     <section class="work-page page-harvester" id="page-harvester" hidden>
         <div class="cp-view" id="harvesterView">
@@ -676,9 +881,234 @@
 
     <!-- pages/datasheet.html -->
     <section class="work-page page-datasheet" id="page-datasheet" hidden>
-        <div class="ds-view" id="datasheetView"></div>
+        <div class="ds-desk">
+            <div class="ds-view" id="datasheetView"></div>
+        </div>
     </section>
     <!-- /pages/datasheet.html -->
+
+    <!-- pages/guide.html -->
+    <section class="work-page page-guide" id="page-guide" hidden>
+        <article class="guide">
+            <header class="guide-top">
+                <p class="help-kicker">Operator guide</p>
+                <h2>OrbINT</h2>
+                <p class="help-aka">Open-source Reconnaissance Bureau of Intelligence</p>
+                <p class="help-lead">OrbINT is for collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources. It also works as case and investigative management software. The workspace is local, not cloud-based: cases stay on this device, with no remote account and no cloud data-breach risk.</p>
+                <nav class="guide-nav" aria-label="On this page">
+                    <button type="button" data-guide-jump="guide-local">Local</button>
+                    <button type="button" data-guide-jump="guide-ops">Operations</button>
+                    <button type="button" data-guide-jump="guide-orbit">Orbit</button>
+                    <button type="button" data-guide-jump="guide-timeline">Timeline</button>
+                    <button type="button" data-guide-jump="guide-board">Whiteboard</button>
+                    <button type="button" data-guide-jump="guide-notes">Notepad</button>
+                    <button type="button" data-guide-jump="guide-harvest">Harvester</button>
+                    <button type="button" data-guide-jump="guide-file">Case file</button>
+                    <button type="button" data-guide-jump="guide-dock">Dock</button>
+                    <button type="button" data-guide-jump="guide-share">Share</button>
+                    <button type="button" data-guide-jump="guide-faq">Questions</button>
+                </nav>
+            </header>
+            <div class="guide-body">
+                <section class="help-section" id="guide-local">
+                    <h3>Local by design</h3>
+                    <p>There is no OrbINT cloud and no sign-in. Profiles, photos, the timeline, the whiteboard, notes, and harvested files live in this browser. A remote breach cannot take a copy that was never sent. Export a case file when you need a backup. Clear site data and the case leaves with it.</p>
+                    <p>The titles across the top switch the workspace. Operator guide in the dock opens this page. On a phone it is labeled Guide. Casebook is an extra title in that bar.</p>
+                </section>
+
+                <section class="help-section" id="guide-ops">
+                    <h3>Operations</h3>
+                    <p>The opening desk. A street map from OpenStreetMap, drawn by OpenFreeMap, plus security news and a few local tools. Scroll to zoom into a city. Attacks, outages, and cameras sit on top of the map.</p>
+                    <div class="help-dock">
+                        <div><b>Attacks</b>One dot per attacking address, on that address’s city coordinates. Live and Day each take the day’s top 1,000 from SANS plus the 30-day source list. Week merges the last seven daily lists. Month, Year, and Decade stay inside that 30-day public feed. Hover a dot for the matching story’s headline and image, or the country flag, plus the address. Click the dot to open that article. If no story matches, the click opens the SANS source for that address.</div>
+                        <div><b>Outages</b>The same map, drawn from IODA. The time buttons change the outage window. Alerts for countries, regions, and networks are placed on the country they name. Several alerts in one country spread apart so each stays visible. Click a dot to open that outage record.</div>
+                        <div><b>Land</b>Move across a land dot and it lightens. Double-click recenters. Scroll to zoom.</div>
+                        <div><b>Security news</b>Stories beside the map. The map hover uses these headlines and images.</div>
+                        <div><b>This computer</b>Stays empty until you allow access. Then it shows what the browser can see. It does not read the disk.</div>
+                    </div>
+                </section>
+
+                <section class="help-section" id="guide-orbit">
+                    <h3>Orbit</h3>
+                    <p>Work one person, company, or asset at a time. Begin with the strongest identifier you already have — usually a name, username, email, or phone — then let that fact open the next search.</p>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <span class="help-num">1</span>
+                            <div>
+                                <strong>Type into a pill</strong>
+                                <span>The value files as you type. You do not need to press Enter. Empty the box and the fact drops off.</span>
+                                <div class="help-ex"><code>Name → Jordan Hale</code><code>Email → jhale@pm.me</code></div>
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <span class="help-num">2</span>
+                            <div>
+                                <strong>Watch the hub</strong>
+                                <span>A filled pill turns green. Marking a field Missing turns it red. The ring around OrbINT fills green for values and red for missing.</span>
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <span class="help-num">3</span>
+                            <div>
+                                <strong>Read the casebook</strong>
+                                <span>On desktop the left sheet is the casebook. On a phone it is a page in the bar. It shows the subject, filed facts, and the case shelf. Click a row to focus that field.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <h3 class="guide-sub">Search from the pill</h3>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <span class="help-num">i</span>
+                            <div>
+                                <strong>Empty field</strong>
+                                <span>The information icon lists where that kind of fact usually turns up.</span>
+                                <div class="help-ex"><code>Phone empty → Whitepages, TruePeopleSearch</code></div>
+                            </div>
+                        </div>
+                        <div class="help-step">
+                            <span class="help-num">⌕</span>
+                            <div>
+                                <strong>Filled field</strong>
+                                <span>The magnifier opens lookups with the value already in the URL, and copies it for sites that need a paste. Image search uses the photo, not the file name.</span>
+                                <div class="help-ex"><code>domain.com → WHOIS, crt.sh, Wayback</code></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="help-grid">
+                        <div class="help-field">
+                            <b>Username</b>
+                            <span>Choose the platform first, then enter the handle. The icon stays on the pill.</span>
+                            <em>Instagram → @jordanh</em>
+                        </div>
+                        <div class="help-field">
+                            <b>Image / Audio</b>
+                            <span>Paste a URL, or use + to upload. Preview opens from the thumbnail.</span>
+                            <em>https://…/portrait.jpg</em>
+                        </div>
+                        <div class="help-field">
+                            <b>IP</b>
+                            <span>Geolocation, hosting, and indexed services. The pin opens a map when the address looks valid.</span>
+                            <em>8.8.8.8</em>
+                        </div>
+                        <div class="help-field">
+                            <b>Timezone</b>
+                            <span>Pick a zone. The pill shows the abbreviation and a live clock.</span>
+                            <em>EST · Eastern Time</em>
+                        </div>
+                        <div class="help-field">
+                            <b>Company</b>
+                            <span>Employer or legal name. Search opens filings, EDGAR, ownership, and sanctions lists.</span>
+                            <em>Northwind Analytics LLC</em>
+                        </div>
+                        <div class="help-field">
+                            <b>VIN / Plate</b>
+                            <span>Decode, history, and registration. MAC, Geo, and Barcode live under Add a field.</span>
+                            <em>1HGCM82633A004352</em>
+                        </div>
+                    </div>
+                    <h3 class="guide-sub">Move the map</h3>
+                    <div class="help-ex">
+                        <span class="help-kbd">Scroll</span><span class="help-kbd">Zoom</span>
+                        <span class="help-kbd">Pinch</span><span class="help-kbd">Zoom</span>
+                        <span class="help-kbd">Drag empty space</span><span class="help-kbd">Pan</span>
+                        <span class="help-kbd">Drag hub</span><span class="help-kbd">Move orbit</span>
+                    </div>
+                    <p>The + on the hub adds a field. Right-click a field, or long-press on a phone, to copy, cut, paste, rename, clear, search, or remove it. Right-click empty map space to drop a linked profile, or for this guide, Recenter, Undo, Redo, Export, Share, and Reset. Right-click the center circle to link this case to other profiles. Drag the right edge of the left sheet to resize the casebook.</p>
+                    <h3 class="guide-sub">Profiles</h3>
+                    <div class="help-dock">
+                        <div><b>Switch</b>Click a face on the case shelf. The orbit and facts follow it.</div>
+                        <div><b>New</b>The plus starts a blank case. Right-click empty map space to drop a linked circle where you clicked.</div>
+                        <div><b>Link</b>Right-click the hub to connect this case to another profile. A line stays between them on the map. Tap a linked circle to open that case.</div>
+                        <div><b>Upload</b>Import an OrbINT .json profile, including a file from Export.</div>
+                        <div><b>Rename</b>The pencil names the current profile. Right-click a face to rename, duplicate, download, or delete.</div>
+                    </div>
+                </section>
+
+                <section class="help-section" id="guide-timeline">
+                    <h3>Timeline</h3>
+                    <p>A pan-and-zoom chronology for the open case. Click the axis to add an event. Type on a card, attach an image, and drag the card to place it. Minimize tucks the extra fields. Connect cards draws an arrow between them. Recenter fits the axis.</p>
+                    <p>Events with a date, time, title, or note are written into the case file. An empty timeline adds no section.</p>
+                </section>
+
+                <section class="help-section" id="guide-board">
+                    <h3>Whiteboard</h3>
+                    <p>A canvas in the same dark desk. Use the Selection tool and drag to select several shapes. The toolbar has lock, shapes, draw, text, image, eraser, connect, and presets. Drag to size a shape. The image tool makes a frame you fill. Paste an image anytime. Connect shows every point. Ctrl+Z undoes.</p>
+                    <p>A card is filed when it has a title or text. Empty shapes, default labels, and bare drawings are left out. Links between filed cards are included. If the board has nothing to say, the case file skips it.</p>
+                </section>
+
+                <section class="help-section" id="guide-notes">
+                    <h3>Notepad</h3>
+                    <p>Short notes kept with this case. New note starts a blank page. The title and the body save as you type. Hold Shift and click notes to link them. The graph on the right shows those links. Drag the dividers to resize the list and the graph.</p>
+                    <p>A note is filed when it has a title or text. An untitled empty note is not. Links between filed notes are included. An empty notepad adds no section to the case file.</p>
+                </section>
+
+                <section class="help-section" id="guide-harvest">
+                    <h3>Harvester</h3>
+                    <p>Drop in a messy file. OrbINT keeps names, dates, accounts, phones, passwords, addresses, and other identifiers, and sets the rest aside. Split shows the original beside the stripped text. Original and Stripped are the other views. Upload, start a new file, copy, or download as text, Markdown, JSON, HTML, CSV, or XML.</p>
+                    <p>Only extracted values are written into the case file. A file that yields nothing does not add a section.</p>
+                </section>
+
+                <section class="help-section" id="guide-file">
+                    <h3>Case file</h3>
+                    <p>The printable record of the open case. The sheets on screen are the same pages as the PDF. Sensitive values stay covered until you reveal them. The downloaded file contains the full record.</p>
+                    <div class="help-dock">
+                        <div><b>Case caption</b>Case number, offense, status, investigator, subject, and the date of the record.</div>
+                        <div><b>Particulars</b>Filed facts from the orbit, in a stable order, with confidence, method, and source when you set them.</div>
+                        <div><b>Timeline</b>Added only when the chronology has an event.</div>
+                        <div><b>Whiteboard</b>Added only when a card has a title or text.</div>
+                        <div><b>Notepad</b>Added only when a note has a title or text.</div>
+                        <div><b>Harvester</b>Added only when a file produced a value.</div>
+                        <div><b>Photographs</b>Added only when the case has a picture beyond the portrait.</div>
+                        <div><b>Notes</b>Filed notes, analysis, and evidence notes. Empty notes are omitted.</div>
+                    </div>
+                    <p>Download PDF in the dock writes that record. Section numbers follow whatever is actually present, so a blank page never leaves a blank heading.</p>
+                </section>
+
+                <section class="help-section" id="guide-dock">
+                    <h3>Dock</h3>
+                    <p>The bar along the bottom follows the page. Buttons that belong to one page hide on the others.</p>
+                    <div class="help-dock">
+                        <div><b>Guide</b>This page. On a phone, open it from Help or More.</div>
+                        <div><b>Casebook</b>Show or hide the left sheet.</div>
+                        <div><b>Toolkit</b>The OSINT catalog, including Domain Intelligence, when a source is not on the pill.</div>
+                        <div><b>Add field</b>Same as the + on the hub. Pick a hidden field, or create your own.</div>
+                        <div><b>Recenter</b>Reset zoom and pan on the orbit, timeline, or whiteboard.</div>
+                        <div><b>Split screen</b>On OrbINT, pin the framework to one side and keep Operations, Timeline, and the other pages on the other. Drag the divider to resize. Click Split again, or the OrbINT title, to return to the full framework.</div>
+                        <div><b>Play</b>Replay the opening motion without reloading.</div>
+                        <div><b>Generate</b>Fill visible fields with a sample persona. Undo restores the case.</div>
+                        <div><b>Undo / Redo</b>Step through filed changes. Ctrl+Z and Ctrl+Y.</div>
+                        <div><b>Export</b>Download the current profile as .json.</div>
+                        <div><b>Import</b>Load an OrbINT .json profile.</div>
+                        <div><b>Report</b>Download the case file PDF.</div>
+                        <div><b>Install</b>Add OrbINT to the home screen, dock, or Start menu.</div>
+                        <div><b>Reset</b>Wipe every profile, the map, and saved layout, then reload the latest site.</div>
+                        <div><b>Settings</b>Privacy curtain, confirm before an outbound search, stealth tab title, clipboard clear, idle lock, reduce motion, larger type, remember the last page, and Logic bomb — delete saved information if you stay away.</div>
+                    </div>
+                </section>
+
+                <section class="help-section" id="guide-share">
+                    <h3>Share</h3>
+                    <p>Share sends one encrypted link for the open case. Turn Live session on and the link can be viewed, and only while you keep the session on. End it and the link shows nothing. The key stays after #. The server stores ciphertext, not the case.</p>
+                    <p>Copy link puts that session URL on the clipboard. The code underneath is for the public site, https://orbint.net/, and Share site hands the page to the system share sheet when the device has one.</p>
+                    <div class="help-callout">File the fact, then search from the pill. Use the pages to keep chronology, diagrams, notes, and extracted text with the same case. The case file prints only the pages that have something in them.</div>
+                    <p class="help-foot">Esc closes menus and sheets. It leaves this page open. Switch titles to go back to the case.</p>
+                </section>
+
+                <section class="help-section" id="guide-faq">
+                    <h3>Questions</h3>
+                    <h3>Where does a case live?</h3>
+                    <p>On this device, in this browser. There is no OrbINT account and no remote case database.</p>
+                    <h3>Who operates OrbINT?</h3>
+                    <p>Delexoo. Reach them at <a href="https://github.com/Delexoo">github.com/Delexoo</a>. Privacy, terms, and contact are in Settings.</p>
+                    <h3>Does a search leave the computer?</h3>
+                    <p>Only the value you send, and only to the public service you open. The rest of the case stays here.</p>
+                    <h3>How do I keep a copy?</h3>
+                    <p>Export JSON from the dock. Upload JSON on the profile rail puts that file back. The browser does not keep an automatic backup.</p>
+                </section>
+            </div>
+        </article>
+    </section>
+    <!-- /pages/guide.html -->
     </div>
     </div>
 
@@ -806,7 +1236,7 @@
     <div class="install-sheet" id="installSheet" hidden>
         <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="installTitle" aria-describedby="installLead">
             <div class="install-top">
-                <div class="install-mark"><img src="icons/app-192.png" alt=""></div>
+                <div class="install-mark"><img src="icons/app-192.png" alt="" width="56" height="56"></div>
                 <button class="help-close" id="installClose" type="button" aria-label="Close">×</button>
             </div>
             <p class="install-kicker" id="installKicker">Home screen</p>
@@ -1019,7 +1449,7 @@
                     <label class="set-row">
                         <span>
                             <b>Remember last page</b>
-                            <small>Reopen Orbit, Timeline, Whiteboard, Harvester, or Case File where you left off.</small>
+                            <small>Reopen the page you left off on.</small>
                         </span>
                         <span class="set-switch"><input id="setRememberPage" type="checkbox"><i></i></span>
                     </label>
@@ -1068,6 +1498,13 @@
                         </span>
                         <span class="set-switch"><input id="setInvestigator" type="checkbox"><i></i></span>
                     </label>
+                    <div class="set-field set-field-stack">
+                        <span>
+                            <b>Have I Been Pwned API key</b>
+                            <small>Optional. Stored in this browser. Email checks use it for Have I Been Pwned. Without it, that check is skipped.</small>
+                        </span>
+                        <input id="setHibpKey" class="set-text" type="password" placeholder="API key" spellcheck="false" autocomplete="off">
+                    </div>
                     </div>
                 </section>
                 <section class="set-block">
@@ -1101,6 +1538,14 @@
                     </label>
                     </div>
                 </section>
+                <section class="set-block">
+                    <h3>About</h3>
+                    <nav class="set-list" aria-label="About OrbINT">
+                        <a class="set-link" href="privacy.html">Privacy</a>
+                        <a class="set-link" href="terms.html">Terms</a>
+                        <a class="set-link" href="contact.html">Contact Delexoo</a>
+                    </nav>
+                </section>
             </div>
         </div>
         <div class="set-pick-menu" id="setPickMenu" hidden role="listbox"></div>
@@ -1128,6 +1573,32 @@
         </div>
     </div>
 
+    <div class="confirm-sheet" id="commandMenu" hidden>
+        <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="commandTitle">
+            <h2 id="commandTitle">Jump</h2>
+            <p class="command-hint" id="commandHint"></p>
+            <div class="command-list" id="commandList"></div>
+            <div class="confirm-actions">
+                <button type="button" class="confirm-ok" id="commandClose">Back to the desk</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="undo-toast" id="undoToast" role="status" hidden>
+        <span id="undoToastText">Profile removed.</span>
+        <button type="button" id="undoToastBtn">Undo</button>
+    </div>
+
+    <div class="confirm-sheet" id="deskDone" hidden>
+        <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="deskDoneTitle" aria-describedby="deskDoneLead">
+            <h2 id="deskDoneTitle">Done</h2>
+            <p id="deskDoneLead"></p>
+            <div class="confirm-actions">
+                <button type="button" class="confirm-ok" id="deskDoneClose">Back to the desk</button>
+            </div>
+        </div>
+    </div>
+
     <div class="confirm-sheet" id="profilePrompt" hidden>
         <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="profilePromptTitle" aria-describedby="profilePromptLead">
             <h2 id="profilePromptTitle">New profile</h2>
@@ -1141,181 +1612,6 @@
     </div>
 
     <div class="profile-menu" id="profileMenu" hidden></div>
-
-    <div class="help-guide" id="helpGuide" hidden>
-        <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-            <div class="help-top">
-                <div>
-                    <div class="help-kicker">Operator guide</div>
-                    <h2 id="helpTitle">OrbINT</h2>
-                    <p class="help-aka">Open-source Reconnaissance Bureau of Intelligence</p>
-                    <p class="help-lead">OrbINT is for collecting, organizing, analyzing, and managing information gathered through reconnaissance of publicly available sources. It also works as case and investigative management software. The workspace is local, not cloud-based: cases stay on this device, with no remote account and no cloud data-breach risk.</p>
-                </div>
-                <button class="help-close" id="helpClose" type="button" aria-label="Close help">×</button>
-            </div>
-            <div class="help-body">
-                <section class="help-section">
-                    <h3>Local by design</h3>
-                    <p>There is no OrbINT cloud and no sign-in. Profiles, photos, the timeline, and the whiteboard live in this browser. That is why the desk is safe to work from: a remote breach cannot take a copy that was never sent. Export a case file when you need a backup. Clear site data and the case leaves with it.</p>
-                </section>
-                <section class="help-section">
-                    <h3>Start a case</h3>
-                    <p>Work one person, company, or asset at a time. Begin with the strongest identifier you already have — usually a name, username, email, or phone — then let that fact open the next search.</p>
-                    <div class="help-steps">
-                        <div class="help-step">
-                            <span class="help-num">1</span>
-                            <div>
-                                <strong>Type into a pill</strong>
-                                <span>The value files as you type. You do not need to press Enter. Empty the box and the fact drops off.</span>
-                                <div class="help-ex"><code>Name → Jordan Hale</code><code>Email → jhale@pm.me</code></div>
-                            </div>
-                        </div>
-                        <div class="help-step">
-                            <span class="help-num">2</span>
-                            <div>
-                                <strong>Watch the hub</strong>
-                                <span>A filled pill turns green. Marking a field Missing turns it red. The ring around OrbINT fills green for values and red for missing. Clearing a box lowers the ring immediately.</span>
-                            </div>
-                        </div>
-                        <div class="help-step">
-                            <span class="help-num">3</span>
-                            <div>
-                                <strong>Read the casebook</strong>
-                                <span>On desktop the left sheet is the case file. On a phone, Casebook is a page in the bar. It shows the subject name, filed facts by group, and a rail of saved profiles. Click a row to focus that field. Under + Add information, Last updated shows when this site last changed on GitHub.</span>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="help-section">
-                    <h3>Search the right way</h3>
-                    <p>Every pill has an action on the right. That is the intended next step — not guessing random sites.</p>
-                    <div class="help-steps">
-                        <div class="help-step">
-                            <span class="help-num">1</span>
-                            <div>
-                                <strong>Empty field — information</strong>
-                                <span>The i icon lists where that kind of fact usually turns up. Use this when you do not have the value yet.</span>
-                                <div class="help-ex"><code>Phone empty → Whitepages, TruePeopleSearch</code></div>
-                            </div>
-                        </div>
-                        <div class="help-step">
-                            <span class="help-num">2</span>
-                            <div>
-                                <strong>Filled field — magnifier</strong>
-                                <span>The search icon opens deeper lookups with the value already in the URL, and copies it for sites that need a paste. Image search uses the photo, not the file name.</span>
-                                <div class="help-ex"><code>domain.com → WHOIS, crt.sh, Wayback</code></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="help-callout">OrbINT is a local investigative desk: identity, accounts, infrastructure, vehicles and registration, credentials, records, media, chronology, and boards. File the fact, then search from the pill. The dock Toolkit holds the broader OSINT catalog when you need a source that is not on the pill. Nothing is uploaded to a cloud.</div>
-                </section>
-
-                <section class="help-section">
-                    <h3>Special fields</h3>
-                    <div class="help-grid">
-                        <div class="help-field">
-                            <b>Username</b>
-                            <span>Choose the platform first, then enter the handle. The icon stays on the pill.</span>
-                            <em>Instagram → @jordanh</em>
-                        </div>
-                        <div class="help-field">
-                            <b>Image / Audio</b>
-                            <span>Paste a URL, or use + to upload. Preview opens from the thumbnail.</span>
-                            <em>https://…/portrait.jpg</em>
-                        </div>
-                        <div class="help-field">
-                            <b>IP</b>
-                            <span>Geolocation, hosting, and indexed services. The pin opens a map when the address looks valid.</span>
-                            <em>8.8.8.8</em>
-                        </div>
-                        <div class="help-field">
-                            <b>Timezone</b>
-                            <span>Pick PST, EST, or another common zone. The pill shows the abbreviation and a live clock — not the city name.</span>
-                            <em>EST · Eastern Time</em>
-                        </div>
-                        <div class="help-field">
-                            <b>Company</b>
-                            <span>Employer, workplace, or legal name. Search opens filings, EDGAR, ownership, and sanctions lists.</span>
-                            <em>Northwind Analytics LLC</em>
-                        </div>
-                        <div class="help-field">
-                            <b>VIN / Plate</b>
-                            <span>Decode, history, registration, and owner trails. MAC, Geo, and Barcode live under Add a field.</span>
-                            <em>1HGCM82633A004352</em>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="help-section">
-                    <h3>Move around the map</h3>
-                    <p>The orbit is the workspace. Zoom and pan as far as you want — there is no limit. Recenter puts the default view back.</p>
-                    <div class="help-ex" style="margin-top:12px">
-                        <span class="help-kbd">Scroll</span>
-                        <span class="help-kbd">Zoom</span>
-                        <span class="help-kbd">Pinch</span>
-                        <span class="help-kbd">Zoom</span>
-                        <span class="help-kbd">Drag empty space</span>
-                        <span class="help-kbd">Pan</span>
-                        <span class="help-kbd">Middle-drag</span>
-                        <span class="help-kbd">Pan</span>
-                        <span class="help-kbd">Drag hub</span>
-                        <span class="help-kbd">Move orbit</span>
-                    </div>
-                    <p style="margin-top:12px">The + on the hub adds a field. Pick a hidden or extra one, or type a name to create your own. Right-click a field (long-press on a phone) to copy, cut, paste, rename, clear, search, or remove that pill. Right-click empty map space to drop a linked profile where you clicked, or for Help, Recenter, Undo, Redo, Export, Share, and Reset. Right-click the center circle to link this case to other profiles. Linked subjects appear on the map — phone and desktop — with a line between them. Tap a linked circle to open that case. Recenter restores the default view. Drag the right edge of the left sheet to resize the casebook. Reset wipes every profile, the map, and saved layout, then hard-refreshes so the latest site loads.</p>
-                </section>
-
-                <section class="help-section">
-                    <h3>Profiles</h3>
-                    <p>Keep more than one subject. The rail on the left of the casebook is the case shelf. Linked profiles also sit on the orbit as extra circles.</p>
-                    <div class="help-dock">
-                        <div><b>Switch</b>Click a face to open that profile. The orbit and facts follow it.</div>
-                        <div><b>New</b>The rail plus starts a separate blank case. Right-click empty map space to drop a linked circle where you clicked. No name needed — file it when you have one.</div>
-                        <div><b>Link</b>Right-click the hub to connect this case to another profile. A cyan mark on the rail face means this case has a linked subject. A line stays between them on the map.</div>
-                        <div><b>Upload</b>Import an OrbINT .json profile, including files from Export.</div>
-                        <div><b>Rename</b>The pencil names the current profile. Right-click a face to rename, duplicate, download, or delete.</div>
-                    </div>
-                </section>
-
-                <section class="help-section">
-                    <h3>Dock</h3>
-                    <div class="help-dock">
-                        <div><b>Help</b>This guide. On a phone, open it from More or Help.</div>
-                        <div><b>Add field</b>Same as the + on the hub. Pick a hidden or extra field, or create your own.</div>
-                        <div><b>Toolkit</b>The OSINT catalog from Free University Tools, including Domain Intelligence.</div>
-                        <div><b>Recenter</b>Reset zoom and pan on the orbit, timeline, or whiteboard.</div>
-                        <div><b>Play</b>Replay the opening ease-in without reloading the page. On a phone it is in the toolbar.</div>
-                        <div><b>Generate Identity</b>Fill every visible field with a random sample persona. Undo restores the previous case.</div>
-                        <div><b>Undo / Redo</b>Step through filed changes. Ctrl+Z and Ctrl+Y. Unlimited in this session.</div>
-                        <div><b>Export</b>Download the current profile as .json.</div>
-                        <div><b>Import</b>Load an OrbINT .json profile next to Export.</div>
-                        <div><b>Download Report</b>Times-style PDF of the case: centered title, hanging sections, identifiers, chronology, and evidence. Not a government record.</div>
-                        <div><b>Share</b>QR code, copy link, or the system share sheet for this site.</div>
-                        <div><b>Install app</b>Add OrbINT to the home screen, dock, or Start menu on this device.</div>
-                        <div><b>Reset</b>Wipe every profile, the map, and saved layout, then hard-refresh so the latest site loads.</div>
-                        <div><b>Settings</b>To the right of Reset. Privacy curtain, outbound confirm, clipboard clear, idle lock, and Logic bomb — auto-delete if you stay away.</div>
-                    </div>
-                </section>
-
-                <section class="help-section">
-                    <h3>Investigation pages</h3>
-                    <p>The titles at the top of the workspace switch the orbit for other case views. On a phone, Casebook is one of those titles. The dock follows the page.</p>
-                    <div class="help-dock">
-                        <div><b>OrbINT</b>The orbit workspace. File identifiers around the subject.</div>
-                        <div><b>Timeline</b>A pan-and-zoom chronology. Click the axis to add an event. Type on a card, attach an image, drag the card to place it. Minimize tucks the extra fields. Connect cards draws a grey arrow between them. Recenter fits the axis.</div>
-                        <div><b>Whiteboard</b>A canvas in OrbINT’s dark UI. Use the Selection tool and drag to select several shapes. Toolbar: lock, shapes, draw, text, image, eraser, connect, pre-sets. Drag to size a shape. The image tool makes a frame you fill. Paste an image anytime. Connect shapes shows every point. Ctrl+Z undoes.</div>
-                        <div><b>Case File</b>A print preview of the case record, laid out like the PDF.</div>
-                    </div>
-                </section>
-
-                <section class="help-section">
-                    <h3>A clean first pass</h3>
-                    <p>Name + city, then username, then email or phone. Use the i icon or magnifier before adding a weaker identifier. Example: file <code style="font-family:ui-monospace,monospace;font-size:12px;color:#86efac">Jordan Hale</code>, search people directories, pick up <code style="font-family:ui-monospace,monospace;font-size:12px;color:#86efac">@jordanh</code> on Instagram, then check whether that handle repeats on WhatsMyName.</p>
-                    <p class="help-foot">Esc closes menus, previews, and this guide.</p>
-                </section>
-            </div>
-        </div>
-    </div>
 
     <a class="donate" id="donate" href="https://buy.stripe.com/9B63cu3RE2ouaKgcHLcjS00" target="_blank" rel="noopener noreferrer" hidden>Donate</a>
 
@@ -1332,7 +1628,7 @@
         <button class="dock-portfolio" type="button" id="dockPortfolio" data-tip="Casebook" aria-label="Casebook" aria-expanded="false" aria-controls="profilePanel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8l2 3h3v13H5V7h3z"/><path d="M8 4v3h8"/></svg>
         </button>
-        <button type="button" id="dockHelp" data-tip="Help" aria-label="Help">
+        <button type="button" id="dockHelp" data-tip="Operator guide" aria-label="Operator guide">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.4 2.4 0 1 1 3.3 2.2c-.8.4-1.3 1-1.3 1.8V14"/><path d="M12 17.2h.01"/></svg>
         </button>
         <button type="button" id="dockToolkit" data-tip="OSINT toolkit" aria-label="OSINT toolkit">
@@ -1346,6 +1642,9 @@
         </button>
         <button type="button" id="dockRecenter" data-tip="Recenter" aria-label="Recenter">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
+        </button>
+        <button type="button" id="dockSplit" data-dock-for="orbit" data-tip="Split screen" aria-label="Split screen" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
         </button>
         <button type="button" id="dockPlay" data-dock-for="orbit" data-tip="Play" aria-label="Play">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -1391,7 +1690,7 @@
     </div>
 
     <nav class="phone-bar" id="phoneBar">
-        <button type="button" id="phoneHelp">Help</button>
+        <button type="button" id="phoneHelp">Guide</button>
         <button class="phone-add" type="button" id="phoneAdd" aria-label="Add field">+</button>
         <button type="button" id="phoneShare">Share</button>
         <button type="button" id="phoneMoreBtn">More</button>
@@ -1405,6 +1704,7 @@
                     <h2 id="phoneFieldTitle">Field</h2>
                 </div>
                 <div class="phone-card-tools">
+                    <button class="phone-find" type="button" id="phoneFieldSearch" aria-label="How to find this" title="How to find this"></button>
                     <button class="phone-done" type="button" id="phoneFieldDone">Done</button>
                 </div>
             </div>
@@ -1431,11 +1731,12 @@
                 <button class="phone-done" type="button" id="phoneMoreClose">Close</button>
             </div>
             <div class="phone-more-list">
-                <button type="button" id="phoneMoreHelp">Help</button>
+                <button type="button" id="phoneMoreHelp">Guide</button>
                 <button type="button" id="phoneUndo">Undo</button>
                 <button type="button" id="phoneRedo">Redo</button>
                 <button type="button" id="phonePlay">Play</button>
                 <button type="button" id="phonePlaytest">Generate Identity</button>
+                <button type="button" id="phoneSplit">Split screen</button>
                 <button type="button" id="phoneToolkit">OSINT toolkit</button>
                 <button type="button" id="phoneExport">Export</button>
                 <button type="button" id="phoneImport">Import</button>
@@ -1482,6 +1783,22 @@
                     <button type="button" id="eventCancel">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="add-sheet" id="searchDesk" hidden>
+        <div class="add-card intel-card" role="dialog" aria-modal="true" aria-labelledby="searchDeskTitle">
+            <div class="share-top">
+                <div>
+                    <div class="share-kicker">Search</div>
+                    <h2 id="searchDeskTitle">Find this</h2>
+                </div>
+                <button class="help-close" id="searchDeskClose" type="button" aria-label="Close">×</button>
+            </div>
+            <form class="intel-form search-desk-form" id="searchDeskForm">
+                <label class="search-desk-field">Value<input id="searchDeskInput" type="text" spellcheck="false" autocomplete="off" placeholder="Phone, email, username, site, or anything else"><button type="submit" id="searchDeskGo" aria-label="Search" title="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg></button></label>
+            </form>
+            <div id="searchDeskResults"></div>
         </div>
     </div>
 

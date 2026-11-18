@@ -413,7 +413,7 @@ def extract_section(html: str, start_marker: str, end_marker: str) -> str:
 def main() -> None:
     index_path = ROOT / "index.html"
     html = index_path.read_text(encoding="utf-8")
-    if '<link rel="stylesheet" href="css/base.css' in html:
+    if '<link rel="stylesheet" href="css/base' in html:
         raise SystemExit("CSS already split. Edit css/*.css and js/*.js, then run: python tools/bundle.py")
     style_m = re.search(r"    <style>\n(.*?)\n    </style>", html, re.S)
     if not style_m:

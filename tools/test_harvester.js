@@ -5,7 +5,10 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
-const src = fs.readFileSync(path.join(root, 'js', 'harvester.js'), 'utf8');
+const src = [
+    fs.readFileSync(path.join(root, 'js', 'harvester-classify.js'), 'utf8'),
+    fs.readFileSync(path.join(root, 'js', 'harvester-scan.js'), 'utf8')
+].join('\n');
 const context = {
     data: { harvester: { files: [], hits: [] } },
     uid: (p) => p + '1',
