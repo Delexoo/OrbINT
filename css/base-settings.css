@@ -36,6 +36,26 @@
     color: #a1a1aa;
 }
 
+.notice-card { width: min(440px, 100%); }
+
+#visitNotice { z-index: 80; }
+
+.notice-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-top: 14px;
+}
+
+.notice-links a {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.notice-links a:hover { text-decoration: underline; }
+
 
 
 .confirm-actions {

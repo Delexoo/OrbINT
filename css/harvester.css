@@ -874,8 +874,14 @@ body.cp-splitting * {
         transform: none;
         max-width: none;
         top: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+        overflow: visible;
     }
-    .cp-result { padding: 108px 8px 120px; }
+    .cp-drop { padding-top: 128px; }
+    .cp-ico,
+    #harvesterInspectBtn { min-height: 36px; }
+    .cp-result { padding: 72px 8px 16px; }
     .cp-diff { margin-top: 8px; }
     .cp-diff-table { min-width: 0; font-size: 12px; }
     .cp-diff.is-single .cp-diff-table { min-width: 0; }

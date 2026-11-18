@@ -2701,6 +2701,17 @@
             void thumb.offsetWidth;
             thumb.classList.remove('is-instant');
         }
+        if (isCompactNav()) {
+            const pad = 16;
+            const edge = on.offsetLeft;
+            const far = edge + on.offsetWidth;
+            if (edge < wrap.scrollLeft + pad || far > wrap.scrollLeft + wrap.clientWidth - pad) {
+                wrap.scrollTo({
+                    left: Math.max(0, edge - (wrap.clientWidth - on.offsetWidth) / 2),
+                    behavior: snap ? 'auto' : 'smooth'
+                });
+            }
+        }
     }
 
     function renderPageSwitch(opts) {
@@ -7455,11 +7466,17 @@
         const tip = $('noteLinkHint');
         if (!tip) return;
         tip.classList.toggle('is-armed', !!picking);
+        let touch = false;
+        try {
+            touch = window.matchMedia('(max-width: 820px), (pointer: coarse)').matches;
+        } catch (error) {}
         if (picking) {
-            tip.textContent = 'Click another note to link';
+            tip.textContent = touch ? 'Tap another note to link' : 'Click another note to link';
             return;
         }
-        tip.innerHTML = 'Hold <kbd>Shift</kbd> and click notes to link. Middle-click to pan.';
+        tip.innerHTML = touch
+            ? 'Tap Link, then another note.'
+            : 'Hold <kbd>Shift</kbd> and click notes to link. Middle-click to pan.';
     }
 
     function linkNoteIntoShift(id) {
@@ -7676,6 +7693,7 @@
         const body = $('noteBody');
         const empty = $('noteEmpty');
         if (!list || !title || !body) return;
+        if (!noteLinkFrom) setNoteTip(false);
         const state = notepadState();
         if (!state.active || !state.notes.some(function (note) { return note.id === state.active; })) {
             state.active = state.notes.length ? state.notes[0].id : '';
@@ -17099,6 +17117,7 @@ const OPS_FLOCK = {
         restoreSplit(saved);
         setPage(saved);
         renderAll();
+        openVisitNotice();
         document.addEventListener('click', function (event) {
             const jump = event.target.closest('[data-guide-jump]');
             if (!jump || page !== 'guide') return;
@@ -17112,6 +17131,28 @@ const OPS_FLOCK = {
             if (timeState) placeTimePicker();
             if (infoState) placeTlInfoPop();
             if (page === 'datasheet') sizeDatasheet();
+        });
+    }
+
+    function openVisitNotice() {
+        const sheet = $('visitNotice');
+        if (!sheet) return;
+        let seen = '';
+        try { seen = localStorage.getItem('orbint-notice'); } catch (error) {}
+        if (seen === '1') return;
+        sheet.hidden = false;
+        const ok = $('visitNoticeOk');
+        if (ok && !ok.dataset.bound) {
+            ok.dataset.bound = '1';
+            ok.addEventListener('click', function () {
+                try { localStorage.setItem('orbint-notice', '1'); } catch (error) {}
+                sheet.classList.remove('is-in');
+                sheet.hidden = true;
+            });
+        }
+        requestAnimationFrame(function () {
+            sheet.classList.add('is-in');
+            if (ok) ok.focus();
         });
     }
 

@@ -5,6 +5,7 @@
         const body = $('noteBody');
         const empty = $('noteEmpty');
         if (!list || !title || !body) return;
+        if (!noteLinkFrom) setNoteTip(false);
         const state = notepadState();
         if (!state.active || !state.notes.some(function (note) { return note.id === state.active; })) {
             state.active = state.notes.length ? state.notes[0].id : '';

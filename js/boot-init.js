@@ -233,6 +233,7 @@
         restoreSplit(saved);
         setPage(saved);
         renderAll();
+        openVisitNotice();
         document.addEventListener('click', function (event) {
             const jump = event.target.closest('[data-guide-jump]');
             if (!jump || page !== 'guide') return;
@@ -246,6 +247,28 @@
             if (timeState) placeTimePicker();
             if (infoState) placeTlInfoPop();
             if (page === 'datasheet') sizeDatasheet();
+        });
+    }
+
+    function openVisitNotice() {
+        const sheet = $('visitNotice');
+        if (!sheet) return;
+        let seen = '';
+        try { seen = localStorage.getItem('orbint-notice'); } catch (error) {}
+        if (seen === '1') return;
+        sheet.hidden = false;
+        const ok = $('visitNoticeOk');
+        if (ok && !ok.dataset.bound) {
+            ok.dataset.bound = '1';
+            ok.addEventListener('click', function () {
+                try { localStorage.setItem('orbint-notice', '1'); } catch (error) {}
+                sheet.classList.remove('is-in');
+                sheet.hidden = true;
+            });
+        }
+        requestAnimationFrame(function () {
+            sheet.classList.add('is-in');
+            if (ok) ok.focus();
         });
     }
 

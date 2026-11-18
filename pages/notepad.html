@@ -21,7 +21,13 @@
             </div>
             <div class="note-split" data-note-split="graph" role="separator" aria-orientation="vertical" aria-label="Resize links" title="Drag to resize" tabindex="0" aria-valuemin="180" aria-valuemax="720" aria-valuenow="280"></div>
             <aside class="note-graph" aria-label="Note links">
-                <p class="note-link-tip" id="noteLinkHint">Hold <kbd>Shift</kbd> and click notes to link</p>
+                <div class="note-graph-tools">
+                    <p class="note-link-tip" id="noteLinkHint">Hold <kbd>Shift</kbd> and click notes to link</p>
+                    <div class="note-link-actions">
+                        <button type="button" id="noteLinkGo">Link</button>
+                        <button type="button" id="noteLinkCancel" hidden>Cancel</button>
+                    </div>
+                </div>
                 <div class="note-graph-stage" id="noteGraph"></div>
             </aside>
         </div>

@@ -1157,7 +1157,7 @@
     border-color: #3f3f46;
 }
 
-body[data-page="operations"] #dockAdd { display: none; }
+body[data-page="operations"] #dockAdd { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
     .ops-feature.is-next,
@@ -1176,6 +1176,37 @@ body[data-page="operations"] #dockAdd { display: none; }
     .ops-globe { min-height: 360px; }
     .ops-news-card { min-height: 420px; }
     .ops-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 820px) {
+    .ops-scroll { padding: 10px 10px 16px; }
+    .ops-stage { min-height: 0; }
+    .ops-globe { min-height: 300px; }
+    .ops-news-card { min-height: 0; }
+    .ops-globe-head { max-width: 100%; }
+    .ops-mode,
+    .ops-range {
+        max-width: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .ops-mode::-webkit-scrollbar,
+    .ops-range::-webkit-scrollbar { display: none; }
+    .ops-filters {
+        flex-wrap: wrap;
+        row-gap: 6px;
+        overflow: visible;
+    }
+    .ops-news-card .ops-filters button { height: 32px; }
+    .ops-map-tools > button,
+    .ops-basemap-pop > button {
+        width: 44px;
+        height: 44px;
+    }
+    .ops-tip,
+    .ops-tip.is-cam { width: min(280px, calc(100vw - 24px)); }
+    .ops-panel-head { flex-wrap: wrap; }
+    .ops-panel-head > button { min-height: 36px; }
 }
 
 .ops-news-card,

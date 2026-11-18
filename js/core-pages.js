@@ -478,6 +478,17 @@
             void thumb.offsetWidth;
             thumb.classList.remove('is-instant');
         }
+        if (isCompactNav()) {
+            const pad = 16;
+            const edge = on.offsetLeft;
+            const far = edge + on.offsetWidth;
+            if (edge < wrap.scrollLeft + pad || far > wrap.scrollLeft + wrap.clientWidth - pad) {
+                wrap.scrollTo({
+                    left: Math.max(0, edge - (wrap.clientWidth - on.offsetWidth) / 2),
+                    behavior: snap ? 'auto' : 'smooth'
+                });
+            }
+        }
     }
 
     function renderPageSwitch(opts) {

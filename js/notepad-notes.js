@@ -16,11 +16,17 @@
         const tip = $('noteLinkHint');
         if (!tip) return;
         tip.classList.toggle('is-armed', !!picking);
+        let touch = false;
+        try {
+            touch = window.matchMedia('(max-width: 820px), (pointer: coarse)').matches;
+        } catch (error) {}
         if (picking) {
-            tip.textContent = 'Click another note to link';
+            tip.textContent = touch ? 'Tap another note to link' : 'Click another note to link';
             return;
         }
-        tip.innerHTML = 'Hold <kbd>Shift</kbd> and click notes to link. Middle-click to pan.';
+        tip.innerHTML = touch
+            ? 'Tap Link, then another note.'
+            : 'Hold <kbd>Shift</kbd> and click notes to link. Middle-click to pan.';
     }
 
     function linkNoteIntoShift(id) {

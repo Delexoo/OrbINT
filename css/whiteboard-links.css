@@ -535,7 +535,17 @@
 
         .page-whiteboard .work-top { display: none; }
 
-        .board-toolbar { top: 8px; }
+        .board-toolbar {
+            top: 8px;
+            max-width: calc(100% - 16px);
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .board-toolbar::-webkit-scrollbar { display: none; }
+        .board-toolbar button { width: 44px; height: 44px; flex: 0 0 auto; }
+        .board-toolbar button::after { display: none !important; }
 
         .board-props { top: 58px; left: 8px; width: min(176px, calc(100% - 16px)); }
 }
