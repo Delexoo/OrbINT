@@ -12020,17 +12020,7 @@ const OPS_FLOCK = {
         return opsAgo(at);
     }
 
-    function opsMapStatusLine() {
-        if (opsMapMode === 'cameras') {
-            opsText('opsMapStatus', opsCameraMiss ? 'Camera locations did not load' : (opsUserNote || ''));
-            return;
-        }
-        if (opsMapMode === 'outages') {
-            opsText('opsMapStatus', '');
-            return;
-        }
-        opsText('opsMapStatus', opsAttackNote || '');
-    }
+    function opsMapStatusLine() {}
 
     function opsModeThumb(instant) {
         const wrap = document.querySelector('.ops-mode');
@@ -12632,7 +12622,6 @@ const OPS_FLOCK = {
         if (!navigator.geolocation) {
             opsUserNote = 'This browser has no location service';
             opsPaintUserRow();
-            opsText('opsMapStatus', opsUserNote);
             return;
         }
         opsUserNote = 'Locating…';
@@ -12659,7 +12648,6 @@ const OPS_FLOCK = {
             opsUserNote = 'Location was denied';
             opsSyncUserPin();
             opsPaintUserRow();
-            opsText('opsMapStatus', opsUserNote);
         }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 });
     }
 

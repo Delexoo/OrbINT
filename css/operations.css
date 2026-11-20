@@ -147,21 +147,6 @@
 
 .ops-globe-head > * { pointer-events: auto; }
 
-.ops-map-status:empty { display: none; }
-
-.ops-map-status {
-    margin: 0;
-    flex: 1 0 100%;
-    width: auto;
-    max-width: 100%;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(9, 9, 11, 0.92);
-    color: #fafafa;
-    font-size: 11px;
-    line-height: 1.35;
-}
-
 .ops-range[hidden] { display: none; }
 
 .ops-range {
