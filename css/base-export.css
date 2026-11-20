@@ -264,7 +264,6 @@
     min-width: 0;
     display: flex;
     align-items: stretch;
-    justify-content: center;
     gap: 2px;
     margin: 10px 12px 0;
     padding: 3px;
@@ -306,10 +305,9 @@
     appearance: none;
     position: relative;
     z-index: 1;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     width: auto;
     min-width: max-content;
-    max-width: max-content;
     height: 36px;
     text-align: center;
     min-height: 36px;
