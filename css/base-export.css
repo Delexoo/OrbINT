@@ -283,7 +283,6 @@
 
 
 .page-switch-thumb {
-    view-transition-name: page-thumb;
     position: absolute;
     top: 3px;
     left: 3px;
@@ -306,9 +305,12 @@
     appearance: none;
     position: relative;
     z-index: 1;
-    flex: 1 0 auto;
+    flex: 0 0 auto;
+    width: auto;
     min-width: max-content;
+    max-width: max-content;
     height: 36px;
+    text-align: center;
     min-height: 36px;
     padding: 0 11px;
     border: 0;
@@ -380,10 +382,19 @@
         overflow-y: hidden;
     }
     .page-switch button {
-        flex: 1 1 0;
-        min-width: 0;
-        padding: 0 4px;
-        font-size: 11px;
+        flex: 0 0 auto;
+        width: auto;
+        min-width: max-content;
+        max-width: max-content;
+        min-height: 34px;
+        height: 34px;
+        padding: 0 12px;
+        font-size: 13px;
+        text-align: center;
+    }
+    .page-switch-thumb {
+        top: 3px;
+        height: 34px;
     }
     .casebook-btn,
     .casebook-btn.map-toggle {

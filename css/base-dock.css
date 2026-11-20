@@ -65,17 +65,18 @@
         }
 
         .page-switch button {
-            flex: 1 1 0;
-            min-width: 0;
+            flex: 0 0 auto;
+            width: auto;
+            min-width: max-content;
+            max-width: max-content;
             height: 34px;
             min-height: 34px;
-            padding: 0 4px;
-            font-size: 11px;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            padding: 0 12px;
+            font-size: 13px;
+            text-align: center;
         }
 
-        .page-switch-thumb { height: 34px; }
+        .page-switch-thumb { top: 3px; height: 34px; }
 
         .work-page {
             top: calc(52px + var(--safe-t));

@@ -2682,6 +2682,9 @@
         return page;
     }
 
+    let pageSwitchResize = null;
+    let pageSwitchFonts = false;
+
     function syncPageSwitchThumb(instant) {
         const wrap = $('pageSwitch');
         if (!wrap) return;
@@ -2691,6 +2694,9 @@
         const x = on.offsetLeft;
         const w = on.offsetWidth;
         if (!(w > 0)) return;
+        if (thumb._orbX === x && thumb._orbW === w) return;
+        thumb._orbX = x;
+        thumb._orbW = w;
         const snap = instant || reduceMotion();
         thumb.style.transform = '';
         if (snap) thumb.classList.add('is-instant');
@@ -2714,6 +2720,24 @@
         }
     }
 
+    function bindPageSwitchResize() {
+        const wrap = $('pageSwitch');
+        if (!wrap || typeof ResizeObserver === 'undefined') return;
+        if (!pageSwitchResize) {
+            pageSwitchResize = new ResizeObserver(function () {
+                syncPageSwitchThumb(true);
+            });
+        }
+        pageSwitchResize.disconnect();
+        pageSwitchResize.observe(wrap);
+        const buttons = wrap.querySelectorAll('button');
+        for (let i = 0; i < buttons.length; i++) pageSwitchResize.observe(buttons[i]);
+        if (!pageSwitchFonts && document.fonts && document.fonts.ready) {
+            pageSwitchFonts = true;
+            document.fonts.ready.then(function () { syncPageSwitchThumb(true); });
+        }
+    }
+
     function renderPageSwitch(opts) {
         const wrap = $('pageSwitch');
         if (!wrap) return;
@@ -2730,6 +2754,7 @@
                     (on ? ' aria-current="page" aria-selected="true"' : ' aria-selected="false"') +
                     '>' + esc(item.label) + '</button>';
             }).join('');
+            bindPageSwitchResize();
             requestAnimationFrame(function () { syncPageSwitchThumb(true); });
             return;
         }
@@ -2745,6 +2770,7 @@
                 btn.setAttribute('aria-selected', 'false');
             }
         });
+        bindPageSwitchResize();
         syncPageSwitchThumb(!!opts.instant);
     }
 
@@ -11999,7 +12025,11 @@ const OPS_FLOCK = {
             opsText('opsMapStatus', opsCameraMiss ? 'Camera locations did not load' : (opsUserNote || ''));
             return;
         }
-        opsText('opsMapStatus', opsMapMode === 'outages' ? (opsOutageNote || '') : (opsAttackNote || ''));
+        if (opsMapMode === 'outages') {
+            opsText('opsMapStatus', '');
+            return;
+        }
+        opsText('opsMapStatus', opsAttackNote || '');
     }
 
     function opsModeThumb(instant) {

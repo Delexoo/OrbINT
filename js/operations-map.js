@@ -28,7 +28,11 @@
             opsText('opsMapStatus', opsCameraMiss ? 'Camera locations did not load' : (opsUserNote || ''));
             return;
         }
-        opsText('opsMapStatus', opsMapMode === 'outages' ? (opsOutageNote || '') : (opsAttackNote || ''));
+        if (opsMapMode === 'outages') {
+            opsText('opsMapStatus', '');
+            return;
+        }
+        opsText('opsMapStatus', opsAttackNote || '');
     }
 
     function opsModeThumb(instant) {
